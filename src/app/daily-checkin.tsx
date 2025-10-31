@@ -14,65 +14,63 @@ export default function DailyCheckin() {
   );
   const [errorMessage, setErrorMessage] = useState("");
 
-  // 1) first try: maybe the host already gave us ?hash=...&signature=...&fid=...
+  // 1) try to resolve user from querystring (works for ?fid=318447 dev mode)
   useEffect(() => {
-    const loadUser = async () => {
+    const load = async () => {
       try {
         const qs =
           typeof window !== "undefined" ? window.location.search : "";
         const res = await fetch("/api/siwn" + qs);
         const data = await res.json();
-
         if (data?.ok && data?.fid) {
           setFid(Number(data.fid));
           setErrorMessage("");
-        } else {
-          setFid(null);
-          if (data?.error) {
-            setErrorMessage(data.error);
-          }
         }
-      } catch (_e) {
-        setFid(null);
+      } catch (e) {
+        // ignore, we’ll let user sign in manually
       } finally {
         setLoadingUser(false);
       }
     };
-
-    loadUser();
+    load();
   }, []);
 
-  // 2) explicit sign-in — this time we POST the result to our API
+  // 2) real SIWN inside Warpcast
   const handleSignIn = async () => {
     try {
+      setErrorMessage("");
+      // ask the host for SIWN
       const nonce = Math.random().toString(36).slice(2);
-
-      // ask Warpcast/Base to SIWN
-      const siwnResult = await sdk.actions.signIn({
+      const result = await sdk.actions.signIn({
         nonce,
         acceptAuthAddress: true,
       });
-      // siwnResult should have hash, signature, maybe fid
 
-      const res = await fetch("/api/siwn", {
+      // result should have hash, signature, maybe fid
+      // 👇 THIS is the part we were missing before
+      const resp = await fetch("/api/siwn", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(siwnResult),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        // send EXACTLY what Warpcast gave us
+        body: JSON.stringify(result),
       });
 
-      const data = await res.json();
+      const json = await resp.json();
 
-      if (data?.ok && data?.fid) {
-        setFid(Number(data.fid));
+      if (resp.ok && json?.ok && json?.fid) {
+        setFid(Number(json.fid));
         setErrorMessage("");
       } else {
         setErrorMessage(
-          data?.error || "Signed in but could not resolve FID from server."
+          json?.error || "Signed in but server could not resolve FID."
         );
       }
     } catch (err: any) {
       setErrorMessage(
-        err?.message || "Sign-in failed. Try from Warpcast mini app preview."
+        err?.message ||
+          "Sign-in failed. Try opening this inside Warpcast mini app preview."
       );
     }
   };
@@ -133,7 +131,7 @@ export default function DailyCheckin() {
         Check in once per day to keep your streak and earn $CATWALK later.
       </p>
 
-      {/* show sign-in button if we still don't know who this is */}
+      {/* show sign-in button if we don't have a user yet */}
       {!fid ? (
         <button
           onClick={handleSignIn}

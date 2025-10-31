@@ -1,64 +1,98 @@
 // src/app/api/siwn/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { getNeynarClient } from "~/lib/neynar";
 
-// simple helper for responses
-function bad(message: string) {
-  return NextResponse.json({ ok: false, error: message }, { status: 400 });
+// helper to build a clean success response
+function ok(fid: number, username?: string) {
+  return NextResponse.json({
+    ok: true,
+    fid,
+    username: username ?? null,
+    message: "SIWN: resolved Farcaster user from Neynar",
+  });
 }
 
-// --------------
-// GET VERSION
-// --------------
-// supports: /api/siwn?fid=318447  (desktop / dev / ngrok test)
+// 1) GET handler – handles the “easy” case (query string params)
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const fidParam = searchParams.get("fid");
+  const url = new URL(req.url);
+  const fidParam = url.searchParams.get("fid");
+  const message = url.searchParams.get("message");
+  const signature = url.searchParams.get("signature");
 
+  // if the host gave us fid directly, we’re done
   if (fidParam) {
-    const fidNum = Number(fidParam);
-    if (!Number.isNaN(fidNum)) {
-      return NextResponse.json({
-        ok: true,
-        fid: fidNum,
-        message: "Resolved FID from querystring",
-      });
+    return ok(Number(fidParam));
+  }
+
+  // if it gave us message + signature in the URL (rare), validate them
+  if (message && signature) {
+    try {
+      const client = getNeynarClient();
+      // this is the official Neynar way to turn SIWN into a user
+      const result = await client.lookupUserBySiwn(message, signature);
+      if (result?.fid) {
+        return ok(result.fid, result.username);
+      }
+      return NextResponse.json(
+        { ok: false, error: "Could not resolve user from SIWN (GET)." },
+        { status: 400 }
+      );
+    } catch (err: any) {
+      return NextResponse.json(
+        { ok: false, error: err?.message ?? "Neynar error (GET)" },
+        { status: 500 }
+      );
     }
   }
 
-  // no FID found
-  return bad("No SIWN params found in URL.");
+  // if we got here, nothing useful was sent
+  return NextResponse.json(
+    { ok: false, error: "No SIWN params found in URL." },
+    { status: 400 }
+  );
 }
 
-// --------------
-// POST VERSION
-// --------------
-// this is what Warpcast / sdk.actions.signIn(...) should call
+// 2) POST handler – this is what Warpcast mini-app preview actually uses
 export async function POST(req: NextRequest) {
-  let body: any;
   try {
-    body = await req.json();
-  } catch (e) {
-    return bad("No JSON body.");
+    const body = await req.json().catch(() => null);
+
+    const message = body?.message;
+    const signature = body?.signature;
+    const fidFromHost = body?.fid; // sometimes mobile gives this
+
+    // if host already gave us fid, use it
+    if (fidFromHost) {
+      return ok(Number(fidFromHost));
+    }
+
+    if (!message || !signature) {
+      return NextResponse.json(
+        { ok: false, error: "No hash/signature in request body." },
+        { status: 400 }
+      );
+    }
+
+    const client = getNeynarClient();
+    // this call is in the Neynar mini-app auth docs
+    const result = await client.lookupUserBySiwn(message, signature);
+
+    if (!result?.fid) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Got message/signature but couldn’t resolve FID. Make sure Neynar API key + client ID are correct on Vercel.",
+        },
+        { status: 400 }
+      );
+    }
+
+    return ok(result.fid, result.username);
+  } catch (err: any) {
+    return NextResponse.json(
+      { ok: false, error: err?.message ?? "SIWN server error" },
+      { status: 500 }
+    );
   }
-
-  // Warpcast often gives back: { fid, hash, signature, ... }
-  const { fid, hash, signature } = body || {};
-
-  // for now: if we at least got a fid, we count it as success.
-  // later we can call Neynar to verify hash/signature.
-  if (fid) {
-    return NextResponse.json({
-      ok: true,
-      fid: Number(fid),
-      message: "SIWN mock: returning real Farcaster user from POST",
-      raw: body,
-    });
-  }
-
-  // if it sent hash/signature but no fid, tell the client
-  if (hash || signature) {
-    return bad("Got hash/signature but no fid — check host config.");
-  }
-
-  return bad("No hash/signature in request body.");
 }

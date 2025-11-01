@@ -2,97 +2,105 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getNeynarClient } from "~/lib/neynar";
 
-// helper to build a clean success response
-function ok(fid: number, username?: string) {
-  return NextResponse.json({
-    ok: true,
-    fid,
-    username: username ?? null,
-    message: "SIWN: resolved Farcaster user from Neynar",
-  });
+// small helper
+function err(message: string, status = 400) {
+  return NextResponse.json({ ok: false, error: message }, { status });
 }
 
-// 1) GET handler – handles the “easy” case (query string params)
+// ---------------
+// GET  (dev, ?fid=318447)
+// ---------------
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const fidParam = url.searchParams.get("fid");
   const message = url.searchParams.get("message");
   const signature = url.searchParams.get("signature");
 
-  // if the host gave us fid directly, we’re done
+  // 1) dev mode: ?fid=318447
   if (fidParam) {
-    return ok(Number(fidParam));
+    return NextResponse.json({
+      ok: true,
+      fid: Number(fidParam),
+      message: "Resolved FID from querystring",
+    });
   }
 
-  // if it gave us message + signature in the URL (rare), validate them
+  // 2) sometimes host passes message/signature in query
   if (message && signature) {
     try {
       const client = getNeynarClient();
-      // this is the official Neynar way to turn SIWN into a user
-      const result = await client.lookupUserBySiwn(message, signature);
-      if (result?.fid) {
-        return ok(result.fid, result.username);
+      const signerRes = await client.fetchSigners({ message, signature });
+      const signer = signerRes?.signers?.[0];
+      if (signer?.fid) {
+        return NextResponse.json({
+          ok: true,
+          fid: signer.fid,
+          user: signer,
+          message: "Resolved from SIWN (GET)",
+        });
       }
-      return NextResponse.json(
-        { ok: false, error: "Could not resolve user from SIWN (GET)." },
-        { status: 400 }
-      );
-    } catch (err: any) {
-      return NextResponse.json(
-        { ok: false, error: err?.message ?? "Neynar error (GET)" },
-        { status: 500 }
-      );
+      return err("Got hash/signature but no fid — check host config.");
+    } catch (e: any) {
+      return err(e?.message || "Neynar error (GET)", 500);
     }
   }
 
-  // if we got here, nothing useful was sent
-  return NextResponse.json(
-    { ok: false, error: "No SIWN params found in URL." },
-    { status: 400 }
-  );
+  return err("No SIWN params found in URL.");
 }
 
-// 2) POST handler – this is what Warpcast mini-app preview actually uses
+// ---------------
+// POST  (real Warpcast flow)
+// ---------------
 export async function POST(req: NextRequest) {
+  let body: any = null;
+
+  // guard against empty body -> this was your error
   try {
-    const body = await req.json().catch(() => null);
+    body = await req.json();
+  } catch {
+    // empty body
+    return err("No JSON body in SIWN POST.");
+  }
 
-    const message = body?.message;
-    const signature = body?.signature;
-    const fidFromHost = body?.fid; // sometimes mobile gives this
+  const { fid: fidFromHost, message, signature } = body || {};
 
-    // if host already gave us fid, use it
-    if (fidFromHost) {
-      return ok(Number(fidFromHost));
-    }
+  // 1) sometimes Warpcast gives fid directly
+  if (fidFromHost) {
+    return NextResponse.json({
+      ok: true,
+      fid: Number(fidFromHost),
+      message: "Resolved FID from host POST",
+    });
+  }
 
-    if (!message || !signature) {
-      return NextResponse.json(
-        { ok: false, error: "No hash/signature in request body." },
-        { status: 400 }
-      );
-    }
+  // 2) normal path: message + signature
+  if (!message || !signature) {
+    return err("Got hash/signature but no fid — check host config.");
+  }
 
+  try {
     const client = getNeynarClient();
-    // this call is in the Neynar mini-app auth docs
-    const result = await client.lookupUserBySiwn(message, signature);
+    // ask Neynar who signed this
+    const signerRes = await client.fetchSigners({ message, signature });
+    const signer = signerRes?.signers?.[0];
 
-    if (!result?.fid) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "Got message/signature but couldn’t resolve FID. Make sure Neynar API key + client ID are correct on Vercel.",
-        },
-        { status: 400 }
+    if (!signer?.fid) {
+      return err(
+        "Got message/signature but Neynar could not resolve FID. Make sure your Vercel NEYNAR_API_KEY + NEYNAR_CLIENT_ID match the app.",
       );
     }
 
-    return ok(result.fid, result.username);
-  } catch (err: any) {
-    return NextResponse.json(
-      { ok: false, error: err?.message ?? "SIWN server error" },
-      { status: 500 }
-    );
+    // optional: get user profile
+    const usersRes = await client.fetchBulkUsers({ fids: [signer.fid] });
+    const user = usersRes?.users?.[0] ?? null;
+
+    return NextResponse.json({
+      ok: true,
+      fid: signer.fid,
+      user,
+      message: "SIWN: resolved via POST",
+    });
+  } catch (e: any) {
+    return err(e?.message || "Neynar error (POST)", 500);
   }
 }

@@ -16,6 +16,7 @@ async function verifyWithNeynar(payload: {
   hash?: string;
   messageBytes?: string;
   signature: string;
+  nonce?: string;
 }) {
   console.log("[SIWN][VERIFY] starting verification", {
     hasMessage: Boolean(payload.message),
@@ -44,13 +45,22 @@ async function verifyWithNeynar(payload: {
       messagePreview: message?.substring(0, 50),
       signatureLength: payload.signature?.length,
       signaturePreview: payload.signature?.substring(0, 50),
+      hasNonce: Boolean(payload.nonce),
     });
     
-    // Use the Neynar SDK's fetchSigners method (same as /api/auth/session-signers)
-    const data = await client.fetchSigners({ 
-      message, 
-      signature: payload.signature 
-    });
+    // Use the Neynar SDK's fetchSigners method
+    // fetchSigners requires message, signature, and nonce for SIWN verification
+    const fetchSignersParams: any = {
+      message,
+      signature: payload.signature,
+    };
+    
+    // Add nonce if provided (required for SIWN)
+    if (payload.nonce) {
+      fetchSignersParams.nonce = payload.nonce;
+    }
+    
+    const data = await client.fetchSigners(fetchSignersParams);
     
     const signers = data.signers;
     
@@ -218,9 +228,11 @@ export async function POST(req: NextRequest) {
   }
 
   // sometimes it's {message, signature}, sometimes {hash, signature}, sometimes {messageBytes}
+  // result from sdk.actions.signIn() includes nonce, message/hash, and signature
   const message = body.message || body.hash;
   const messageBytes = body.messageBytes || body.message_bytes || body.message_bytes;
   const signature = body.signature;
+  const nonce = body.nonce;
 
   try {
     console.log("[SIWN][POST] body", {
@@ -228,6 +240,7 @@ export async function POST(req: NextRequest) {
       hasHash: Boolean(body?.hash),
       hasMessageBytes: Boolean(body?.messageBytes || body?.message_bytes),
       hasSignature: Boolean(signature),
+      hasNonce: Boolean(nonce),
       hasFid: Boolean(body?.fid),
     });
   } catch {}
@@ -252,7 +265,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const result = await verifyWithNeynar({ message, hash: body.hash, messageBytes, signature });
+  const result = await verifyWithNeynar({ message, hash: body.hash, messageBytes, signature, nonce });
   try {
     console.log("[SIWN][POST] neynar result", {
       ok: result.ok,

@@ -68,34 +68,87 @@ async function verifyWithNeynar(payload: {
       matches: extractedNonce === payload.nonce,
     });
     
-    // Try fetchSigners WITHOUT nonce parameter
-    // The SDK should extract it from the message automatically
-    // If TypeScript complains about nonce, it's not in the type definition,
-    // but we know from logs that Neynar expects it at runtime
-    console.log("[SIWN][VERIFY] trying fetchSigners without nonce parameter");
+    // Try fetchSigners with different approaches
+    // SIWN messages from @farcaster/miniapp-sdk may need special handling
     let data;
-    try {
-      data = await client.fetchSigners({
-        message,
-        signature: payload.signature,
-      } as any);
-    } catch (error: any) {
-      // If that fails with nonce error, try WITH nonce (using 'as any' to bypass TypeScript)
-      if (error?.response?.data?.code === 'InvalidField' && error?.response?.data?.property === 'nonce') {
-        console.log("[SIWN][VERIFY] nonce error without param, trying with extracted nonce");
-        const nonceToUse = extractedNonce || payload.nonce;
-        if (nonceToUse) {
+    let lastError: any = null;
+    
+    // Strategy 1: Try with explicit nonce parameter first (if we have it)
+    // This is more likely to work for SIWN messages
+    const nonceToUse = extractedNonce || payload.nonce;
+    
+    if (nonceToUse) {
+      console.log("[SIWN][VERIFY] trying fetchSigners WITH explicit nonce parameter");
+      try {
+        data = await client.fetchSigners({
+          message,
+          signature: payload.signature,
+          nonce: nonceToUse,
+        } as any);
+        console.log("[SIWN][VERIFY] success with explicit nonce");
+      } catch (error: any) {
+        lastError = error;
+        console.log("[SIWN][VERIFY] failed with explicit nonce", {
+          errorCode: error?.response?.data?.code,
+          errorProperty: error?.response?.data?.property,
+          errorMessage: error?.response?.data?.message,
+        });
+        
+        // Strategy 2: Try without nonce parameter (let SDK extract it)
+        console.log("[SIWN][VERIFY] trying fetchSigners WITHOUT nonce parameter (SDK extraction)");
+        try {
           data = await client.fetchSigners({
             message,
             signature: payload.signature,
-            nonce: nonceToUse,
           } as any);
-        } else {
-          throw error; // Re-throw if we don't have a nonce to try
+          console.log("[SIWN][VERIFY] success without explicit nonce");
+        } catch (error2: any) {
+          lastError = error2;
+          console.log("[SIWN][VERIFY] failed without nonce too", {
+            errorCode: error2?.response?.data?.code,
+            errorProperty: error2?.response?.data?.property,
+            errorMessage: error2?.response?.data?.message,
+          });
+          
+          // Strategy 3: If we have hash instead of message, try using hash
+          if (payload.hash && payload.hash !== message) {
+            console.log("[SIWN][VERIFY] trying with hash instead of message");
+            try {
+              data = await client.fetchSigners({
+                message: payload.hash,
+                signature: payload.signature,
+                nonce: nonceToUse,
+              } as any);
+              console.log("[SIWN][VERIFY] success with hash");
+            } catch (error3: any) {
+              lastError = error3;
+              console.log("[SIWN][VERIFY] failed with hash too");
+            }
+          }
         }
-      } else {
-        throw error; // Re-throw if it's a different error
       }
+    } else {
+      // No nonce available, try without it
+      console.log("[SIWN][VERIFY] no nonce available, trying fetchSigners without nonce parameter");
+      try {
+        data = await client.fetchSigners({
+          message,
+          signature: payload.signature,
+        } as any);
+        console.log("[SIWN][VERIFY] success without nonce");
+      } catch (error: any) {
+        lastError = error;
+        console.log("[SIWN][VERIFY] failed without nonce", {
+          errorCode: error?.response?.data?.code,
+          errorProperty: error?.response?.data?.property,
+          errorMessage: error?.response?.data?.message,
+        });
+      }
+    }
+    
+    // If all strategies failed, throw the last error
+    if (!data) {
+      throw lastError || new Error("All fetchSigners strategies failed");
     }
     
     const signers = data.signers;

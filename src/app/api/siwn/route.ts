@@ -64,11 +64,6 @@ async function verifyWithNeynar(payload: {
     status: lastStatus,
     error: lastBody,
   };
-
-  return {
-    ok: true,
-    data: json2,
-  };
 }
 
 // ===== GET version (Warpcast often hits this) =====

@@ -47,14 +47,17 @@ export default function DailyCheckin() {
       });
 
       // result should have hash, signature, maybe fid
-      // 👇 THIS is the part we were missing before
+      // 👇 Include nonce in the request body (Neynar requires it for verification)
       const resp = await fetch("/api/siwn", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        // send EXACTLY what Warpcast gave us
-        body: JSON.stringify(result),
+        // send what Warpcast gave us PLUS the nonce we generated
+        body: JSON.stringify({
+          ...result,
+          nonce, // Include the nonce we generated
+        }),
       });
 
       const json = await resp.json();

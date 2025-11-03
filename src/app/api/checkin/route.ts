@@ -37,6 +37,69 @@ export async function POST(req: NextRequest) {
     }
 
     const existing = await existingRes.json();
+    
+    // Helper functions for Pacific Time (PST/PDT) day boundaries
+    // Day resets at 9 AM Pacific time
+    // A "check-in day" runs from 9 AM Pacific to 8:59:59.999 AM Pacific the next day
+    
+    // Get which check-in day a date falls into (as a string identifier)
+    const getCheckInDayId = (date: Date): string => {
+      // Get date components in Pacific timezone
+      const formatter = new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/Los_Angeles",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+      
+      const parts = formatter.formatToParts(date);
+      const year = parts.find(p => p.type === "year")?.value;
+      const month = parts.find(p => p.type === "month")?.value;
+      const day = parts.find(p => p.type === "day")?.value;
+      const hour = parseInt(parts.find(p => p.type === "hour")?.value || "0");
+      
+      // If before 9 AM, it belongs to the previous day's check-in window
+      let checkInDate = new Date(parseInt(year!), parseInt(month!) - 1, parseInt(day!));
+      if (hour < 9) {
+        checkInDate.setDate(checkInDate.getDate() - 1);
+      }
+      
+      // Return as YYYY-MM-DD string for easy comparison
+      const checkInYear = checkInDate.getFullYear();
+      const checkInMonth = String(checkInDate.getMonth() + 1).padStart(2, "0");
+      const checkInDay = String(checkInDate.getDate()).padStart(2, "0");
+      return `${checkInYear}-${checkInMonth}-${checkInDay}`;
+    };
+
+    const isInSameCheckInWindow = (date1: Date, date2: Date): boolean => {
+      return getCheckInDayId(date1) === getCheckInDayId(date2);
+    };
+
+    const canCheckIn = (lastCheckinDate: Date | null, nowDate: Date): boolean => {
+      if (!lastCheckinDate) return true;
+      
+      // Check if now is in a different check-in window than the last check-in
+      return !isInSameCheckInWindow(lastCheckinDate, nowDate);
+    };
+
+    const getPacificDaysDiff = (date1: Date, date2: Date): number => {
+      const dayId1 = getCheckInDayId(date1);
+      const dayId2 = getCheckInDayId(date2);
+      
+      // Parse dates to calculate difference
+      const [year1, month1, day1] = dayId1.split("-").map(Number);
+      const [year2, month2, day2] = dayId2.split("-").map(Number);
+      
+      const d1 = new Date(year1, month1 - 1, day1);
+      const d2 = new Date(year2, month2 - 1, day2);
+      
+      const msDiff = d2.getTime() - d1.getTime();
+      return Math.floor(msDiff / (24 * 60 * 60 * 1000));
+    };
+
     const nowDate = new Date();
     const now = nowDate.toISOString();
 
@@ -75,7 +138,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3) row exists → update it instead of 409, with day-boundary streak logic
+    // 3) row exists → check if they can check in again (9 AM Pacific reset)
     const current = existing[0];
     const currentStreak =
       typeof current.streak === "number" && !isNaN(current.streak)
@@ -85,42 +148,37 @@ export async function POST(req: NextRequest) {
     const lastCheckinIso: string | null = current.last_checkin ?? null;
     const lastDate = lastCheckinIso ? new Date(lastCheckinIso) : null;
 
-    // helpers inlined to avoid imports
-    const toUtcYmd = (d: Date) =>
-      `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(
-        d.getUTCDate()
-      ).padStart(2, "0")}`;
-
-    const sameUtcDay = (a: Date, b: Date) => toUtcYmd(a) === toUtcYmd(b);
-
-    const daysDiffUtc = (a: Date, b: Date) => {
-      // strip to midnight UTC by constructing new Date from Y-M-D
-      const aMid = new Date(`${toUtcYmd(a)}T00:00:00.000Z`);
-      const bMid = new Date(`${toUtcYmd(b)}T00:00:00.000Z`);
-      const ms = bMid.getTime() - aMid.getTime();
-      return Math.round(ms / (24 * 60 * 60 * 1000));
-    };
-
-    if (lastDate && sameUtcDay(lastDate, nowDate)) {
-      // already checked in today → do not increment, avoid write
+    // Check if user can check in (based on 9 AM Pacific reset)
+    if (lastDate && !canCheckIn(lastDate, nowDate)) {
+      // Already checked in today (after 9 AM Pacific) → do not allow another check-in
       return NextResponse.json(
-        { ok: true, streak: currentStreak, mode: "noop" },
-        { status: 200 }
+        { 
+          ok: false, 
+          error: "You can only check in once per day. The day resets at 9 AM Pacific time.",
+          streak: currentStreak, 
+          mode: "already_checked_in" 
+        },
+        { status: 409 } // 409 Conflict - already checked in today
       );
     }
 
+    // Calculate new streak based on Pacific day boundaries (9 AM reset)
     let newStreak: number;
     if (!lastDate) {
       newStreak = Math.max(1, currentStreak || 1);
     } else {
-      const diff = daysDiffUtc(lastDate, nowDate);
-      if (diff === 1) {
+      // Calculate days difference in Pacific check-in windows
+      const daysDiff = getPacificDaysDiff(lastDate, nowDate);
+      
+      if (daysDiff === 1) {
+        // Checked in consecutive day - increment streak
         newStreak = currentStreak + 1;
-      } else if (diff > 1) {
-        newStreak = 1; // broke streak
-      } else {
-        // If somehow diff < 0 (clock drift), just treat as same day handled above or reset
+      } else if (daysDiff > 1) {
+        // Missed a day or more - reset streak
         newStreak = 1;
+      } else {
+        // Same window (shouldn't happen due to canCheckIn check, but handle gracefully)
+        newStreak = currentStreak;
       }
     }
 

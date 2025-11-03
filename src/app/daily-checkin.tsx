@@ -135,6 +135,14 @@ export default function DailyCheckin() {
         setCheckedIn(true);
         setStreak((s) => s + 1);
         setStatus("done");
+      } else if (res.status === 409) {
+        // Already checked in today
+        setStatus("error");
+        setCheckedIn(true); // Show as checked in
+        setErrorMessage(
+          data?.error || 
+          "You've already checked in today! Come back at 9 AM Pacific time tomorrow."
+        );
       } else {
         setStatus("error");
         setErrorMessage(data?.detail || data?.error || "Unknown error");

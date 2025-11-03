@@ -1,5 +1,6 @@
 // src/app/api/siwn/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { getNeynarClient } from "~/lib/neynar";
 
 const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
 const NEYNAR_CLIENT_ID = process.env.NEYNAR_CLIENT_ID;
@@ -8,9 +9,8 @@ if (!NEYNAR_API_KEY) {
   console.warn("⚠️ NEYNAR_API_KEY is missing in env");
 }
 
-// helper: verify SIWN message using Neynar API
-// Note: For mini apps, Warpcast may provide FID directly in context
-// This verification is for cases where we need to validate the signature
+// helper: verify SIWN message using Neynar SDK
+// Uses fetchSigners method which is the correct way to verify SIWN messages
 async function verifyWithNeynar(payload: {
   message?: string;
   hash?: string;
@@ -24,74 +24,78 @@ async function verifyWithNeynar(payload: {
     hasSignature: Boolean(payload.signature),
   });
 
-  // Try multiple endpoint formats that might work for SIWN validation
-  const messageBytes = payload.messageBytes || payload.message || payload.hash;
-  
-  const candidateEndpoints = [
-    {
-      url: "https://api.neynar.com/v2/farcaster/validate",
-      body: {
-        message_bytes_in_hex: messageBytes,
-        signature: payload.signature,
-      },
-    },
-    {
-      url: "https://api.neynar.com/v2/farcaster/frame/validate",
-      body: {
-        messageBytesInHex: messageBytes,
-        signature: payload.signature,
-        ...(NEYNAR_CLIENT_ID && { client_id: NEYNAR_CLIENT_ID }),
-      },
-    },
-  ];
-
-  const attempts: Array<{ url: string; status: number; error?: any }> = [];
-
-  for (const endpoint of candidateEndpoints) {
-    try {
-      console.log("[SIWN][VERIFY] trying endpoint", { url: endpoint.url });
-      
-      const res = await fetch(endpoint.url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "api_key": NEYNAR_API_KEY!,
-          ...(NEYNAR_CLIENT_ID && { "x-client-id": NEYNAR_CLIENT_ID }),
-        },
-        body: JSON.stringify(endpoint.body),
-      });
-
-      const parsed = await res.json().catch(() => ({}));
-      attempts.push({ url: endpoint.url, status: res.status, error: parsed });
-      
-      if (res.ok) {
-        console.log("[SIWN][VERIFY] success with", { url: endpoint.url });
-        return { ok: true, data: parsed };
-      }
-
-      console.log("[SIWN][VERIFY] endpoint returned", { 
-        url: endpoint.url,
-        status: res.status, 
-        error: parsed 
-      });
-    } catch (fetchError: any) {
-      console.log("[SIWN][VERIFY] fetch error for", { 
-        url: endpoint.url,
-        error: fetchError?.message || String(fetchError) 
-      });
-      attempts.push({ url: endpoint.url, status: 0, error: fetchError?.message || String(fetchError) });
+  try {
+    const client = getNeynarClient();
+    
+    // Use message or hash (Warpcast sends one or the other)
+    const message = payload.message || payload.hash || payload.messageBytes;
+    
+    if (!message) {
+      console.log("[SIWN][VERIFY] no message/hash/messageBytes provided");
+      return {
+        ok: false,
+        status: 400,
+        error: "No message, hash, or messageBytes provided",
+      };
     }
+
+    console.log("[SIWN][VERIFY] calling fetchSigners with message and signature");
+    
+    // Use the Neynar SDK's fetchSigners method (same as /api/auth/session-signers)
+    const data = await client.fetchSigners({ 
+      message, 
+      signature: payload.signature 
+    });
+    
+    const signers = data.signers;
+    
+    if (!signers || signers.length === 0) {
+      console.log("[SIWN][VERIFY] no signers returned");
+      return {
+        ok: false,
+        status: 401,
+        error: "No valid signers found",
+      };
+    }
+
+    const signer = signers[0];
+    const fid = signer.fid;
+
+    if (!fid) {
+      console.log("[SIWN][VERIFY] signer has no FID");
+      return {
+        ok: false,
+        status: 400,
+        error: "Signer has no FID",
+      };
+    }
+
+    console.log("[SIWN][VERIFY] success, fetching user data for FID", fid);
+
+    // Fetch full user data
+    const { users } = await client.fetchBulkUsers({ fids: [fid] });
+    const user = users[0] || null;
+
+    return {
+      ok: true,
+      data: {
+        fid,
+        username: user?.username,
+        user,
+        signer,
+      },
+    };
+  } catch (error: any) {
+    console.log("[SIWN][VERIFY] SDK error", { 
+      error: error?.message || String(error),
+      stack: error?.stack 
+    });
+    return {
+      ok: false,
+      status: 500,
+      error: error?.message || String(error),
+    };
   }
-
-  // Log all attempts before returning
-  console.log("[SIWN][VERIFY] all attempts failed", { attempts });
-
-  // All endpoints failed - return error
-  return {
-    ok: false,
-    status: 404,
-    error: "No working SIWN verification endpoint found. Check Neynar SIWN settings.",
-  };
 }
 
 // ===== GET version (Warpcast often hits this) =====
@@ -168,17 +172,9 @@ export async function GET(req: NextRequest) {
   }
 
   // At this point Neynar should have told us who the user is
-  // Different orgs return slightly different shapes, so we normalize a bit
-  const fid =
-    result.data?.fid ??
-    result.data?.user?.fid ??
-    result.data?.data?.fid ??
-    null;
-  const username =
-    result.data?.username ??
-    result.data?.user?.username ??
-    result.data?.data?.username ??
-    undefined;
+  // The verifyWithNeynar function returns { ok: true, data: { fid, username, user, signer } }
+  const fid = result.data?.fid ?? result.data?.user?.fid ?? null;
+  const username = result.data?.username ?? result.data?.user?.username ?? undefined;
 
   if (!fid) {
     return NextResponse.json(
@@ -265,16 +261,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const fid =
-    result.data?.fid ??
-    result.data?.user?.fid ??
-    result.data?.data?.fid ??
-    null;
-  const username =
-    result.data?.username ??
-    result.data?.user?.username ??
-    result.data?.data?.username ??
-    undefined;
+  const fid = result.data?.fid ?? result.data?.user?.fid ?? null;
+  const username = result.data?.username ?? result.data?.user?.username ?? undefined;
 
   if (!fid) {
     return NextResponse.json(

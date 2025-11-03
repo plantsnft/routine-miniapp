@@ -8,78 +8,77 @@ if (!NEYNAR_API_KEY) {
   console.warn("⚠️ NEYNAR_API_KEY is missing in env");
 }
 
-// helper: actually call Neynar with whichever payload host provided
+// helper: verify SIWN message using Neynar API
+// Note: For mini apps, Warpcast may provide FID directly in context
+// This verification is for cases where we need to validate the signature
 async function verifyWithNeynar(payload: {
   message?: string;
   hash?: string;
   messageBytes?: string;
   signature: string;
 }) {
-  // try a few known SIWN verify endpoints; some orgs/apps are routed differently
-  const candidateUrls = [
-    "https://api.neynar.com/v2/farcaster/siwn/verify",
-    "https://api.neynar.com/v2/farcaster/siwn/validate",
-    "https://api.neynar.com/v2/siwn/verify",
-    "https://api.neynar.com/v2/siwn/validate",
-    "https://api.neynar.com/v1/siwn/verify",
-    // try snapchain host as a fallback (some orgs route there)
-    "https://snapchain-api.neynar.com/v2/siwn/verify",
-    "https://snapchain-api.neynar.com/v2/farcaster/siwn/verify",
+  // Try multiple endpoint formats that might work for SIWN validation
+  const messageBytes = payload.messageBytes || payload.message || payload.hash;
+  
+  const candidateEndpoints = [
+    {
+      url: "https://api.neynar.com/v2/farcaster/validate",
+      body: {
+        message_bytes_in_hex: messageBytes,
+        signature: payload.signature,
+      },
+    },
+    {
+      url: "https://api.neynar.com/v2/farcaster/frame/validate",
+      body: {
+        messageBytesInHex: messageBytes,
+        signature: payload.signature,
+        ...(NEYNAR_CLIENT_ID && { client_id: NEYNAR_CLIENT_ID }),
+      },
+    },
   ];
 
-  const baseBody: Record<string, any> = {};
-  if (payload.message) baseBody.message = payload.message;
-  if (payload.hash) baseBody.hash = payload.hash;
-  if (payload.messageBytes) {
-    baseBody.messageBytes = payload.messageBytes;
-    baseBody.message_bytes = payload.messageBytes; // snake_case variant
-  }
-  baseBody.signature = payload.signature;
-  if (NEYNAR_CLIENT_ID) baseBody.client_id = NEYNAR_CLIENT_ID;
+  for (const endpoint of candidateEndpoints) {
+    try {
+      const res = await fetch(endpoint.url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "api_key": NEYNAR_API_KEY!,
+          ...(NEYNAR_CLIENT_ID && { "x-client-id": NEYNAR_CLIENT_ID }),
+        },
+        body: JSON.stringify(endpoint.body),
+      });
 
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    "api_key": NEYNAR_API_KEY!,
-    "x-neynar-api-key": NEYNAR_API_KEY!,
-  };
-  if (NEYNAR_CLIENT_ID) {
-    headers["x-neynar-client-id"] = NEYNAR_CLIENT_ID;
-    headers["x-client-id"] = NEYNAR_CLIENT_ID; // alt header seen in some setups
-  }
+      const parsed = await res.json().catch(() => ({}));
+      
+      if (res.ok) {
+        console.log("[SIWN][VERIFY] success with", { url: endpoint.url });
+        return { ok: true, data: parsed };
+      }
 
-  let lastStatus = 0;
-  let lastBody: any = {};
-  const attempts: Array<{ url: string; status: number }> = [];
-  for (const url of candidateUrls) {
-    const res = await fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(baseBody),
-    });
-    lastStatus = res.status;
-    const parsed = await res.json().catch(() => ({}));
-    lastBody = parsed;
-    attempts.push({ url, status: res.status });
-    if (res.ok) {
-      try {
-        console.log("[SIWN][VERIFY] using", { url });
-      } catch {}
-      return { ok: true, data: parsed };
-    }
-    if (res.status !== 404) {
-      // non-404 error → break and report
-      break;
+      // If it's not a 404, this endpoint exists but rejected our request
+      if (res.status !== 404) {
+        console.log("[SIWN][VERIFY] endpoint exists but rejected", { 
+          url: endpoint.url,
+          status: res.status, 
+          error: parsed 
+        });
+        // Continue trying other endpoints
+      }
+    } catch (fetchError: any) {
+      console.log("[SIWN][VERIFY] fetch error for", { 
+        url: endpoint.url,
+        error: fetchError?.message || String(fetchError) 
+      });
     }
   }
 
-  try {
-    console.log("[SIWN][VERIFY] attempts", attempts);
-  } catch {}
-
+  // All endpoints failed - return error
   return {
     ok: false,
-    status: lastStatus,
-    error: lastBody,
+    status: 404,
+    error: "No working SIWN verification endpoint found. Check Neynar SIWN settings.",
   };
 }
 

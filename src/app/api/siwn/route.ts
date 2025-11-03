@@ -17,6 +17,13 @@ async function verifyWithNeynar(payload: {
   messageBytes?: string;
   signature: string;
 }) {
+  console.log("[SIWN][VERIFY] starting verification", {
+    hasMessage: Boolean(payload.message),
+    hasHash: Boolean(payload.hash),
+    hasMessageBytes: Boolean(payload.messageBytes),
+    hasSignature: Boolean(payload.signature),
+  });
+
   // Try multiple endpoint formats that might work for SIWN validation
   const messageBytes = payload.messageBytes || payload.message || payload.hash;
   
@@ -38,8 +45,12 @@ async function verifyWithNeynar(payload: {
     },
   ];
 
+  const attempts: Array<{ url: string; status: number; error?: any }> = [];
+
   for (const endpoint of candidateEndpoints) {
     try {
+      console.log("[SIWN][VERIFY] trying endpoint", { url: endpoint.url });
+      
       const res = await fetch(endpoint.url, {
         method: "POST",
         headers: {
@@ -51,28 +62,29 @@ async function verifyWithNeynar(payload: {
       });
 
       const parsed = await res.json().catch(() => ({}));
+      attempts.push({ url: endpoint.url, status: res.status, error: parsed });
       
       if (res.ok) {
         console.log("[SIWN][VERIFY] success with", { url: endpoint.url });
         return { ok: true, data: parsed };
       }
 
-      // If it's not a 404, this endpoint exists but rejected our request
-      if (res.status !== 404) {
-        console.log("[SIWN][VERIFY] endpoint exists but rejected", { 
-          url: endpoint.url,
-          status: res.status, 
-          error: parsed 
-        });
-        // Continue trying other endpoints
-      }
+      console.log("[SIWN][VERIFY] endpoint returned", { 
+        url: endpoint.url,
+        status: res.status, 
+        error: parsed 
+      });
     } catch (fetchError: any) {
       console.log("[SIWN][VERIFY] fetch error for", { 
         url: endpoint.url,
         error: fetchError?.message || String(fetchError) 
       });
+      attempts.push({ url: endpoint.url, status: 0, error: fetchError?.message || String(fetchError) });
     }
   }
+
+  // Log all attempts before returning
+  console.log("[SIWN][VERIFY] all attempts failed", { attempts });
 
   // All endpoints failed - return error
   return {

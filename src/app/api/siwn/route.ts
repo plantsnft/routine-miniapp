@@ -15,10 +15,12 @@ async function verifyWithNeynar(payload: {
   messageBytes?: string;
   signature: string;
 }) {
-  // this is the most common SIWN verify path in current Neynar mini-app flow
-  // we also fallback to alternative path if 404 is returned
-  const primaryUrl = "https://api.neynar.com/v2/farcaster/siwn/verify";
-  const fallbackUrl = "https://api.neynar.com/v2/siwn/verify";
+  // try a few known SIWN verify endpoints; some orgs/apps are routed differently
+  const candidateUrls = [
+    "https://api.neynar.com/v2/farcaster/siwn/verify",
+    "https://api.neynar.com/v2/farcaster/siwn/validate",
+    "https://api.neynar.com/v2/siwn/verify",
+  ];
 
   const baseBody: Record<string, any> = {};
   if (payload.message) baseBody.message = payload.message;
@@ -34,33 +36,34 @@ async function verifyWithNeynar(payload: {
   };
   if (NEYNAR_CLIENT_ID) headers["x-neynar-client-id"] = NEYNAR_CLIENT_ID;
 
-  // attempt primary endpoint first
-  let res = await fetch(primaryUrl, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(baseBody),
-  });
-
-  const json = await res.json().catch(() => ({}));
-
-  if (!res.ok && res.status === 404) {
-    // try alternate path
-    res = await fetch(fallbackUrl, {
+  let lastStatus = 0;
+  let lastBody: any = {};
+  for (const url of candidateUrls) {
+    const res = await fetch(url, {
       method: "POST",
       headers,
       body: JSON.stringify(baseBody),
     });
+    lastStatus = res.status;
+    const parsed = await res.json().catch(() => ({}));
+    lastBody = parsed;
+    if (res.ok) {
+      try {
+        console.log("[SIWN][VERIFY] using", { url });
+      } catch {}
+      return { ok: true, data: parsed };
+    }
+    if (res.status !== 404) {
+      // non-404 error → break and report
+      break;
+    }
   }
 
-  const json2 = res.ok ? await res.json().catch(() => ({})) : json;
-
-  if (!res.ok) {
-    return {
-      ok: false,
-      status: res.status,
-      error: json2,
-    };
-  }
+  return {
+    ok: false,
+    status: lastStatus,
+    error: lastBody,
+  };
 
   return {
     ok: true,

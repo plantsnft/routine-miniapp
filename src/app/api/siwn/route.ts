@@ -22,6 +22,9 @@ async function verifyWithNeynar(payload: {
     "https://api.neynar.com/v2/siwn/verify",
     "https://api.neynar.com/v2/siwn/validate",
     "https://api.neynar.com/v1/siwn/verify",
+    // try snapchain host as a fallback (some orgs route there)
+    "https://snapchain-api.neynar.com/v2/siwn/verify",
+    "https://snapchain-api.neynar.com/v2/farcaster/siwn/verify",
   ];
 
   const baseBody: Record<string, any> = {};
@@ -46,6 +49,7 @@ async function verifyWithNeynar(payload: {
 
   let lastStatus = 0;
   let lastBody: any = {};
+  const attempts: Array<{ url: string; status: number }> = [];
   for (const url of candidateUrls) {
     const res = await fetch(url, {
       method: "POST",
@@ -55,6 +59,7 @@ async function verifyWithNeynar(payload: {
     lastStatus = res.status;
     const parsed = await res.json().catch(() => ({}));
     lastBody = parsed;
+    attempts.push({ url, status: res.status });
     if (res.ok) {
       try {
         console.log("[SIWN][VERIFY] using", { url });
@@ -66,6 +71,10 @@ async function verifyWithNeynar(payload: {
       break;
     }
   }
+
+  try {
+    console.log("[SIWN][VERIFY] attempts", attempts);
+  } catch {}
 
   return {
     ok: false,

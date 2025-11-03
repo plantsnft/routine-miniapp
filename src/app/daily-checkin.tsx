@@ -39,12 +39,39 @@ export default function DailyCheckin() {
   const handleSignIn = async () => {
     try {
       setErrorMessage("");
+      
+      // Check if SDK actions are available
+      // When opened in a regular browser (not Warpcast), sdk.actions.signIn might not exist
+      if (!sdk?.actions?.signIn) {
+        setErrorMessage(
+          "Sign-in is not available. Please open this app inside Warpcast by clicking a link in a cast, not in a regular web browser."
+        );
+        return;
+      }
+
       // ask the host for SIWN
       const nonce = Math.random().toString(36).slice(2);
-      const result = await sdk.actions.signIn({
-        nonce,
-        acceptAuthAddress: true,
-      });
+      
+      let result;
+      try {
+        result = await sdk.actions.signIn({
+          nonce,
+          acceptAuthAddress: true,
+        });
+      } catch (signInError: any) {
+        console.error("[SIWN] signIn error:", signInError);
+        setErrorMessage(
+          signInError?.message ||
+            "Failed to initiate sign-in. Please ensure you're in Warpcast and try again."
+        );
+        return;
+      }
+
+      // Validate result structure
+      if (!result) {
+        setErrorMessage("Sign-in returned no result. Please try again.");
+        return;
+      }
 
       // result should have hash, signature, maybe fid
       // 👇 Include nonce in the request body (Neynar requires it for verification)
@@ -71,9 +98,10 @@ export default function DailyCheckin() {
         );
       }
     } catch (err: any) {
+      console.error("[SIWN] handleSignIn error:", err);
       setErrorMessage(
         err?.message ||
-          "Sign-in failed. Try opening this inside Warpcast mini app preview."
+          "Sign-in failed. Please open this inside Warpcast and try again."
       );
     }
   };

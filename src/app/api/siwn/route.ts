@@ -20,12 +20,17 @@ async function verifyWithNeynar(payload: {
     "https://api.neynar.com/v2/farcaster/siwn/verify",
     "https://api.neynar.com/v2/farcaster/siwn/validate",
     "https://api.neynar.com/v2/siwn/verify",
+    "https://api.neynar.com/v2/siwn/validate",
+    "https://api.neynar.com/v1/siwn/verify",
   ];
 
   const baseBody: Record<string, any> = {};
   if (payload.message) baseBody.message = payload.message;
   if (payload.hash) baseBody.hash = payload.hash;
-  if (payload.messageBytes) baseBody.messageBytes = payload.messageBytes;
+  if (payload.messageBytes) {
+    baseBody.messageBytes = payload.messageBytes;
+    baseBody.message_bytes = payload.messageBytes; // snake_case variant
+  }
   baseBody.signature = payload.signature;
   if (NEYNAR_CLIENT_ID) baseBody.client_id = NEYNAR_CLIENT_ID;
 
@@ -34,7 +39,10 @@ async function verifyWithNeynar(payload: {
     "api_key": NEYNAR_API_KEY!,
     "x-neynar-api-key": NEYNAR_API_KEY!,
   };
-  if (NEYNAR_CLIENT_ID) headers["x-neynar-client-id"] = NEYNAR_CLIENT_ID;
+  if (NEYNAR_CLIENT_ID) {
+    headers["x-neynar-client-id"] = NEYNAR_CLIENT_ID;
+    headers["x-client-id"] = NEYNAR_CLIENT_ID; // alt header seen in some setups
+  }
 
   let lastStatus = 0;
   let lastBody: any = {};

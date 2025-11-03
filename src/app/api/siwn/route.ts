@@ -43,24 +43,22 @@ async function verifyWithNeynar(payload: {
     console.log("[SIWN][VERIFY] calling fetchSigners", {
       messageLength: message?.length,
       messagePreview: message?.substring(0, 50),
+      messageFull: message, // Log full message to see if nonce is embedded
       signatureLength: payload.signature?.length,
       signaturePreview: payload.signature?.substring(0, 50),
       hasNonce: Boolean(payload.nonce),
+      nonceValue: payload.nonce, // Log the actual nonce value
+      nonceType: typeof payload.nonce,
+      nonceLength: payload.nonce?.length,
     });
     
     // Use the Neynar SDK's fetchSigners method
-    // fetchSigners requires message, signature, and nonce for SIWN verification
-    const fetchSignersParams: any = {
+    // Note: fetchSigners should extract nonce from message automatically
+    // Passing nonce explicitly may cause "Invalid nonce" error if it doesn't match
+    const data = await client.fetchSigners({
       message,
       signature: payload.signature,
-    };
-    
-    // Add nonce if provided (required for SIWN)
-    if (payload.nonce) {
-      fetchSignersParams.nonce = payload.nonce;
-    }
-    
-    const data = await client.fetchSigners(fetchSignersParams);
+    });
     
     const signers = data.signers;
     

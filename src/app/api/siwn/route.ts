@@ -39,7 +39,12 @@ async function verifyWithNeynar(payload: {
       };
     }
 
-    console.log("[SIWN][VERIFY] calling fetchSigners with message and signature");
+    console.log("[SIWN][VERIFY] calling fetchSigners", {
+      messageLength: message?.length,
+      messagePreview: message?.substring(0, 50),
+      signatureLength: payload.signature?.length,
+      signaturePreview: payload.signature?.substring(0, 50),
+    });
     
     // Use the Neynar SDK's fetchSigners method (same as /api/auth/session-signers)
     const data = await client.fetchSigners({ 
@@ -86,14 +91,20 @@ async function verifyWithNeynar(payload: {
       },
     };
   } catch (error: any) {
-    console.log("[SIWN][VERIFY] SDK error", { 
-      error: error?.message || String(error),
-      stack: error?.stack 
-    });
+    // Log detailed error info including response data if available
+    const errorDetails: any = {
+      message: error?.message || String(error),
+      status: error?.response?.status,
+      statusText: error?.response?.statusText,
+      data: error?.response?.data,
+    };
+    
+    console.log("[SIWN][VERIFY] SDK error", errorDetails);
+    
     return {
       ok: false,
-      status: 500,
-      error: error?.message || String(error),
+      status: error?.response?.status || 500,
+      error: error?.response?.data || error?.message || String(error),
     };
   }
 }

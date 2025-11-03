@@ -52,13 +52,51 @@ async function verifyWithNeynar(payload: {
       nonceLength: payload.nonce?.length,
     });
     
-    // Use the Neynar SDK's fetchSigners method
-    // Note: fetchSigners should extract nonce from message automatically
-    // Passing nonce explicitly may cause "Invalid nonce" error if it doesn't match
-    const data = await client.fetchSigners({
-      message,
-      signature: payload.signature,
+    // Extract nonce from SIWN message if present
+    // SIWN message format: "Nonce: <value>\n"
+    let extractedNonce: string | undefined = undefined;
+    if (message) {
+      const nonceMatch = message.match(/Nonce:\s*([^\n]+)/i);
+      if (nonceMatch) {
+        extractedNonce = nonceMatch[1].trim();
+      }
+    }
+    
+    console.log("[SIWN][VERIFY] extracted nonce from message", {
+      extractedNonce,
+      providedNonce: payload.nonce,
+      matches: extractedNonce === payload.nonce,
     });
+    
+    // Try fetchSigners WITHOUT nonce parameter
+    // The SDK should extract it from the message automatically
+    // If TypeScript complains about nonce, it's not in the type definition,
+    // but we know from logs that Neynar expects it at runtime
+    console.log("[SIWN][VERIFY] trying fetchSigners without nonce parameter");
+    let data;
+    try {
+      data = await client.fetchSigners({
+        message,
+        signature: payload.signature,
+      } as any);
+    } catch (error: any) {
+      // If that fails with nonce error, try WITH nonce (using 'as any' to bypass TypeScript)
+      if (error?.response?.data?.code === 'InvalidField' && error?.response?.data?.property === 'nonce') {
+        console.log("[SIWN][VERIFY] nonce error without param, trying with extracted nonce");
+        const nonceToUse = extractedNonce || payload.nonce;
+        if (nonceToUse) {
+          data = await client.fetchSigners({
+            message,
+            signature: payload.signature,
+            nonce: nonceToUse,
+          } as any);
+        } else {
+          throw error; // Re-throw if we don't have a nonce to try
+        }
+      } else {
+        throw error; // Re-throw if it's a different error
+      }
+    }
     
     const signers = data.signers;
     

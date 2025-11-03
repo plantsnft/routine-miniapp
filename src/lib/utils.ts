@@ -20,17 +20,23 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function getMiniAppEmbedMetadata(ogImageUrl?: string) {
+export function getMiniAppEmbedMetadata(ogImageUrl?: string, baseUrl?: string) {
+  // Get base URL - prioritize provided baseUrl, then APP_URL, then env var, then fallback
+  const appUrl = baseUrl || APP_URL || process.env.NEXT_PUBLIC_URL || 'https://routine-smoky.vercel.app';
+  
+  const imageUrl = ogImageUrl ?? `${appUrl}/api/opengraph-image`;
+  const splashImageUrl = `${appUrl}/splash.png`;
+  
   return {
     version: '1', // Must be "1" not "next" per Farcaster docs
-    imageUrl: ogImageUrl ?? APP_OG_IMAGE_URL,
+    imageUrl,
     button: {
       title: APP_BUTTON_TEXT,
       action: {
         type: 'launch_frame',
         name: APP_NAME,
-        url: APP_URL,
-        splashImageUrl: APP_SPLASH_URL,
+        url: appUrl,
+        splashImageUrl,
         splashBackgroundColor: APP_SPLASH_BACKGROUND_COLOR,
       },
     },

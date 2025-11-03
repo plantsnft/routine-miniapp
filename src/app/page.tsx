@@ -8,17 +8,21 @@ import DebugSiwn from "./debug-siwn";
 export const revalidate = 300;
 
 export async function generateMetadata(): Promise<Metadata> {
+  // Get base URL - use environment variable or fallback
+  const baseUrl = process.env.NEXT_PUBLIC_URL || 'https://routine-smoky.vercel.app';
+  const ogImageUrl = `${baseUrl}/api/opengraph-image`;
+  
   return {
     title: APP_NAME ?? "Routine",
     description: APP_DESCRIPTION,
     openGraph: {
       title: APP_NAME,
       description: APP_DESCRIPTION,
-      images: [APP_OG_IMAGE_URL],
+      images: [ogImageUrl],
     },
     other: {
       // Use fc:miniapp for new Mini Apps (not fc:frame which is legacy)
-      "fc:miniapp": JSON.stringify(getMiniAppEmbedMetadata()),
+      "fc:miniapp": JSON.stringify(getMiniAppEmbedMetadata(ogImageUrl, baseUrl)),
     },
   };
 }

@@ -1,6 +1,7 @@
 // src/app/api/siwn/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getNeynarClient } from "~/lib/neynar";
+import { SiweMessage } from "siwe";
 
 const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
 const _NEYNAR_CLIENT_ID = process.env.NEYNAR_CLIENT_ID;
@@ -9,8 +10,8 @@ if (!NEYNAR_API_KEY) {
   console.warn("⚠️ NEYNAR_API_KEY is missing in env");
 }
 
-// helper: verify SIWN message using Neynar SDK
-// Uses fetchSigners method which is the correct way to verify SIWN messages
+// helper: verify SIWN message using SIWE signature verification
+// SIWN messages are SIWE (Sign-In With Ethereum) messages that include Farcaster FID in Resources
 async function verifyWithNeynar(payload: {
   message?: string;
   hash?: string;
@@ -26,8 +27,6 @@ async function verifyWithNeynar(payload: {
   });
 
   try {
-    const client = getNeynarClient();
-    
     // Use message or hash (Warpcast sends one or the other)
     const message = payload.message || payload.hash || payload.messageBytes;
     
@@ -40,143 +39,98 @@ async function verifyWithNeynar(payload: {
       };
     }
 
-    console.log("[SIWN][VERIFY] calling fetchSigners", {
-      messageLength: message?.length,
-      messagePreview: message?.substring(0, 50),
-      messageFull: message, // Log full message to see if nonce is embedded
-      signatureLength: payload.signature?.length,
-      signaturePreview: payload.signature?.substring(0, 50),
-      hasNonce: Boolean(payload.nonce),
-      nonceValue: payload.nonce, // Log the actual nonce value
-      nonceType: typeof payload.nonce,
-      nonceLength: payload.nonce?.length,
-    });
-    
-    // Extract nonce from SIWN message if present
-    // SIWN message format: "Nonce: <value>\n"
-    let extractedNonce: string | undefined = undefined;
-    if (message) {
-      const nonceMatch = message.match(/Nonce:\s*([^\n]+)/i);
-      if (nonceMatch) {
-        extractedNonce = nonceMatch[1].trim();
-      }
-    }
-    
-    console.log("[SIWN][VERIFY] extracted nonce from message", {
-      extractedNonce,
-      providedNonce: payload.nonce,
-      matches: extractedNonce === payload.nonce,
-    });
-    
-    // Try fetchSigners with different approaches
-    // SIWN messages from @farcaster/miniapp-sdk may need special handling
-    let data;
-    let lastError: any = null;
-    
-    // Strategy 1: Try with explicit nonce parameter first (if we have it)
-    // This is more likely to work for SIWN messages
-    const nonceToUse = extractedNonce || payload.nonce;
-    
-    if (nonceToUse) {
-      console.log("[SIWN][VERIFY] trying fetchSigners WITH explicit nonce parameter");
-      try {
-        data = await client.fetchSigners({
-          message,
-          signature: payload.signature,
-          nonce: nonceToUse,
-        } as any);
-        console.log("[SIWN][VERIFY] success with explicit nonce");
-      } catch (error: any) {
-        lastError = error;
-        console.log("[SIWN][VERIFY] failed with explicit nonce", {
-          errorCode: error?.response?.data?.code,
-          errorProperty: error?.response?.data?.property,
-          errorMessage: error?.response?.data?.message,
-        });
-        
-        // Strategy 2: Try without nonce parameter (let SDK extract it)
-        console.log("[SIWN][VERIFY] trying fetchSigners WITHOUT nonce parameter (SDK extraction)");
-        try {
-          data = await client.fetchSigners({
-            message,
-            signature: payload.signature,
-          } as any);
-          console.log("[SIWN][VERIFY] success without explicit nonce");
-        } catch (error2: any) {
-          lastError = error2;
-          console.log("[SIWN][VERIFY] failed without nonce too", {
-            errorCode: error2?.response?.data?.code,
-            errorProperty: error2?.response?.data?.property,
-            errorMessage: error2?.response?.data?.message,
-          });
-          
-          // Strategy 3: If we have hash instead of message, try using hash
-          if (payload.hash && payload.hash !== message) {
-            console.log("[SIWN][VERIFY] trying with hash instead of message");
-            try {
-              data = await client.fetchSigners({
-                message: payload.hash,
-                signature: payload.signature,
-                nonce: nonceToUse,
-              } as any);
-              console.log("[SIWN][VERIFY] success with hash");
-            } catch (error3: any) {
-              lastError = error3;
-              console.log("[SIWN][VERIFY] failed with hash too");
-            }
-          }
-        }
-      }
-    } else {
-      // No nonce available, try without it
-      console.log("[SIWN][VERIFY] no nonce available, trying fetchSigners without nonce parameter");
-      try {
-        data = await client.fetchSigners({
-          message,
-          signature: payload.signature,
-        } as any);
-        console.log("[SIWN][VERIFY] success without nonce");
-      } catch (error: any) {
-        lastError = error;
-        console.log("[SIWN][VERIFY] failed without nonce", {
-          errorCode: error?.response?.data?.code,
-          errorProperty: error?.response?.data?.property,
-          errorMessage: error?.response?.data?.message,
-        });
-      }
-    }
-    
-    // If all strategies failed, throw the last error
-    if (!data) {
-      throw lastError || new Error("All fetchSigners strategies failed");
-    }
-    
-    const signers = data.signers;
-    
-    if (!signers || signers.length === 0) {
-      console.log("[SIWN][VERIFY] no signers returned");
-      return {
-        ok: false,
-        status: 401,
-        error: "No valid signers found",
-      };
-    }
-
-    const signer = signers[0];
-    const fid = signer.fid;
-
-    if (!fid) {
-      console.log("[SIWN][VERIFY] signer has no FID");
+    if (!payload.signature) {
+      console.log("[SIWN][VERIFY] no signature provided");
       return {
         ok: false,
         status: 400,
-        error: "Signer has no FID",
+        error: "No signature provided",
+      };
+    }
+
+    console.log("[SIWN][VERIFY] parsing and verifying SIWE message", {
+      messageLength: message?.length,
+      messagePreview: message?.substring(0, 100),
+    });
+
+    // Parse and verify the SIWE message
+    const siweMessage = new SiweMessage(message);
+    const verifyResult = await siweMessage.verify({ signature: payload.signature });
+    
+    if (!verifyResult.success) {
+      console.log("[SIWN][VERIFY] SIWE verification failed", {
+        error: verifyResult.error,
+      });
+      return {
+        ok: false,
+        status: 401,
+        error: verifyResult.error?.type || "SIWE signature verification failed",
+      };
+    }
+
+    // Get the parsed message data
+    const fields = siweMessage;
+
+    console.log("[SIWN][VERIFY] SIWE message validated", {
+      address: fields.address,
+      domain: fields.domain,
+      uri: fields.uri,
+      nonce: fields.nonce,
+      resources: fields.resources,
+    });
+
+    // Extract FID from Resources field
+    // Resources format: ['- farcaster://fid/318447']
+    let fid: number | null = null;
+    if (fields.resources && fields.resources.length > 0) {
+      for (const resource of fields.resources) {
+        // Match patterns like "farcaster://fid/318447" or "- farcaster://fid/318447"
+        const fidMatch = resource.toString().match(/farcaster:\/\/fid\/(\d+)/i);
+        if (fidMatch && fidMatch[1]) {
+          fid = parseInt(fidMatch[1], 10);
+          console.log("[SIWN][VERIFY] extracted FID from Resources", { fid, resource });
+          break;
+        }
+      }
+    }
+
+    if (!fid) {
+      console.log("[SIWN][VERIFY] no FID found in Resources, trying alternative verification");
+      
+      // Fallback: Try using Neynar's fetchSigners with the verified address
+      // This might work for some cases where FID isn't in Resources
+      try {
+        const client = getNeynarClient();
+        // Note: This might not work for SIWN, but worth trying as fallback
+        const data = await client.fetchSigners({
+          message,
+          signature: payload.signature,
+        } as any);
+        
+        if (data.signers && data.signers.length > 0 && data.signers[0].fid) {
+          fid = data.signers[0].fid;
+          console.log("[SIWN][VERIFY] got FID from fetchSigners fallback", { fid });
+        }
+      } catch (fallbackError: any) {
+        console.log("[SIWN][VERIFY] fetchSigners fallback failed", {
+          error: fallbackError?.message,
+        });
+      }
+    }
+
+    if (!fid) {
+      console.log("[SIWN][VERIFY] could not extract FID from SIWN message");
+      return {
+        ok: false,
+        status: 400,
+        error: "SIWN message verified but no FID found in Resources",
       };
     }
 
     console.log("[SIWN][VERIFY] success, fetching user data for FID", fid);
 
-    // Fetch full user data
+    // Fetch full user data from Neynar
+    const client = getNeynarClient();
     const { users } = await client.fetchBulkUsers({ fids: [fid] });
     const user = users[0] || null;
 
@@ -186,24 +140,22 @@ async function verifyWithNeynar(payload: {
         fid,
         username: user?.username,
         user,
-        signer,
+        address: fields.address, // Include the verified Ethereum address
       },
     };
   } catch (error: any) {
-    // Log detailed error info including response data if available
+    // Log detailed error info
     const errorDetails: any = {
       message: error?.message || String(error),
-      status: error?.response?.status,
-      statusText: error?.response?.statusText,
-      data: error?.response?.data,
+      stack: error?.stack,
     };
     
-    console.log("[SIWN][VERIFY] SDK error", errorDetails);
+    console.log("[SIWN][VERIFY] verification error", errorDetails);
     
     return {
       ok: false,
-      status: error?.response?.status || 500,
-      error: error?.response?.data || error?.message || String(error),
+      status: 400,
+      error: error?.message || "SIWN verification failed",
     };
   }
 }

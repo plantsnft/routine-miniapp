@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { sdk } from "@farcaster/miniapp-sdk";
 
 export default function DailyCheckin() {
@@ -8,11 +8,132 @@ export default function DailyCheckin() {
   const [_loadingUser, setLoadingUser] = useState(true);
 
   const [checkedIn, setCheckedIn] = useState(false);
-  const [_streak, setStreak] = useState(3);
+  const [streak, setStreak] = useState<number | null>(null);
+  const [lastCheckIn, setLastCheckIn] = useState<string | null>(null);
+  const [timeUntilNext, setTimeUntilNext] = useState<string | null>(null);
+  const [_loadingStreak, setLoadingStreak] = useState(false);
   const [status, setStatus] = useState<"idle" | "saving" | "done" | "error">(
     "idle"
   );
   const [errorMessage, setErrorMessage] = useState("");
+
+  // Helper function to calculate time until next 9 AM Pacific
+  const calculateTimeUntilNext = (): string => {
+    const now = new Date();
+    
+    // Get current time components in Pacific timezone
+    const pacificFormatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Los_Angeles",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    
+    const pacificParts = pacificFormatter.formatToParts(now);
+    const pacificHour = parseInt(pacificParts.find(p => p.type === "hour")?.value || "0");
+    const pacificMinute = parseInt(pacificParts.find(p => p.type === "minute")?.value || "0");
+    
+    // Calculate hours and minutes until next 9 AM Pacific
+    let hoursUntil = 0;
+    let minutesUntil = 0;
+    
+    if (pacificHour >= 9) {
+      // Next check-in is tomorrow at 9 AM
+      hoursUntil = (24 - pacificHour) + 9 - 1; // Hours until midnight + 9 hours
+      minutesUntil = 60 - pacificMinute;
+    } else {
+      // Next check-in is today at 9 AM
+      hoursUntil = 9 - pacificHour - 1; // Hours until 9 AM
+      minutesUntil = 60 - pacificMinute;
+    }
+    
+    // Adjust for minutes
+    if (minutesUntil >= 60) {
+      hoursUntil += 1;
+      minutesUntil -= 60;
+    }
+    
+    // Format the result
+    if (hoursUntil > 0) {
+      return `${hoursUntil}h ${minutesUntil}m`;
+    }
+    return `${minutesUntil}m`;
+  };
+
+  // Update countdown timer every minute
+  useEffect(() => {
+    if (!checkedIn) return; // Only show countdown if already checked in
+    
+    const updateTimer = () => {
+      setTimeUntilNext(calculateTimeUntilNext());
+    };
+    
+    updateTimer(); // Initial update
+    const interval = setInterval(updateTimer, 60000); // Update every minute
+    
+    return () => clearInterval(interval);
+  }, [checkedIn]);
+
+  // Function to format last check-in date/time
+  const formatLastCheckIn = (timestamp: string | null): string => {
+    if (!timestamp) return "";
+    
+    try {
+      const date = new Date(timestamp);
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffMins = Math.floor(diffMs / (1000 * 60));
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      
+      if (diffMins < 1) return "Just now";
+      if (diffMins < 60) return `${diffMins} minute${diffMins === 1 ? "" : "s"} ago`;
+      if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
+      if (diffDays === 1) return "Yesterday";
+      if (diffDays < 7) return `${diffDays} days ago`;
+      
+      // Format as date
+      const formatter = new Intl.DateTimeFormat("en-US", {
+        month: "short",
+        day: "numeric",
+        year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+      return formatter.format(date);
+    } catch {
+      return "";
+    }
+  };
+
+  // Function to fetch user's streak from the API
+  const fetchStreak = useCallback(async (userId: number) => {
+    try {
+      setLoadingStreak(true);
+      const res = await fetch(`/api/checkin?fid=${userId}`);
+      const data = await res.json();
+      
+      if (data?.ok) {
+        setStreak(data.streak || 0);
+        setLastCheckIn(data.last_checkin || null);
+        // Check if user has already checked in today (based on 9 AM Pacific reset)
+        setCheckedIn(data.hasCheckedInToday || false);
+        // Update countdown if already checked in
+        if (data.hasCheckedInToday) {
+          setTimeUntilNext(calculateTimeUntilNext());
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching streak:", err);
+      // Don't show error to user, just don't update streak
+    } finally {
+      setLoadingStreak(false);
+    }
+  }, []);
 
   // 1) try to resolve user from querystring (works for ?fid=318447 dev mode)
   useEffect(() => {
@@ -23,8 +144,11 @@ export default function DailyCheckin() {
         const res = await fetch("/api/siwn" + qs);
         const data = await res.json();
         if (data?.ok && data?.fid) {
-          setFid(Number(data.fid));
+          const userId = Number(data.fid);
+          setFid(userId);
           setErrorMessage("");
+          // Fetch streak after getting FID
+          await fetchStreak(userId);
         }
       } catch (_e) {
         // ignore, we'll let user sign in manually
@@ -33,7 +157,7 @@ export default function DailyCheckin() {
       }
     };
     load();
-  }, []);
+  }, [fetchStreak]);
 
   // 2) real SIWN inside Warpcast
   const handleSignIn = async () => {
@@ -90,8 +214,11 @@ export default function DailyCheckin() {
       const json = await resp.json();
 
       if (resp.ok && json?.ok && json?.fid) {
-        setFid(Number(json.fid));
+        const userId = Number(json.fid);
+        setFid(userId);
         setErrorMessage("");
+        // Fetch streak after signing in
+        await fetchStreak(userId);
       } else {
         setErrorMessage(
           json?.error || "Signed in but server could not resolve FID."
@@ -133,10 +260,23 @@ export default function DailyCheckin() {
 
       if (res.ok && data.ok) {
         setCheckedIn(true);
-        setStreak((s) => s + 1);
+        // Update streak from the response (server returns the new streak)
+        if (data.streak !== undefined) {
+          setStreak(data.streak);
+        } else {
+          // Fallback: increment if we have a current streak
+          setStreak((s) => (s ?? 0) + 1);
+        }
+        // Update last check-in time to now
+        setLastCheckIn(new Date().toISOString());
+        // Update countdown
+        setTimeUntilNext(calculateTimeUntilNext());
         setStatus("done");
       } else if (res.status === 409) {
-        // Already checked in today
+        // Already checked in today - fetch current streak to show it
+        if (fid) {
+          await fetchStreak(fid);
+        }
         setStatus("error");
         setCheckedIn(true); // Show as checked in
         setErrorMessage(
@@ -169,6 +309,25 @@ export default function DailyCheckin() {
       <p style={{ margin: 0, marginBottom: 14, color: "#6b21a8" }}>
         Check in once per day to keep your streak and earn $CATWALK later.
       </p>
+
+      {/* Display current streak and check-in info if user is signed in */}
+      {fid && streak !== null && (
+        <div style={{ marginBottom: 16, padding: 12, background: "#ede9fe", borderRadius: 8, border: "1px solid #c4b5fd" }}>
+          <p style={{ margin: 0, marginBottom: 6, color: "#5b21b6", fontWeight: 700, fontSize: 20 }}>
+            🔥 {streak === 0 ? "Start your catwalk streak" : `${streak} day${streak === 1 ? "" : "s"} streak`}
+          </p>
+          {lastCheckIn && (
+            <p style={{ margin: 0, marginBottom: 4, color: "#6b21a8", fontSize: 13 }}>
+              Last check-in: {formatLastCheckIn(lastCheckIn)}
+            </p>
+          )}
+          {checkedIn && timeUntilNext && (
+            <p style={{ margin: 0, color: "#7c3aed", fontSize: 13, fontWeight: 500 }}>
+              Next check-in: {timeUntilNext} (9 AM Pacific)
+            </p>
+          )}
+        </div>
+      )}
 
       {/* show sign-in button if we don't have a user yet */}
       {!fid ? (
@@ -212,7 +371,24 @@ export default function DailyCheckin() {
       </button>
 
       {status === "done" && (
-        <p style={{ marginTop: 12, color: "#15803d" }}>Saved ✅</p>
+        <div style={{ marginTop: 16, padding: 14, background: "#d1fae5", borderRadius: 8, border: "1px solid #86efac" }}>
+          <p style={{ margin: 0, marginBottom: 8, color: "#15803d", fontWeight: 600, fontSize: 16 }}>
+            ✅ Saved successfully!
+          </p>
+          <p style={{ margin: 0, marginBottom: 10, color: "#166534", fontSize: 14 }}>
+            Thank you for taking a virtual catwalk today
+          </p>
+          {streak !== null && (
+            <p style={{ margin: 0, color: "#7c3aed", fontWeight: 700, fontSize: 18 }}>
+              🔥 {streak} day{streak === 1 ? "" : "s"} streak
+            </p>
+          )}
+          {timeUntilNext && (
+            <p style={{ margin: 0, marginTop: 6, color: "#6b21a8", fontSize: 13 }}>
+              Next check-in: {timeUntilNext} (9 AM Pacific)
+            </p>
+          )}
+        </div>
       )}
       {(status === "error" || errorMessage) && (
         <p style={{ marginTop: 12, color: "#b91c1c" }}>

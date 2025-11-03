@@ -3,6 +3,122 @@ import { NextRequest, NextResponse } from "next/server";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
+// GET endpoint to fetch user's check-in data (streak, last_checkin, etc.)
+export async function GET(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const fidParam = searchParams.get("fid");
+
+    if (!fidParam) {
+      return NextResponse.json(
+        { ok: false, error: "fid query parameter is required" },
+        { status: 400 }
+      );
+    }
+
+    const fid = Number(fidParam);
+
+    if (!fid || isNaN(fid)) {
+      return NextResponse.json(
+        { ok: false, error: "Invalid fid" },
+        { status: 400 }
+      );
+    }
+
+    // Fetch user's check-in data from Supabase
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/checkins?fid=eq.${fid}&limit=1`,
+      {
+        method: "GET",
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+      }
+    );
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("Supabase select error:", text);
+      return NextResponse.json(
+        { ok: false, error: "Failed to fetch check-in data", detail: text },
+        { status: 500 }
+      );
+    }
+
+    const data = await res.json();
+
+    if (!data || data.length === 0) {
+      // No check-in record yet - return default values
+      return NextResponse.json({
+        ok: true,
+        streak: 0,
+        last_checkin: null,
+        hasCheckedIn: false,
+      });
+    }
+
+    const checkin = data[0];
+    const streak = typeof checkin.streak === "number" && !isNaN(checkin.streak)
+      ? checkin.streak
+      : 0;
+    const lastCheckin = checkin.last_checkin || null;
+
+    // Check if user has already checked in today (based on 9 AM Pacific reset)
+    let hasCheckedInToday = false;
+    if (lastCheckin) {
+      const lastDate = new Date(lastCheckin);
+      const nowDate = new Date();
+      
+      // Helper to get check-in day ID (same logic as POST endpoint)
+      const getCheckInDayId = (date: Date): string => {
+        const formatter = new Intl.DateTimeFormat("en-US", {
+          timeZone: "America/Los_Angeles",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        });
+        
+        const parts = formatter.formatToParts(date);
+        const year = parts.find(p => p.type === "year")?.value;
+        const month = parts.find(p => p.type === "month")?.value;
+        const day = parts.find(p => p.type === "day")?.value;
+        const hour = parseInt(parts.find(p => p.type === "hour")?.value || "0");
+        
+        const checkInDate = new Date(parseInt(year!), parseInt(month!) - 1, parseInt(day!));
+        if (hour < 9) {
+          checkInDate.setDate(checkInDate.getDate() - 1);
+        }
+        
+        const checkInYear = checkInDate.getFullYear();
+        const checkInMonth = String(checkInDate.getMonth() + 1).padStart(2, "0");
+        const checkInDay = String(checkInDate.getDate()).padStart(2, "0");
+        return `${checkInYear}-${checkInMonth}-${checkInDay}`;
+      };
+      
+      // Check if last check-in is in the same check-in window as today
+      hasCheckedInToday = getCheckInDayId(lastDate) === getCheckInDayId(nowDate);
+    }
+
+    return NextResponse.json({
+      ok: true,
+      streak,
+      last_checkin: lastCheckin,
+      hasCheckedIn: !!lastCheckin,
+      hasCheckedInToday,
+    });
+  } catch (err: any) {
+    console.error("API /api/checkin GET error:", err);
+    return NextResponse.json(
+      { ok: false, error: err?.message ?? "Unknown server error" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();

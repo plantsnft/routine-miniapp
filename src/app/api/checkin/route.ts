@@ -37,7 +37,8 @@ export async function POST(req: NextRequest) {
     }
 
     const existing = await existingRes.json();
-    const now = new Date().toISOString();
+    const nowDate = new Date();
+    const now = nowDate.toISOString();
 
     // 2) if no row yet → insert new
     if (!existing || existing.length === 0) {
@@ -74,14 +75,54 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3) row exists → update it instead of 409
+    // 3) row exists → update it instead of 409, with day-boundary streak logic
     const current = existing[0];
-
-    // super simple streak logic for now: just +1
-    const newStreak =
+    const currentStreak =
       typeof current.streak === "number" && !isNaN(current.streak)
-        ? current.streak + 1
-        : 1;
+        ? current.streak
+        : 0;
+
+    const lastCheckinIso: string | null = current.last_checkin ?? null;
+    const lastDate = lastCheckinIso ? new Date(lastCheckinIso) : null;
+
+    // helpers inlined to avoid imports
+    const toUtcYmd = (d: Date) =>
+      `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(
+        d.getUTCDate()
+      ).padStart(2, "0")}`;
+
+    const sameUtcDay = (a: Date, b: Date) => toUtcYmd(a) === toUtcYmd(b);
+
+    const daysDiffUtc = (a: Date, b: Date) => {
+      // strip to midnight UTC by constructing new Date from Y-M-D
+      const aMid = new Date(`${toUtcYmd(a)}T00:00:00.000Z`);
+      const bMid = new Date(`${toUtcYmd(b)}T00:00:00.000Z`);
+      const ms = bMid.getTime() - aMid.getTime();
+      return Math.round(ms / (24 * 60 * 60 * 1000));
+    };
+
+    if (lastDate && sameUtcDay(lastDate, nowDate)) {
+      // already checked in today → do not increment, avoid write
+      return NextResponse.json(
+        { ok: true, streak: currentStreak, mode: "noop" },
+        { status: 200 }
+      );
+    }
+
+    let newStreak: number;
+    if (!lastDate) {
+      newStreak = Math.max(1, currentStreak || 1);
+    } else {
+      const diff = daysDiffUtc(lastDate, nowDate);
+      if (diff === 1) {
+        newStreak = currentStreak + 1;
+      } else if (diff > 1) {
+        newStreak = 1; // broke streak
+      } else {
+        // If somehow diff < 0 (clock drift), just treat as same day handled above or reset
+        newStreak = 1;
+      }
+    }
 
     const updateRes = await fetch(
       `${SUPABASE_URL}/rest/v1/checkins?fid=eq.${fid}`,

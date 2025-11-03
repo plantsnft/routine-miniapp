@@ -2,16 +2,28 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
+const NEYNAR_CLIENT_ID = process.env.NEYNAR_CLIENT_ID;
 
 if (!NEYNAR_API_KEY) {
   console.warn("⚠️ NEYNAR_API_KEY is missing in env");
 }
 
-// helper: actually call Neynar with message + signature
-async function verifyWithNeynar(message: string, signature: string) {
+// helper: actually call Neynar with whichever payload host provided
+async function verifyWithNeynar(payload: {
+  message?: string;
+  hash?: string;
+  messageBytes?: string;
+  signature: string;
+}) {
   // this is the most common SIWN verify path in current Neynar mini-app flow
   // if Neynar changes it for your account, we will see it in the error they return
   const url = "https://api.neynar.com/v2/farcaster/siwn/verify";
+
+  const body: Record<string, any> = {};
+  if (payload.message) body.message = payload.message;
+  if (payload.hash) body.hash = payload.hash;
+  if (payload.messageBytes) body.messageBytes = payload.messageBytes;
+  body.signature = payload.signature;
 
   const res = await fetch(url, {
     method: "POST",
@@ -19,11 +31,11 @@ async function verifyWithNeynar(message: string, signature: string) {
       "Content-Type": "application/json",
       "api_key": NEYNAR_API_KEY!,
       "x-neynar-api-key": NEYNAR_API_KEY!, // some envs use this header name
+      ...(NEYNAR_CLIENT_ID
+        ? { "x-neynar-client-id": NEYNAR_CLIENT_ID }
+        : {}),
     },
-    body: JSON.stringify({
-      message,
-      signature,
-    }),
+    body: JSON.stringify(body),
   });
 
   const json = await res.json().catch(() => ({}));
@@ -48,6 +60,15 @@ export async function GET(req: NextRequest) {
   const message = searchParams.get("message");
   const signature = searchParams.get("signature");
   const hash = searchParams.get("hash"); // sometimes they call it hash
+  // defensive logging without secrets
+  try {
+    console.log("[SIWN][GET] params", {
+      hasMessage: Boolean(message),
+      hasHash: Boolean(hash),
+      hasSignature: Boolean(signature),
+      hasFid: Boolean(searchParams.get("fid")),
+    });
+  } catch {}
 
   // 1) if Warpcast actually sent us a fid directly, just return it
   const fidFromHost = searchParams.get("fid");
@@ -55,7 +76,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       fid: Number(fidFromHost),
-      source: "host-fid",
+      username: undefined,
     });
   }
 
@@ -86,7 +107,14 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const result = await verifyWithNeynar(finalMessage, finalSignature);
+  const result = await verifyWithNeynar({ message: finalMessage, signature: finalSignature });
+  try {
+    console.log("[SIWN][GET] neynar result", {
+      ok: result.ok,
+      hasData: Boolean((result as any)?.data),
+      status: (result as any)?.status,
+    });
+  } catch {}
 
   if (!result.ok) {
     return NextResponse.json(
@@ -106,6 +134,11 @@ export async function GET(req: NextRequest) {
     result.data?.user?.fid ??
     result.data?.data?.fid ??
     null;
+  const username =
+    result.data?.username ??
+    result.data?.user?.username ??
+    result.data?.data?.username ??
+    undefined;
 
   if (!fid) {
     return NextResponse.json(
@@ -121,7 +154,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     fid: Number(fid),
-    raw: result.data,
+    username,
   });
 }
 
@@ -137,31 +170,48 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // sometimes it's {message, signature}, sometimes {hash, signature}
+  // sometimes it's {message, signature}, sometimes {hash, signature}, sometimes {messageBytes}
   const message = body.message || body.hash;
+  const messageBytes = body.messageBytes || body.message_bytes || body.message_bytes;
   const signature = body.signature;
+
+  try {
+    console.log("[SIWN][POST] body", {
+      hasMessage: Boolean(body?.message),
+      hasHash: Boolean(body?.hash),
+      hasSignature: Boolean(signature),
+      hasFid: Boolean(body?.fid),
+    });
+  } catch {}
 
   // host might send fid directly — in that case we’re good
   if (body.fid) {
     return NextResponse.json({
       ok: true,
       fid: Number(body.fid),
-      source: "host-fid",
+      username: body.username ?? undefined,
     });
   }
 
-  if (!message || !signature) {
+  if ((!message && !messageBytes) || !signature) {
     return NextResponse.json(
       {
         ok: false,
-        error: "No hash/signature in request body.",
+        error: "No message/hash/messageBytes and signature in request body.",
         debug: body,
       },
       { status: 400 }
     );
   }
 
-  const result = await verifyWithNeynar(message, signature);
+  const result = await verifyWithNeynar({ message, hash: body.hash, messageBytes, signature });
+  try {
+    console.log("[SIWN][POST] neynar result", {
+      ok: result.ok,
+      hasData: Boolean((result as any)?.data),
+      status: (result as any)?.status,
+    });
+  } catch {}
 
   if (!result.ok) {
     return NextResponse.json(
@@ -179,6 +229,11 @@ export async function POST(req: NextRequest) {
     result.data?.user?.fid ??
     result.data?.data?.fid ??
     null;
+  const username =
+    result.data?.username ??
+    result.data?.user?.username ??
+    result.data?.data?.username ??
+    undefined;
 
   if (!fid) {
     return NextResponse.json(
@@ -194,6 +249,6 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     fid: Number(fid),
-    raw: result.data,
+    username,
   });
 }

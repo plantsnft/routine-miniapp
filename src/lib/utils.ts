@@ -37,7 +37,10 @@ export function getMiniAppEmbedMetadata(ogImageUrl?: string) {
   };
 }
 
-export async function getFarcasterDomainManifest(): Promise<Manifest> {
+export async function getFarcasterDomainManifest(baseUrl?: string): Promise<Manifest> {
+  // Use provided baseUrl, or fall back to APP_URL, or use environment variable
+  const appUrl = baseUrl || APP_URL || process.env.NEXT_PUBLIC_URL || 'https://routine-smoky.vercel.app';
+  
   // Use environment variable if available, otherwise use the signed accountAssociation
   const accountAssociation = APP_ACCOUNT_ASSOCIATION || {
     header: "eyJmaWQiOjMxODQ0NywidHlwZSI6ImF1dGgiLCJrZXkiOiIweDdjNTI3ZDk1NmY0NzkyMEZlYzM4ZEZjNTgzNEZlMzFiNUE3MmRCMTIifQ",
@@ -50,13 +53,13 @@ export async function getFarcasterDomainManifest(): Promise<Manifest> {
     miniapp: {
       version: '1',
       name: APP_NAME ?? 'Neynar Starter Kit',
-      homeUrl: APP_URL,
-      iconUrl: APP_ICON_URL,
-      imageUrl: APP_OG_IMAGE_URL,
+      homeUrl: appUrl,
+      iconUrl: `${appUrl}/icon.png`,
+      imageUrl: `${appUrl}/api/opengraph-image`,
       buttonTitle: APP_BUTTON_TEXT ?? 'Launch Mini App',
-      splashImageUrl: APP_SPLASH_URL,
+      splashImageUrl: `${appUrl}/splash.png`,
       splashBackgroundColor: APP_SPLASH_BACKGROUND_COLOR,
-      webhookUrl: APP_WEBHOOK_URL,
+      webhookUrl: APP_WEBHOOK_URL || `https://api.neynar.com/f/app/${process.env.NEYNAR_CLIENT_ID}/event`,
     },
   };
 }

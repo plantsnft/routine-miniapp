@@ -10,7 +10,7 @@ export default function DebugSiwn() {
       const res = await fetch("/api/siwn");
       const data = await res.json();
       setMsg(JSON.stringify(data, null, 2));
-    } catch (e) {
+    } catch (_e) {
       setMsg("Error calling /api/siwn");
     }
   };

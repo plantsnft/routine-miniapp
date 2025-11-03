@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getNeynarClient } from "~/lib/neynar";
 
 const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
-const NEYNAR_CLIENT_ID = process.env.NEYNAR_CLIENT_ID;
+const _NEYNAR_CLIENT_ID = process.env.NEYNAR_CLIENT_ID;
 
 if (!NEYNAR_API_KEY) {
   console.warn("⚠️ NEYNAR_API_KEY is missing in env");
@@ -210,7 +210,7 @@ export async function POST(req: NextRequest) {
   let body: any = {};
   try {
     body = await req.json();
-  } catch (e) {
+  } catch (_e) {
     return NextResponse.json(
       { ok: false, error: "Body was not JSON" },
       { status: 400 }

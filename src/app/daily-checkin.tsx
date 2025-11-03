@@ -5,10 +5,10 @@ import { sdk } from "@farcaster/miniapp-sdk";
 
 export default function DailyCheckin() {
   const [fid, setFid] = useState<number | null>(null);
-  const [loadingUser, setLoadingUser] = useState(true);
+  const [_loadingUser, setLoadingUser] = useState(true);
 
   const [checkedIn, setCheckedIn] = useState(false);
-  const [streak, setStreak] = useState(3);
+  const [_streak, setStreak] = useState(3);
   const [status, setStatus] = useState<"idle" | "saving" | "done" | "error">(
     "idle"
   );
@@ -26,8 +26,8 @@ export default function DailyCheckin() {
           setFid(Number(data.fid));
           setErrorMessage("");
         }
-      } catch (e) {
-        // ignore, we’ll let user sign in manually
+      } catch (_e) {
+        // ignore, we'll let user sign in manually
       } finally {
         setLoadingUser(false);
       }

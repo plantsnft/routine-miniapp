@@ -21,11 +21,11 @@ async function verifyWithNeynar(payload: {
   const fallbackUrl = "https://api.neynar.com/v2/siwn/verify";
 
   const baseBody: Record<string, any> = {};
-  if (payload.message) body.message = payload.message;
-  if (payload.hash) body.hash = payload.hash;
-  if (payload.messageBytes) body.messageBytes = payload.messageBytes;
-  body.signature = payload.signature;
-  if (NEYNAR_CLIENT_ID) body.client_id = NEYNAR_CLIENT_ID;
+  if (payload.message) baseBody.message = payload.message;
+  if (payload.hash) baseBody.hash = payload.hash;
+  if (payload.messageBytes) baseBody.messageBytes = payload.messageBytes;
+  baseBody.signature = payload.signature;
+  if (NEYNAR_CLIENT_ID) baseBody.client_id = NEYNAR_CLIENT_ID;
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",

@@ -22,11 +22,8 @@ export function cn(...inputs: ClassValue[]) {
 
 export function getMiniAppEmbedMetadata(ogImageUrl?: string) {
   return {
-    version: 'next',
+    version: '1', // Must be "1" not "next" per Farcaster docs
     imageUrl: ogImageUrl ?? APP_OG_IMAGE_URL,
-    ogTitle: APP_NAME,
-    ogDescription: APP_DESCRIPTION,
-    ogImageUrl: ogImageUrl ?? APP_OG_IMAGE_URL,
     button: {
       title: APP_BUTTON_TEXT,
       action: {
@@ -34,19 +31,22 @@ export function getMiniAppEmbedMetadata(ogImageUrl?: string) {
         name: APP_NAME,
         url: APP_URL,
         splashImageUrl: APP_SPLASH_URL,
-        iconUrl: APP_ICON_URL,
         splashBackgroundColor: APP_SPLASH_BACKGROUND_COLOR,
-        description: APP_DESCRIPTION,
-        primaryCategory: APP_PRIMARY_CATEGORY,
-        tags: APP_TAGS,
       },
     },
   };
 }
 
 export async function getFarcasterDomainManifest(): Promise<Manifest> {
+  // Use environment variable if available, otherwise use the signed accountAssociation
+  const accountAssociation = APP_ACCOUNT_ASSOCIATION || {
+    header: "eyJmaWQiOjMxODQ0NywidHlwZSI6ImF1dGgiLCJrZXkiOiIweDdjNTI3ZDk1NmY0NzkyMEZlYzM4ZEZjNTgzNEZlMzFiNUE3MmRCMTIifQ",
+    payload: "eyJkb21haW4iOiJyb3V0aW5lLXNtb2t5LnZlcmNlbC5hcHAifQ",
+    signature: "edEJSA+ZYlH0pssvN99KYTk3EzwQPFUQ2grBw+zKlYcLJUZdTqf6brlZ7qnPBTlMRh72KspvXkmCQdV6llxRexw="
+  };
+
   return {
-    accountAssociation: APP_ACCOUNT_ASSOCIATION!,
+    accountAssociation,
     miniapp: {
       version: '1',
       name: APP_NAME ?? 'Neynar Starter Kit',

@@ -67,6 +67,7 @@ export default function App(
   // --- Effects ---
   /**
    * Sets the initial tab to "home" when the SDK is loaded.
+   * Also calls sdk.actions.ready() to signal the app is ready to display.
    * 
    * This effect ensures that users start on the home tab when they first
    * load the mini app. It only runs when the SDK is fully loaded to
@@ -75,6 +76,12 @@ export default function App(
   useEffect(() => {
     if (isSDKLoaded) {
       setInitialTab(Tab.Home);
+      // Call ready() to signal app is ready (required per Farcaster docs)
+      import('@farcaster/miniapp-sdk').then(({ sdk }) => {
+        sdk.actions.ready().catch((err) => {
+          console.error('Error calling sdk.actions.ready():', err);
+        });
+      });
     }
   }, [isSDKLoaded, setInitialTab]);
 

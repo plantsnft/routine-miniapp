@@ -16,41 +16,55 @@ async function verifyWithNeynar(payload: {
   signature: string;
 }) {
   // this is the most common SIWN verify path in current Neynar mini-app flow
-  // if Neynar changes it for your account, we will see it in the error they return
-  const url = "https://api.neynar.com/v2/farcaster/siwn/verify";
+  // we also fallback to alternative path if 404 is returned
+  const primaryUrl = "https://api.neynar.com/v2/farcaster/siwn/verify";
+  const fallbackUrl = "https://api.neynar.com/v2/siwn/verify";
 
-  const body: Record<string, any> = {};
+  const baseBody: Record<string, any> = {};
   if (payload.message) body.message = payload.message;
   if (payload.hash) body.hash = payload.hash;
   if (payload.messageBytes) body.messageBytes = payload.messageBytes;
   body.signature = payload.signature;
+  if (NEYNAR_CLIENT_ID) body.client_id = NEYNAR_CLIENT_ID;
 
-  const res = await fetch(url, {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "api_key": NEYNAR_API_KEY!,
+    "x-neynar-api-key": NEYNAR_API_KEY!,
+  };
+  if (NEYNAR_CLIENT_ID) headers["x-neynar-client-id"] = NEYNAR_CLIENT_ID;
+
+  // attempt primary endpoint first
+  let res = await fetch(primaryUrl, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "api_key": NEYNAR_API_KEY!,
-      "x-neynar-api-key": NEYNAR_API_KEY!, // some envs use this header name
-      ...(NEYNAR_CLIENT_ID
-        ? { "x-neynar-client-id": NEYNAR_CLIENT_ID }
-        : {}),
-    },
-    body: JSON.stringify(body),
+    headers,
+    body: JSON.stringify(baseBody),
   });
 
   const json = await res.json().catch(() => ({}));
+
+  if (!res.ok && res.status === 404) {
+    // try alternate path
+    res = await fetch(fallbackUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(baseBody),
+    });
+  }
+
+  const json2 = res.ok ? await res.json().catch(() => ({})) : json;
 
   if (!res.ok) {
     return {
       ok: false,
       status: res.status,
-      error: json,
+      error: json2,
     };
   }
 
   return {
     ok: true,
-    data: json,
+    data: json2,
   };
 }
 
@@ -179,6 +193,7 @@ export async function POST(req: NextRequest) {
     console.log("[SIWN][POST] body", {
       hasMessage: Boolean(body?.message),
       hasHash: Boolean(body?.hash),
+      hasMessageBytes: Boolean(body?.messageBytes || body?.message_bytes),
       hasSignature: Boolean(signature),
       hasFid: Boolean(body?.fid),
     });

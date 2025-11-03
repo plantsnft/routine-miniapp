@@ -43,6 +43,8 @@ export async function POST(req: NextRequest) {
     // A "check-in day" runs from 9 AM Pacific to 8:59:59.999 AM Pacific the next day
     
     // Get which check-in day a date falls into (as a string identifier)
+    // Check-in windows: 9 AM Pacific on Day N to 8:59:59.999 AM Pacific on Day N+1
+    // Example: Window for "Jan 2" runs from 9 AM Jan 2 to 8:59:59 AM Jan 3
     const getCheckInDayId = (date: Date): string => {
       // Get date components in Pacific timezone
       const formatter = new Intl.DateTimeFormat("en-US", {
@@ -61,11 +63,15 @@ export async function POST(req: NextRequest) {
       const day = parts.find(p => p.type === "day")?.value;
       const hour = parseInt(parts.find(p => p.type === "hour")?.value || "0");
       
-      // If before 9 AM, it belongs to the previous day's check-in window
-      let checkInDate = new Date(parseInt(year!), parseInt(month!) - 1, parseInt(day!));
+      // Determine which check-in window this falls into
+      // If it's 9 AM or later, it's in today's window
+      // If it's before 9 AM, it's in yesterday's window
+      const checkInDate = new Date(parseInt(year!), parseInt(month!) - 1, parseInt(day!));
       if (hour < 9) {
+        // Before 9 AM - belongs to previous day's window
         checkInDate.setDate(checkInDate.getDate() - 1);
       }
+      // If 9 AM or later, use today's date
       
       // Return as YYYY-MM-DD string for easy comparison
       const checkInYear = checkInDate.getFullYear();

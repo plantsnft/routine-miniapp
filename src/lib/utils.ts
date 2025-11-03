@@ -3,14 +3,8 @@ import { twMerge } from 'tailwind-merge';
 import { Manifest } from '@farcaster/miniapp-core/src/manifest';
 import {
   APP_BUTTON_TEXT,
-  APP_DESCRIPTION,
-  APP_ICON_URL,
   APP_NAME,
-  APP_OG_IMAGE_URL,
-  APP_PRIMARY_CATEGORY,
   APP_SPLASH_BACKGROUND_COLOR,
-  APP_SPLASH_URL,
-  APP_TAGS,
   APP_URL,
   APP_WEBHOOK_URL,
   APP_ACCOUNT_ASSOCIATION,

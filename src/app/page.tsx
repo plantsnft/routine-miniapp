@@ -1,6 +1,6 @@
 import { Metadata } from "next";
 import App from "./app";
-import { APP_NAME, APP_DESCRIPTION, APP_OG_IMAGE_URL } from "~/lib/constants";
+import { APP_NAME, APP_DESCRIPTION } from "~/lib/constants";
 import { getMiniAppEmbedMetadata } from "~/lib/utils";
 import DailyCheckin from "./daily-checkin";
 import DebugSiwn from "./debug-siwn";

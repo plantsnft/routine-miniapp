@@ -26,11 +26,11 @@ export function HomeTab() {
   const CREATOR_COUNT = CATWALK_CREATOR_FIDS.length || 29; // Default to 29 if list is empty
   const CATWALK_CHANNEL_URL = "https://farcaster.xyz/~/channel/catwalk";
 
-  // Cycle through keywords every 4 seconds (slower)
+  // Cycle through keywords every 12 seconds (3x slower than 4 seconds)
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentKeywordIndex((prev) => (prev + 1) % keywords.length);
-    }, 4000); // Changed from 2000 to 4000 (4 seconds)
+    }, 12000); // 12 seconds (3x slower)
     return () => clearInterval(interval);
   }, [keywords.length]);
 
@@ -145,14 +145,23 @@ export function HomeTab() {
             alignItems: "center",
           }}
         >
-          <div style={{ textAlign: "center" }}>
+          <a
+            href={CATWALK_CHANNEL_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              textAlign: "center",
+              textDecoration: "none",
+              cursor: "pointer",
+            }}
+          >
             <p style={{ margin: 0, color: "#c1b400", fontSize: 12, fontWeight: 600 }}>
-              Followers
+              /catwalk channel fans
             </p>
             <p style={{ margin: 0, color: "#ffffff", fontSize: 20, fontWeight: 700 }}>
               {loadingStats ? "..." : followers !== null ? followers.toLocaleString() : "—"}
             </p>
-          </div>
+          </a>
           <div
             style={{
               width: "1px",
@@ -172,7 +181,7 @@ export function HomeTab() {
             }}
           >
             <p style={{ margin: 0, color: "#c1b400", fontSize: 12, fontWeight: 600 }}>
-              Catwalk Creators
+              Official Catwalk Creators
             </p>
             <p style={{ margin: 0, color: "#ffffff", fontSize: 20, fontWeight: 700 }}>
               {CREATOR_COUNT}
@@ -244,7 +253,7 @@ export function HomeTab() {
                 color: "#c1b400",
                 fontSize: 14,
                 fontWeight: 600,
-                animation: "fadeInOut 3.5s ease-in-out",
+                animation: "fadeInOut 11s ease-in-out",
               }}
             >
               {keywords[currentKeywordIndex]}
@@ -253,8 +262,8 @@ export function HomeTab() {
           <style>{`
             @keyframes fadeInOut {
               0% { opacity: 0; transform: translateY(10px); }
-              15% { opacity: 1; transform: translateY(0); }
-              85% { opacity: 1; transform: translateY(0); }
+              5% { opacity: 1; transform: translateY(0); }
+              95% { opacity: 1; transform: translateY(0); }
               100% { opacity: 0; transform: translateY(-10px); }
             }
           `}</style>
@@ -294,7 +303,7 @@ export function HomeTab() {
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <h3 style={{ margin: 0, color: "#c1b400", fontSize: 20, fontWeight: 700 }}>
-                Catwalk Creators
+                Official Catwalk Creators
               </h3>
               <button
                 onClick={() => setShowCreatorsModal(false)}

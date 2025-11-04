@@ -443,7 +443,7 @@ export default function DailyCheckin() {
         </p>
 
         {/* Display current streak and check-in info if user is signed in */}
-        {fid && streak !== null && (
+        {fid && streak !== null && streak > 0 && (
           <div
             style={{
               marginBottom: 16,
@@ -462,7 +462,7 @@ export default function DailyCheckin() {
                 fontSize: 20,
               }}
             >
-              🔥 {streak === 0 ? "Start your catwalk streak" : `${streak} day${streak === 1 ? "" : "s"} streak`}
+              🔥 {streak} day{streak === 1 ? "" : "s"} streak
             </p>
             {lastCheckIn && (
               <p style={{ margin: 0, marginBottom: 4, color: "#000000", fontSize: 13, opacity: 0.8 }}>
@@ -532,7 +532,7 @@ export default function DailyCheckin() {
             ? "Saving..."
             : checkedIn
             ? "✅ Checked in for today"
-            : "Check in for today"}
+            : "Daily /Catwalk Checkin"}
         </button>
 
         {status === "done" && (

@@ -137,7 +137,7 @@ export async function GET() {
         throw new Error("DexScreener returned invalid data format");
       }
 
-      if (dexScreenerResponse.ok) {
+      // Process the data
         console.log("[Token Price] DexScreener raw data:", {
           pairsCount: data.pairs?.length,
           pairs: data.pairs?.map((p: any) => ({

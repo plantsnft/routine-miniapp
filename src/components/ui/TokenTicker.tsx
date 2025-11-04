@@ -194,7 +194,7 @@ export function TokenTicker() {
 
   // Create swap URL for Farcaster wallet
   // Using Uniswap on Base as it's the most common DEX
-  const TOKEN_ADDRESS = "0xa5eb1cad0dfc1c4f8d4f84f995aeda9a7a047b07";
+  const TOKEN_ADDRESS = "0xa5eb1cAD0dFC1c4f8d4f84f995aeDA9a7A047B07";
   const swapUrl = `https://app.uniswap.org/swap?chain=base&outputCurrency=${TOKEN_ADDRESS}`;
 
   const handleTickerClick = () => {

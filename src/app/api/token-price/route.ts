@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
-// CATWALK token on Base
-const TOKEN_ADDRESS = "0xa5eb1cad0dfc1c4f8d4f84f995aeda9a7a047b07";
+// CATWALK token on Base - using checksummed address
+const TOKEN_ADDRESS = "0xa5eb1cAD0dFC1c4f8d4f84f995aeDA9a7A047B07";
 const BASE_CHAIN_ID = "base";
 const BASESCAN_API_KEY = process.env.BASESCAN_API_KEY || ""; // Optional API key for BaseScan
 
@@ -107,23 +107,55 @@ export async function GET() {
     ]);
 
     // Try DexScreener API first (free, no API key needed)
+    // Use the direct URL format: /base/TOKEN_ADDRESS
     try {
-      const dexScreenerResponse = await fetch(
-        `https://api.dexscreener.com/latest/dex/tokens/${TOKEN_ADDRESS}`
-      );
+      const dexScreenerUrl = `https://api.dexscreener.com/latest/dex/tokens/${TOKEN_ADDRESS}`;
+      console.log("[Token Price] Fetching from DexScreener:", dexScreenerUrl);
+      
+      const dexScreenerResponse = await fetch(dexScreenerUrl, {
+        headers: {
+          "User-Agent": "Catwalk-MiniApp",
+        },
+      });
+
+      console.log("[Token Price] DexScreener response status:", dexScreenerResponse.status);
 
       if (dexScreenerResponse.ok) {
         const data = await dexScreenerResponse.json();
+        console.log("[Token Price] DexScreener raw data:", {
+          pairsCount: data.pairs?.length,
+          pairs: data.pairs?.map((p: any) => ({
+            chainId: p.chainId,
+            dexId: p.dexId,
+            priceUsd: p.priceUsd,
+            pairAddress: p.pairAddress,
+          })),
+        });
         
         if (data.pairs && data.pairs.length > 0) {
-          // Find the pair on Base chain
-          const basePair = data.pairs.find(
+          // Find the pair on Base chain - prioritize Base pairs
+          const basePairs = data.pairs.filter(
             (pair: any) => 
-              pair.chainId === BASE_CHAIN_ID || 
-              pair.chainId === "base" ||
-              pair.dexId === "baseswap" ||
-              pair.dexId === "uniswap-v3"
-          ) || data.pairs[0]; // Fallback to first pair if no Base pair found
+              pair.chainId === "base" || 
+              pair.chainId === BASE_CHAIN_ID
+          );
+          
+          // If we have Base pairs, use the one with highest liquidity, otherwise use first pair
+          const basePair = basePairs.length > 0
+            ? basePairs.reduce((best: any, current: any) => {
+                const bestLiq = parseFloat(best.liquidity?.usd || "0");
+                const currentLiq = parseFloat(current.liquidity?.usd || "0");
+                return currentLiq > bestLiq ? current : best;
+              })
+            : data.pairs[0]; // Fallback to first pair if no Base pair found
+          
+          console.log("[Token Price] Selected pair:", {
+            chainId: basePair.chainId,
+            dexId: basePair.dexId,
+            priceUsd: basePair.priceUsd,
+            liquidity: basePair.liquidity?.usd,
+            volume24h: basePair.volume?.h24,
+          });
 
           if (basePair) {
             // Calculate market cap: price * total supply
@@ -131,22 +163,29 @@ export async function GET() {
             // Try to get it from the pair data or calculate from liquidity
             let marketCap: number | null = null;
             
-            // Try to get market cap from pair data if available
-            if (basePair.marketCap) {
-              marketCap = parseFloat(basePair.marketCap);
-            } else if (basePair.fdv) {
-              // Fully diluted valuation is close to market cap
+            // Try to get market cap from pair data
+            // DexScreener provides fdv (fully diluted valuation) which is market cap
+            if (basePair.fdv) {
               marketCap = parseFloat(basePair.fdv);
+            } else if (basePair.marketCap) {
+              marketCap = parseFloat(basePair.marketCap);
             } else if (basePair.priceUsd && basePair.liquidity?.usd) {
-              // Rough estimate: use liquidity as a proxy for market cap
+              // Fallback: rough estimate from liquidity
               // This is not accurate but better than nothing
-              marketCap = parseFloat(basePair.liquidity.usd) * 2; // Rough multiplier
+              marketCap = parseFloat(basePair.liquidity.usd) * 2;
             }
+
+            // Extract price change - DexScreener uses priceChange24h or priceChange.h24
+            const priceChange24h = basePair.priceChange24h 
+              ? parseFloat(basePair.priceChange24h)
+              : basePair.priceChange?.h24 
+                ? parseFloat(basePair.priceChange.h24)
+                : 0;
 
             const response = {
               price: parseFloat(basePair.priceUsd || "0"),
-              priceChange24h: parseFloat(basePair.priceChange?.h24 || "0"),
-              volume24h: parseFloat(basePair.volume?.h24 || "0"),
+              priceChange24h,
+              volume24h: parseFloat(basePair.volume?.h24 || basePair.volume24h || "0"),
               liquidity: parseFloat(basePair.liquidity?.usd || "0"),
               marketCap,
               holders: tokenStats.holders,

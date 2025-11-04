@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-const TOKEN_ADDRESS = "0xa5eb1cad0dfc1c4f8d4f84f995aeda9a7a047b07"; // CATWALK on Base
+const TOKEN_ADDRESS = "0xa5eb1cAD0dFC1c4f8d4f84f995aeDA9a7A047B07"; // CATWALK on Base
 const BASESCAN_API_KEY = process.env.BASESCAN_API_KEY || "";
 
 interface RecentPurchase {

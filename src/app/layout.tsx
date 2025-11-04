@@ -7,6 +7,10 @@ import { APP_NAME, APP_DESCRIPTION } from '~/lib/constants';
 export const metadata: Metadata = {
   title: APP_NAME,
   description: APP_DESCRIPTION,
+  icons: {
+    icon: '/logo.png',
+    apple: '/logo.png',
+  },
 };
 
 export default async function RootLayout({

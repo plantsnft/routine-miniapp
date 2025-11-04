@@ -86,7 +86,7 @@ export const RETURN_URL: string | undefined = process.env.NEXT_PUBLIC_RETURN_URL
 /**
  * Icon URL for the mini app.
  */
-export const APP_ICON_URL: string = `${APP_URL}/icon.png`;
+export const APP_ICON_URL: string = `${APP_URL}/logo.png`;
 
 /**
  * Whether wallet functionality is enabled.

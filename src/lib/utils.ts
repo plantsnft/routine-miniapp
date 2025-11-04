@@ -54,7 +54,7 @@ export async function getFarcasterDomainManifest(baseUrl?: string): Promise<Mani
       version: '1',
       name: APP_NAME ?? 'Neynar Starter Kit',
       homeUrl: appUrl,
-      iconUrl: `${appUrl}/icon.png`,
+      iconUrl: `${appUrl}/logo.png`,
       imageUrl: `${appUrl}/api/opengraph-image`,
       buttonTitle: APP_BUTTON_TEXT ?? 'Launch Mini App',
       splashImageUrl: `${appUrl}/splash.png`,

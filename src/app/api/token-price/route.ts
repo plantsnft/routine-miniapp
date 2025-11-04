@@ -120,8 +120,24 @@ export async function GET() {
 
       console.log("[Token Price] DexScreener response status:", dexScreenerResponse.status);
 
+      if (!dexScreenerResponse.ok) {
+        const errorText = await dexScreenerResponse.text();
+        console.error("[Token Price] DexScreener API error:", {
+          status: dexScreenerResponse.status,
+          statusText: dexScreenerResponse.statusText,
+          body: errorText,
+        });
+        throw new Error(`DexScreener API returned ${dexScreenerResponse.status}: ${dexScreenerResponse.statusText}`);
+      }
+
+      const data = await dexScreenerResponse.json();
+      
+      if (!data || !data.pairs) {
+        console.error("[Token Price] DexScreener returned invalid data:", data);
+        throw new Error("DexScreener returned invalid data format");
+      }
+
       if (dexScreenerResponse.ok) {
-        const data = await dexScreenerResponse.json();
         console.log("[Token Price] DexScreener raw data:", {
           pairsCount: data.pairs?.length,
           pairs: data.pairs?.map((p: any) => ({
@@ -201,8 +217,13 @@ export async function GET() {
           }
         }
       }
-    } catch (dexError) {
-      console.log("[Token Price] DexScreener failed:", dexError);
+    } catch (dexError: any) {
+      console.error("[Token Price] DexScreener failed:", {
+        message: dexError?.message,
+        stack: dexError?.stack,
+        error: dexError,
+      });
+      // Continue to fallback APIs
     }
 
     // Fallback: Try CoinGecko API (if token is listed)
@@ -252,9 +273,16 @@ export async function GET() {
       error: "Unable to fetch token data",
     });
   } catch (error: any) {
-    console.error("[Token Price] Error:", error);
+    console.error("[Token Price] Fatal error:", {
+      message: error?.message,
+      stack: error?.stack,
+      error,
+    });
     return NextResponse.json(
-      { error: error?.message || "Failed to fetch token price" },
+      { 
+        error: error?.message || "Failed to fetch token price",
+        details: process.env.NODE_ENV === "development" ? error?.stack : undefined,
+      },
       { status: 500 }
     );
   }

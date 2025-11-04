@@ -135,29 +135,92 @@ export default function DailyCheckin() {
     }
   }, []);
 
-  // 1) try to resolve user from querystring (works for ?fid=318447 dev mode)
+  // Auto-sign in when opened in Warpcast/Farcaster mini app
   useEffect(() => {
-    const load = async () => {
+    const autoSignIn = async () => {
+      // Check if we're in a Farcaster/Warpcast context
+      const isInWarpcast = typeof window !== "undefined" && 
+        ((window as any).farcaster || sdk?.actions?.signIn);
+      
+      // If we already have an FID, don't try to sign in again
+      if (fid || !isInWarpcast) {
+        setLoadingUser(false);
+        return;
+      }
+
+      // Try to resolve from query string first (for dev/testing)
       try {
-        const qs =
-          typeof window !== "undefined" ? window.location.search : "";
-        const res = await fetch("/api/siwn" + qs);
-        const data = await res.json();
-        if (data?.ok && data?.fid) {
-          const userId = Number(data.fid);
-          setFid(userId);
-          setErrorMessage("");
-          // Fetch streak after getting FID
-          await fetchStreak(userId);
+        const qs = typeof window !== "undefined" ? window.location.search : "";
+        if (qs) {
+          const res = await fetch("/api/siwn" + qs);
+          const data = await res.json();
+          if (data?.ok && data?.fid) {
+            const userId = Number(data.fid);
+            setFid(userId);
+            setErrorMessage("");
+            await fetchStreak(userId);
+            setLoadingUser(false);
+            return;
+          }
         }
       } catch (_e) {
-        // ignore, we'll let user sign in manually
+        // Continue to auto-sign in
+      }
+
+      // Auto-sign in using SDK
+      try {
+        setErrorMessage("");
+        
+        if (!sdk?.actions?.signIn) {
+          setLoadingUser(false);
+          return;
+        }
+
+        // Generate nonce and auto-sign in
+        const nonce = Math.random().toString(36).slice(2);
+        const result = await sdk.actions.signIn({
+          nonce,
+          acceptAuthAddress: true,
+        });
+
+        if (!result) {
+          setLoadingUser(false);
+          return;
+        }
+
+        // Verify with backend
+        const resp = await fetch("/api/siwn", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            ...result,
+            nonce,
+          }),
+        });
+
+        const json = await resp.json();
+
+        if (resp.ok && json?.ok && json?.fid) {
+          const userId = Number(json.fid);
+          setFid(userId);
+          setErrorMessage("");
+          await fetchStreak(userId);
+        } else {
+          // Silent fail - user can still manually sign in if needed
+          console.error("[SIWN] Auto-sign in failed:", json?.error);
+        }
+      } catch (err) {
+        // Silent fail - user can still manually sign in if needed
+        console.error("[SIWN] Auto-sign in error:", err);
       } finally {
         setLoadingUser(false);
       }
     };
-    load();
-  }, [fetchStreak]);
+
+    autoSignIn();
+  }, [fetchStreak, fid]);
 
   // 2) real SIWN inside Warpcast
   const handleSignIn = async () => {
@@ -329,8 +392,8 @@ export default function DailyCheckin() {
         </div>
       )}
 
-      {/* show sign-in button if we don't have a user yet */}
-      {!fid ? (
+      {/* show sign-in button only as fallback if auto-sign in failed and we're not in Warpcast */}
+      {!fid && typeof window !== "undefined" && !(window as any).farcaster && !sdk?.actions?.signIn ? (
         <button
           onClick={handleSignIn}
           style={{

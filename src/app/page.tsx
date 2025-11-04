@@ -2,7 +2,6 @@ import { Metadata } from "next";
 import App from "./app";
 import { APP_NAME, APP_DESCRIPTION } from "~/lib/constants";
 import { getMiniAppEmbedMetadata } from "~/lib/utils";
-import DebugSiwn from "./debug-siwn";
 
 export const revalidate = 300;
 
@@ -30,7 +29,6 @@ export default function Home() {
   return (
     <>
       <App />
-      <DebugSiwn />
     </>
   );
 }

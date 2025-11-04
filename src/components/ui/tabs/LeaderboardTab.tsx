@@ -3,11 +3,14 @@
 import { useState, useEffect } from "react";
 import type { LeaderboardEntry } from "~/lib/models";
 
+type SortBy = "holdings" | "streak";
+
 /**
- * LeaderboardTab component displays the top users by streak and $CATWALK holdings.
+ * LeaderboardTab component displays two leaderboards:
+ * 1. Top users by $CATWALK holdings
+ * 2. Top users by check-in streak
  * 
- * Shows users ranked by their check-in streak, with their Farcaster usernames
- * and $CATWALK token balances displayed.
+ * Users can toggle between the two views.
  * 
  * @example
  * ```tsx
@@ -15,6 +18,7 @@ import type { LeaderboardEntry } from "~/lib/models";
  * ```
  */
 export function LeaderboardTab() {
+  const [sortBy, setSortBy] = useState<SortBy>("holdings");
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -24,7 +28,7 @@ export function LeaderboardTab() {
       try {
         setLoading(true);
         setError(null);
-        const res = await fetch("/api/leaderboard?limit=50");
+        const res = await fetch(`/api/leaderboard?sortBy=${sortBy}&limit=50`);
         const data = await res.json();
 
         if (data?.ok && data?.entries) {
@@ -41,13 +45,16 @@ export function LeaderboardTab() {
     };
 
     fetchLeaderboard();
-  }, []);
+  }, [sortBy]);
 
   const formatTokenBalance = (balance: number | undefined): string => {
     if (balance === undefined || balance === 0) return "0";
+    if (balance >= 1000000000) return `${(balance / 1000000000).toFixed(2)}B`;
     if (balance >= 1000000) return `${(balance / 1000000).toFixed(2)}M`;
     if (balance >= 1000) return `${(balance / 1000).toFixed(2)}K`;
-    return balance.toFixed(2);
+    // For values less than 1000, show up to 2 decimal places but remove trailing zeros
+    const formatted = balance.toFixed(2);
+    return formatted.replace(/\.?0+$/, "");
   };
 
   const getRankEmoji = (rank: number): string => {
@@ -112,7 +119,7 @@ export function LeaderboardTab() {
         {/* Title */}
         <div
           style={{
-            marginBottom: 20,
+            marginBottom: 16,
             padding: "16px",
             background: "#000000",
             border: "2px solid #c1b400",
@@ -130,15 +137,63 @@ export function LeaderboardTab() {
           >
             🏆 Leaderboard
           </h2>
-          <p style={{ margin: "8px 0 0", color: "#ffffff", fontSize: 13, opacity: 0.8 }}>
-            Top users by streak and $CATWALK holdings
-          </p>
+        </div>
+
+        {/* Toggle buttons */}
+        <div
+          style={{
+            marginBottom: 20,
+            display: "flex",
+            gap: 12,
+            background: "#000000",
+            border: "2px solid #c1b400",
+            borderRadius: 12,
+            padding: 4,
+          }}
+        >
+          <button
+            onClick={() => setSortBy("holdings")}
+            style={{
+              flex: 1,
+              padding: "12px 16px",
+              background: sortBy === "holdings" ? "#c1b400" : "transparent",
+              color: sortBy === "holdings" ? "#000000" : "#c1b400",
+              border: "none",
+              borderRadius: 8,
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: "pointer",
+              transition: "all 0.2s",
+            }}
+          >
+            💰 Top Holders
+          </button>
+          <button
+            onClick={() => setSortBy("streak")}
+            style={{
+              flex: 1,
+              padding: "12px 16px",
+              background: sortBy === "streak" ? "#c1b400" : "transparent",
+              color: sortBy === "streak" ? "#000000" : "#c1b400",
+              border: "none",
+              borderRadius: 8,
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: "pointer",
+              transition: "all 0.2s",
+            }}
+          >
+            🔥 Top Streaks
+          </button>
         </div>
 
         {/* Loading state */}
         {loading && (
           <div style={{ textAlign: "center", padding: "40px 20px" }}>
-            <p style={{ color: "#c1b400", fontSize: 16 }}>Loading leaderboard...</p>
+            <p style={{ color: "#c1b400", fontSize: 16, marginBottom: 8 }}>Loading leaderboard...</p>
+            <p style={{ color: "#ffffff", fontSize: 12, opacity: 0.7 }}>
+              Fetching token balances and rankings...
+            </p>
           </div>
         )}
 
@@ -153,7 +208,45 @@ export function LeaderboardTab() {
               textAlign: "center",
             }}
           >
-            <p style={{ color: "#c1b400", fontSize: 14 }}>{error}</p>
+            <p style={{ color: "#c1b400", fontSize: 14, marginBottom: 8, fontWeight: 600 }}>
+              ⚠️ {error}
+            </p>
+            <button
+              onClick={() => {
+                setError(null);
+                const fetchLeaderboard = async () => {
+                  try {
+                    setLoading(true);
+                    const res = await fetch(`/api/leaderboard?sortBy=${sortBy}&limit=50`);
+                    const data = await res.json();
+                    if (data?.ok && data?.entries) {
+                      setEntries(data.entries);
+                    } else {
+                      setError(data?.error || "Failed to fetch leaderboard");
+                    }
+                  } catch (err) {
+                    console.error("Error fetching leaderboard:", err);
+                    setError("Failed to load leaderboard");
+                  } finally {
+                    setLoading(false);
+                  }
+                };
+                fetchLeaderboard();
+              }}
+              style={{
+                marginTop: 12,
+                padding: "8px 16px",
+                background: "#c1b400",
+                color: "#000000",
+                border: "2px solid #000000",
+                borderRadius: 8,
+                cursor: "pointer",
+                fontWeight: 600,
+                fontSize: 13,
+              }}
+            >
+              Retry
+            </button>
           </div>
         )}
 
@@ -162,7 +255,7 @@ export function LeaderboardTab() {
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {entries.map((entry) => (
               <div
-                key={entry.fid}
+                key={`${entry.fid}-${sortBy}`}
                 style={{
                   padding: "16px",
                   background: "#000000",
@@ -214,32 +307,68 @@ export function LeaderboardTab() {
                       @{entry.username}
                     </p>
                   )}
-                  <div style={{ display: "flex", gap: 12, marginTop: 6 }}>
-                    <span
-                      style={{
-                        color: "#000000",
-                        fontSize: 12,
-                        background: "#c1b400",
-                        padding: "2px 8px",
-                        borderRadius: 6,
-                        fontWeight: 600,
-                      }}
-                    >
-                      🔥 {entry.streak} day{entry.streak === 1 ? "" : "s"}
-                    </span>
-                    {entry.tokenBalance !== undefined && entry.tokenBalance > 0 && (
-                      <span
-                        style={{
-                          color: "#000000",
-                          fontSize: 12,
-                          background: "#c1b400",
-                          padding: "2px 8px",
-                          borderRadius: 6,
-                          fontWeight: 600,
-                        }}
-                      >
-                        💰 {formatTokenBalance(entry.tokenBalance)} $CATWALK
-                      </span>
+                  <div style={{ display: "flex", gap: 12, marginTop: 6, flexWrap: "wrap" }}>
+                    {/* Show primary metric prominently */}
+                    {sortBy === "holdings" ? (
+                      <>
+                        <span
+                          style={{
+                            color: "#000000",
+                            fontSize: 13,
+                            background: "#c1b400",
+                            padding: "4px 10px",
+                            borderRadius: 6,
+                            fontWeight: 700,
+                          }}
+                        >
+                          💰 {formatTokenBalance(entry.tokenBalance)} $CATWALK
+                        </span>
+                        {entry.streak > 0 && (
+                          <span
+                            style={{
+                              color: "#ffffff",
+                              fontSize: 12,
+                              background: "transparent",
+                              border: "1px solid #c1b400",
+                              padding: "4px 10px",
+                              borderRadius: 6,
+                              fontWeight: 600,
+                            }}
+                          >
+                            🔥 {entry.streak} day{entry.streak === 1 ? "" : "s"}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <span
+                          style={{
+                            color: "#000000",
+                            fontSize: 13,
+                            background: "#c1b400",
+                            padding: "4px 10px",
+                            borderRadius: 6,
+                            fontWeight: 700,
+                          }}
+                        >
+                          🔥 {entry.streak} day{entry.streak === 1 ? "" : "s"}
+                        </span>
+                        {entry.tokenBalance !== undefined && entry.tokenBalance > 0 && (
+                          <span
+                            style={{
+                              color: "#ffffff",
+                              fontSize: 12,
+                              background: "transparent",
+                              border: "1px solid #c1b400",
+                              padding: "4px 10px",
+                              borderRadius: 6,
+                              fontWeight: 600,
+                            }}
+                          >
+                            💰 {formatTokenBalance(entry.tokenBalance)} $CATWALK
+                          </span>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
@@ -259,8 +388,14 @@ export function LeaderboardTab() {
               textAlign: "center",
             }}
           >
-            <p style={{ color: "#ffffff", fontSize: 16, margin: 0 }}>
-              No leaderboard entries yet. Be the first to check in!
+            <p style={{ color: "#c1b400", fontSize: 24, margin: "0 0 12px 0" }}>
+              🏁
+            </p>
+            <p style={{ color: "#ffffff", fontSize: 16, margin: "0 0 8px 0", fontWeight: 600 }}>
+              No leaderboard entries yet
+            </p>
+            <p style={{ color: "#ffffff", fontSize: 13, margin: 0, opacity: 0.7 }}>
+              Be the first to check in and claim your spot!
             </p>
           </div>
         )}
@@ -268,4 +403,3 @@ export function LeaderboardTab() {
     </div>
   );
 }
-

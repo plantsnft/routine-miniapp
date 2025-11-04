@@ -84,7 +84,10 @@ export function useAuth(onSignInSuccess?: (fid: number) => void): UseAuthResult 
           onSignInSuccess?.(result.fid);
         } else {
           // Silent fail - user can still manually sign in if needed
-          console.error("[useAuth] Auto-sign in failed:", result.error);
+          // Only log if it's not a context issue (expected behavior outside Warpcast)
+          if (result.error && !result.error.includes("Warpcast")) {
+            console.error("[useAuth] Auto-sign in failed:", result.error);
+          }
         }
       } catch (err) {
         // Silent fail - user can still manually sign in if needed

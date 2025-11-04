@@ -88,16 +88,15 @@ export function useCheckin(): UseCheckinResult {
         });
         return { success: true, streak: newStreak };
       } else if (res.status === 409) {
-        // Already checked in today
+        // Already checked in today - refresh streak to show current state
         await fetchStreak(userId);
         setStatus((prev) => ({ ...prev, checkedIn: true }));
-        setError(
-          data?.error ||
-            "You've already checked in today! Come back at 9 AM Pacific time tomorrow."
-        );
+        // Don't show error for already checked in - this is expected behavior
+        // The UI will show the checked-in state from fetchStreak
         return { success: false };
       } else {
-        setError(data?.detail || data?.error || "Unknown error");
+        const errorMessage = data?.detail || data?.error || "Unknown error occurred";
+        setError(errorMessage);
         return { success: false };
       }
     } catch (err: any) {

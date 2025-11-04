@@ -22,42 +22,39 @@ export const APP_URL: string = process.env.NEXT_PUBLIC_URL!;
  * The name of the mini app as displayed to users.
  * Used in titles, headers, and app store listings.
  */
-export const APP_NAME: string = 'routine';
+export const APP_NAME: string | undefined = process.env.NEXT_PUBLIC_APP_NAME;
 
 /**
- * A brief description of the mini app's functionality.
- * Used in app store listings and metadata.
+ * The description of the mini app.
+ * Used in metadata and app store listings.
  */
-export const APP_DESCRIPTION: string = 'Share the buttons you press & how you spend your time';
+export const APP_DESCRIPTION: string | undefined = process.env.NEXT_PUBLIC_APP_DESCRIPTION;
 
 /**
- * The primary category for the mini app.
- * Used for app store categorization and discovery.
+ * The button text displayed on the mini app card.
+ * Used in the Farcaster mini app manifest.
  */
-export const APP_PRIMARY_CATEGORY: string = 'education';
+export const APP_BUTTON_TEXT: string | undefined = process.env.NEXT_PUBLIC_APP_BUTTON_TEXT;
 
 /**
- * Tags associated with the mini app.
- * Used for search and discovery in app stores.
+ * The webhook URL for the mini app.
+ * Used for receiving events from Farcaster.
  */
-export const APP_TAGS: string[] = ['farming', 'airdrops', 'onboarding', 'check-in', 'social'];
+export const APP_WEBHOOK_URL: string | undefined = process.env.NEXT_PUBLIC_APP_WEBHOOK_URL;
 
-// --- Asset URLs ---
 /**
- * URL for the app's icon image.
- * Used in app store listings and UI elements.
+ * Account association for the mini app.
+ * Used to associate the mini app with a Farcaster account.
+ * If not provided, the mini app will be unsigned and have limited capabilities.
  */
-export const APP_ICON_URL: string = `${APP_URL}/icon.png`;
+export const APP_ACCOUNT_ASSOCIATION: AccountAssociation | undefined = process.env
+  .NEXT_PUBLIC_APP_ACCOUNT_ASSOCIATION
+  ? JSON.parse(process.env.NEXT_PUBLIC_APP_ACCOUNT_ASSOCIATION)
+  : undefined;
 
 /**
- * URL for the app's Open Graph image.
- * Used for social media sharing and previews.
- */
-export const APP_OG_IMAGE_URL: string = `${APP_URL}/api/opengraph-image`;
-
-/**
- * URL for the app's splash screen image.
- * Displayed during app loading.
+ * The URL of the splash image displayed when the mini app loads.
+ * Used in the Farcaster mini app manifest.
  */
 export const APP_SPLASH_URL: string = `${APP_URL}/splash.png`;
 
@@ -68,83 +65,51 @@ export const APP_SPLASH_URL: string = `${APP_URL}/splash.png`;
 export const APP_SPLASH_BACKGROUND_COLOR: string = '#f7f7f7';
 
 /**
- * Account association for the mini app.
- * Used to associate the mini app with a Farcaster account.
- * If not provided, the mini app will be unsigned and have limited capabilities.
+ * Catwalk channel creator FIDs
+ * TODO: Update this list with the actual creator FIDs when provided
  */
-export const APP_ACCOUNT_ASSOCIATION: AccountAssociation | undefined =
-  undefined;
-
-// --- UI Configuration ---
-/**
- * Text displayed on the main action button.
- * Used for the primary call-to-action in the mini app.
- */
-export const APP_BUTTON_TEXT: string = 'Start My Routine';
-
-// --- Integration Configuration ---
-/**
- * Webhook URL for receiving events from Neynar.
- *
- * If Neynar API key and client ID are configured, uses the official
- * Neynar webhook endpoint. Otherwise, falls back to a local webhook
- * endpoint for development and testing.
- */
-export const APP_WEBHOOK_URL: string =
-  process.env.NEYNAR_API_KEY && process.env.NEYNAR_CLIENT_ID
-    ? `https://api.neynar.com/f/app/${process.env.NEYNAR_CLIENT_ID}/event`
-    : `${APP_URL}/api/webhook`;
+export const CATWALK_CREATOR_FIDS: number[] = [
+  // Add creator FIDs here when provided
+  // Example: 318447, 123456, etc.
+];
 
 /**
- * Flag to enable/disable wallet functionality.
- *
- * When true, wallet-related components and features are rendered.
- * When false, wallet functionality is completely hidden from the UI.
- * Useful for mini apps that don't require wallet integration.
+ * Whether analytics are enabled for the mini app.
  */
-export const USE_WALLET: boolean = true;
-
-/**
- * Flag to enable/disable analytics tracking.
- *
- * When true, usage analytics are collected and sent to Neynar.
- * When false, analytics collection is disabled.
- * Useful for privacy-conscious users or development environments.
- */
-export const ANALYTICS_ENABLED: boolean = true;
-
-/**
- * Required chains for the mini app.
- *
- * Contains an array of CAIP-2 identifiers for blockchains that the mini app requires.
- * If the host does not support all chains listed here, it will not render the mini app.
- * If empty or undefined, the mini app will be rendered regardless of chain support.
- *
- * Supported chains: eip155:1, eip155:137, eip155:42161, eip155:10, eip155:8453,
- * solana:mainnet, solana:devnet
- */
-export const APP_REQUIRED_CHAINS: string[] = [];
+export const ANALYTICS_ENABLED: boolean = process.env.NEXT_PUBLIC_ANALYTICS_ENABLED === 'true';
 
 /**
  * Return URL for the mini app.
- *
- * If provided, the mini app will be rendered with a return URL to be rendered if the
- * back button is pressed from the home page.
  */
-export const RETURN_URL: string | undefined = undefined;
+export const RETURN_URL: string | undefined = process.env.NEXT_PUBLIC_RETURN_URL;
 
-// PLEASE DO NOT UPDATE THIS
+/**
+ * Icon URL for the mini app.
+ */
+export const APP_ICON_URL: string = `${APP_URL}/icon.png`;
+
+/**
+ * Whether wallet functionality is enabled.
+ */
+export const USE_WALLET: boolean = process.env.NEXT_PUBLIC_USE_WALLET === 'true';
+
+/**
+ * EIP-712 domain for signed key requests.
+ */
 export const SIGNED_KEY_REQUEST_VALIDATOR_EIP_712_DOMAIN = {
   name: 'Farcaster SignedKeyRequestValidator',
   version: '1',
   chainId: 10,
-  verifyingContract:
-    '0x00000000fc700472606ed4fa22623acf62c60553' as `0x${string}`,
+  verifyingContract: '0x00000000fc700472606ed4fa22623acf62c60553' as `0x${string}`,
 };
 
-// PLEASE DO NOT UPDATE THIS
-export const SIGNED_KEY_REQUEST_TYPE = [
-  { name: 'requestFid', type: 'uint256' },
-  { name: 'key', type: 'bytes' },
-  { name: 'deadline', type: 'uint256' },
-];
+/**
+ * EIP-712 types for signed key requests.
+ */
+export const SIGNED_KEY_REQUEST_TYPE = {
+  SignedKeyRequest: [
+    { name: 'requestFid', type: 'uint256' },
+    { name: 'key', type: 'bytes' },
+    { name: 'deadline', type: 'uint256' },
+  ],
+};

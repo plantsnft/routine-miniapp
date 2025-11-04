@@ -62,9 +62,8 @@ export function TokenTicker() {
     return () => clearInterval(interval);
   }, []);
 
-  if (loading && !tokenData) {
-    return null; // Don't show anything while loading initially
-  }
+  // Always show the ticker, even while loading
+  // Show placeholder content if data isn't available yet
 
   const priceChange = tokenData?.priceChange24h || 0;
   const isPositive = priceChange >= 0;
@@ -87,12 +86,16 @@ export function TokenTicker() {
     return num.toFixed(2);
   };
 
-  // Create scrolling content
+  // Create scrolling content - always show something
   const tickerContent = [
     <span key="symbol" style={{ color: "#c1b400", fontWeight: 600 }}>
       {tokenData?.symbol || "CATWALK"}
     </span>,
-    tokenData && tokenData.price !== null ? (
+    loading && !tokenData ? (
+      <span key="loading" style={{ color: "#ffffff", opacity: 0.7 }}>
+        Loading...
+      </span>
+    ) : tokenData && tokenData.price !== null ? (
       <span key="price" style={{ color: "#ffffff" }}>
         ${tokenData.price.toFixed(6)}
       </span>
@@ -125,6 +128,15 @@ export function TokenTicker() {
       </span>
     ) : null,
   ].filter(Boolean);
+  
+  // If no content, show at least the symbol
+  if (tickerContent.length === 0) {
+    tickerContent.push(
+      <span key="symbol" style={{ color: "#c1b400", fontWeight: 600 }}>
+        CATWALK
+      </span>
+    );
+  }
 
   // Create a single row of content with separators
   const tickerRow = tickerContent.map((item, idx) => (

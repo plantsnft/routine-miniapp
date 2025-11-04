@@ -21,19 +21,31 @@ export function Header({ neynarUser }: HeaderProps) {
         className="mt-4 mb-4 mx-4 px-4 py-3 bg-black rounded-lg flex items-center justify-between border-2 border-[#c1b400]"
         style={{ background: "#000000", borderColor: "#c1b400" }}
       >
-        <a
-          href="https://farcaster.xyz/~/channel/catwalk"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-lg font-bold"
-          style={{ 
-            color: "#c1b400", 
-            textDecoration: "none",
-            cursor: "pointer",
-          }}
-        >
-          Welcome to /catwalk
-        </a>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+          <a
+            href="https://farcaster.xyz/~/channel/catwalk"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-lg font-bold"
+            style={{ 
+              color: "#c1b400", 
+              textDecoration: "none",
+              cursor: "pointer",
+              marginBottom: 4,
+            }}
+          >
+            Welcome to /Catwalk
+          </a>
+          <p style={{ 
+            margin: 0, 
+            fontSize: 12, 
+            color: "#ffffff", 
+            opacity: 0.8,
+            fontWeight: 400,
+          }}>
+            World&apos;s First Entertainment Brand Coin
+          </p>
+        </div>
         {context?.user && (
           <div 
             className="cursor-pointer"

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-const CATWALK_CHANNEL_URL = "https://farcaster.xyz/~/channel/catwalk";
+const CATWALK_CHANNEL_URL = "https://farcaster.xyz/~/channel/Catwalk";
 
 export function FollowChannelButton() {
   const [isLoading, setIsLoading] = useState(false);
@@ -64,7 +64,7 @@ export function FollowChannelButton() {
         }
       }}
     >
-      {isLoading ? "Loading..." : "Follow /catwalk"}
+      {isLoading ? "Loading..." : "Follow /Catwalk"}
     </button>
   );
 }

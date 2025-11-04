@@ -25,7 +25,7 @@ export function HomeTab() {
   const [creators, setCreators] = useState<Array<{ fid: number; username?: string; displayName?: string }>>([]);
 
   const CREATOR_COUNT = CATWALK_CREATOR_FIDS.length || 29; // Default to 29 if list is empty
-  const CATWALK_CHANNEL_URL = "https://farcaster.xyz/~/channel/catwalk";
+  const CATWALK_CHANNEL_URL = "https://farcaster.xyz/~/channel/Catwalk";
 
   // Cycle through keywords every 3 seconds (faster)
   useEffect(() => {
@@ -178,7 +178,7 @@ export function HomeTab() {
             }}
           >
             <p style={{ margin: 0, color: "#c1b400", fontSize: 12, fontWeight: 600 }}>
-              /catwalk channel fans
+              /Catwalk channel fans
             </p>
             <p style={{ margin: 0, color: "#ffffff", fontSize: 20, fontWeight: 700 }}>
               {loadingStats ? "..." : followers !== null ? followers.toLocaleString() : "—"}
@@ -244,7 +244,7 @@ export function HomeTab() {
                 cursor: "pointer",
               }}
             >
-              /catwalk
+              /Catwalk
             </a>{" "}
             channel?
           </p>

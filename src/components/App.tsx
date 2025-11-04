@@ -3,9 +3,9 @@
 import { useEffect } from "react";
 import { useMiniApp } from "@neynar/react";
 import { Header } from "~/components/ui/Header";
-import { Footer } from "~/components/ui/Footer";
+// import { Footer } from "~/components/ui/Footer";
 import { HomeTab, ActionsTab, ContextTab, WalletTab } from "~/components/ui/tabs";
-import { USE_WALLET } from "~/lib/constants";
+// import { USE_WALLET } from "~/lib/constants";
 import { useNeynarUser } from "../hooks/useNeynarUser";
 
 // --- Types ---
@@ -57,7 +57,7 @@ export default function App(
     isSDKLoaded,
     context,
     setInitialTab,
-    setActiveTab,
+    setActiveTab: _setActiveTab,
     currentTab,
   } = useMiniApp();
 
@@ -121,8 +121,8 @@ export default function App(
         {currentTab === Tab.Context && <ContextTab />}
         {currentTab === Tab.Wallet && <WalletTab />}
 
-        {/* Footer with navigation */}
-        <Footer activeTab={currentTab as Tab} setActiveTab={setActiveTab} showWallet={USE_WALLET} />
+        {/* Footer with navigation - hidden for now */}
+        {/* <Footer activeTab={currentTab as Tab} setActiveTab={setActiveTab} showWallet={USE_WALLET} /> */}
       </div>
     </div>
   );

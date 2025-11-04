@@ -138,90 +138,90 @@ export async function GET() {
       }
 
       // Process the data
-        console.log("[Token Price] DexScreener raw data:", {
-          pairsCount: data.pairs?.length,
-          pairs: data.pairs?.map((p: any) => ({
-            chainId: p.chainId,
-            dexId: p.dexId,
-            priceUsd: p.priceUsd,
-            pairAddress: p.pairAddress,
-          })),
-        });
+      console.log("[Token Price] DexScreener raw data:", {
+        pairsCount: data.pairs?.length,
+        pairs: data.pairs?.map((p: any) => ({
+          chainId: p.chainId,
+          dexId: p.dexId,
+          priceUsd: p.priceUsd,
+          pairAddress: p.pairAddress,
+        })),
+      });
+      
+      if (data.pairs && data.pairs.length > 0) {
+        // Find the pair on Base chain - prioritize Base pairs
+        const basePairs = data.pairs.filter(
+          (pair: any) => 
+            pair.chainId === "base" || 
+            pair.chainId === BASE_CHAIN_ID
+        );
         
-        if (data.pairs && data.pairs.length > 0) {
-          // Find the pair on Base chain - prioritize Base pairs
-          const basePairs = data.pairs.filter(
-            (pair: any) => 
-              pair.chainId === "base" || 
-              pair.chainId === BASE_CHAIN_ID
-          );
+        // If we have Base pairs, use the one with highest liquidity, otherwise use first pair
+        const basePair = basePairs.length > 0
+          ? basePairs.reduce((best: any, current: any) => {
+              const bestLiq = parseFloat(best.liquidity?.usd || "0");
+              const currentLiq = parseFloat(current.liquidity?.usd || "0");
+              return currentLiq > bestLiq ? current : best;
+            })
+          : data.pairs[0]; // Fallback to first pair if no Base pair found
+        
+        console.log("[Token Price] Selected pair:", {
+          chainId: basePair.chainId,
+          dexId: basePair.dexId,
+          priceUsd: basePair.priceUsd,
+          liquidity: basePair.liquidity?.usd,
+          volume24h: basePair.volume?.h24,
+        });
+
+        if (basePair) {
+          // Calculate market cap: price * total supply
+          // For market cap calculation, we need total supply
+          // Try to get it from the pair data or calculate from liquidity
+          let marketCap: number | null = null;
           
-          // If we have Base pairs, use the one with highest liquidity, otherwise use first pair
-          const basePair = basePairs.length > 0
-            ? basePairs.reduce((best: any, current: any) => {
-                const bestLiq = parseFloat(best.liquidity?.usd || "0");
-                const currentLiq = parseFloat(current.liquidity?.usd || "0");
-                return currentLiq > bestLiq ? current : best;
-              })
-            : data.pairs[0]; // Fallback to first pair if no Base pair found
-          
-          console.log("[Token Price] Selected pair:", {
-            chainId: basePair.chainId,
-            dexId: basePair.dexId,
-            priceUsd: basePair.priceUsd,
-            liquidity: basePair.liquidity?.usd,
-            volume24h: basePair.volume?.h24,
-          });
-
-          if (basePair) {
-            // Calculate market cap: price * total supply
-            // For market cap calculation, we need total supply
-            // Try to get it from the pair data or calculate from liquidity
-            let marketCap: number | null = null;
-            
-            // Try to get market cap from pair data
-            // DexScreener provides fdv (fully diluted valuation) which is market cap
-            if (basePair.fdv) {
-              marketCap = parseFloat(basePair.fdv);
-            } else if (basePair.marketCap) {
-              marketCap = parseFloat(basePair.marketCap);
-            } else if (basePair.priceUsd && basePair.liquidity?.usd) {
-              // Fallback: rough estimate from liquidity
-              // This is not accurate but better than nothing
-              marketCap = parseFloat(basePair.liquidity.usd) * 2;
-            }
-
-            // Extract price change - DexScreener uses priceChange24h or priceChange.h24
-            const priceChange24h = basePair.priceChange24h 
-              ? parseFloat(basePair.priceChange24h)
-              : basePair.priceChange?.h24 
-                ? parseFloat(basePair.priceChange.h24)
-                : 0;
-
-            const response = {
-              price: parseFloat(basePair.priceUsd || "0"),
-              priceChange24h,
-              volume24h: parseFloat(basePair.volume?.h24 || basePair.volume24h || "0"),
-              liquidity: parseFloat(basePair.liquidity?.usd || "0"),
-              marketCap,
-              holders: tokenStats.holders,
-              transactions: tokenStats.transactions,
-              symbol: basePair.baseToken?.symbol || "CATWALK",
-              name: basePair.baseToken?.name || "Catwalk",
-              address: TOKEN_ADDRESS,
-              source: "dexscreener",
-            };
-            
-            console.log("[Token Price] DexScreener success:", response);
-            return NextResponse.json(response);
+          // Try to get market cap from pair data
+          // DexScreener provides fdv (fully diluted valuation) which is market cap
+          if (basePair.fdv) {
+            marketCap = parseFloat(basePair.fdv);
+          } else if (basePair.marketCap) {
+            marketCap = parseFloat(basePair.marketCap);
+          } else if (basePair.priceUsd && basePair.liquidity?.usd) {
+            // Fallback: rough estimate from liquidity
+            // This is not accurate but better than nothing
+            marketCap = parseFloat(basePair.liquidity.usd) * 2;
           }
+
+          // Extract price change - DexScreener uses priceChange24h or priceChange.h24
+          const priceChange24h = basePair.priceChange24h 
+            ? parseFloat(basePair.priceChange24h)
+            : basePair.priceChange?.h24 
+              ? parseFloat(basePair.priceChange.h24)
+              : 0;
+
+          const response = {
+            price: parseFloat(basePair.priceUsd || "0"),
+            priceChange24h,
+            volume24h: parseFloat(basePair.volume?.h24 || basePair.volume24h || "0"),
+            liquidity: parseFloat(basePair.liquidity?.usd || "0"),
+            marketCap,
+            holders: tokenStats.holders,
+            transactions: tokenStats.transactions,
+            symbol: basePair.baseToken?.symbol || "CATWALK",
+            name: basePair.baseToken?.name || "Catwalk",
+            address: TOKEN_ADDRESS,
+            source: "dexscreener",
+          };
+          
+          console.log("[Token Price] DexScreener success:", response);
+          return NextResponse.json(response);
         }
       }
-    } catch (dexError: any) {
+    } catch (dexError: unknown) {
+      const error = dexError as Error;
       console.error("[Token Price] DexScreener failed:", {
-        message: dexError?.message,
-        stack: dexError?.stack,
-        error: dexError,
+        message: error?.message,
+        stack: error?.stack,
+        error: error,
       });
       // Continue to fallback APIs
     }
@@ -272,16 +272,17 @@ export async function GET() {
       source: null,
       error: "Unable to fetch token data",
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const err = error as Error;
     console.error("[Token Price] Fatal error:", {
-      message: error?.message,
-      stack: error?.stack,
-      error,
+      message: err?.message,
+      stack: err?.stack,
+      error: err,
     });
     return NextResponse.json(
       { 
-        error: error?.message || "Failed to fetch token price",
-        details: process.env.NODE_ENV === "development" ? error?.stack : undefined,
+        error: err?.message || "Failed to fetch token price",
+        details: process.env.NODE_ENV === "development" ? err?.stack : undefined,
       },
       { status: 500 }
     );

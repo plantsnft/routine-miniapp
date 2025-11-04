@@ -131,7 +131,7 @@ export function LeaderboardTab() {
             style={{
               margin: 0,
               color: "#c1b400",
-              fontSize: 24,
+              fontSize: 12,
               fontWeight: 700,
             }}
           >

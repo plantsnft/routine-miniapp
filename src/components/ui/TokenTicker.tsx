@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useMiniApp } from "@neynar/react";
 
 interface RecentPurchase {
   buyerAddress: string;
@@ -10,6 +11,7 @@ interface RecentPurchase {
 }
 
 export function TokenTicker() {
+  const { actions } = useMiniApp();
   const [tokenData, setTokenData] = useState<{
     price: number | null;
     priceChange24h: number | null;
@@ -193,21 +195,19 @@ export function TokenTicker() {
   ));
 
   // Create swap URL for Farcaster wallet
-  // Using Uniswap on Base as it's the most common DEX
+  // Using Uniswap on Base with USDC as input and CATWALK as output
   const TOKEN_ADDRESS = "0xa5eb1cAD0dFC1c4f8d4f84f995aeDA9a7A047B07";
-  const swapUrl = `https://app.uniswap.org/swap?chain=base&outputCurrency=${TOKEN_ADDRESS}`;
+  // USDC on Base (native USDC)
+  const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+  const swapUrl = `https://app.uniswap.org/swap?chain=base&inputCurrency=${USDC_ADDRESS}&outputCurrency=${TOKEN_ADDRESS}`;
 
   const handleTickerClick = () => {
-    // Try to open in Farcaster wallet if available, otherwise open in browser
-    if (typeof window !== "undefined") {
-      // Check if we're in a Farcaster context
-      const isFarcaster = (window as any).farcaster;
-      if (isFarcaster) {
-        // Try to use Farcaster's native wallet if available
-        window.open(swapUrl, "_blank");
-      } else {
-        window.open(swapUrl, "_blank");
-      }
+    // Use Farcaster SDK actions to open swap in embedded wallet
+    if (actions?.openUrl) {
+      actions.openUrl(swapUrl);
+    } else if (typeof window !== "undefined") {
+      // Fallback to window.open if SDK actions not available
+      window.open(swapUrl, "_blank");
     }
   };
 

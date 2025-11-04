@@ -165,6 +165,11 @@ export default function DailyCheckin() {
                 Next check-in: {checkin.status.timeUntilNext} (9 AM Pacific)
               </p>
             )}
+            {checkin.status.lastCheckIn && (
+              <p style={{ margin: 0, marginTop: 6, color: "#000000", fontSize: 13, opacity: 0.8 }}>
+                Checked in today: {new Date(checkin.status.lastCheckIn).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
+              </p>
+            )}
           </div>
         )}
 

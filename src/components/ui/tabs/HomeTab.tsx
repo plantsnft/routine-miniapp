@@ -27,11 +27,11 @@ export function HomeTab() {
   const CREATOR_COUNT = CATWALK_CREATOR_FIDS.length || 29; // Default to 29 if list is empty
   const CATWALK_CHANNEL_URL = "https://farcaster.xyz/~/channel/catwalk";
 
-  // Cycle through keywords every 12 seconds (3x slower than 4 seconds)
+  // Cycle through keywords every 3 seconds (faster)
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentKeywordIndex((prev) => (prev + 1) % keywords.length);
-    }, 12000); // 12 seconds (3x slower)
+    }, 3000); // 3 seconds
     return () => clearInterval(interval);
   }, [keywords.length]);
 
@@ -275,7 +275,7 @@ export function HomeTab() {
                 color: "#c1b400",
                 fontSize: 14,
                 fontWeight: 600,
-                animation: "fadeInOut 11s ease-in-out",
+                animation: "fadeInOut 2.5s ease-in-out",
               }}
             >
               {keywords[currentKeywordIndex]}

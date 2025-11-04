@@ -23,14 +23,14 @@ export default {
   theme: {
   	extend: {
   		colors: {
-  			// Main theme color - change this to update the entire app's color scheme
-  			primary: "#8b5cf6", // Main brand color
-  			"primary-light": "#a78bfa", // For hover states
-  			"primary-dark": "#7c3aed", // For active states
+  			// Main theme color - Catwalk brand colors (black, gold #c1b400, white)
+  			primary: "#c1b400", // Gold brand color
+  			"primary-light": "#d4c700", // Lighter gold for hover states
+  			"primary-dark": "#a89a00", // Darker gold for active states
   			
   			// Secondary colors for backgrounds and text
-  			secondary: "#f8fafc", // Light backgrounds
-  			"secondary-dark": "#334155", // Dark backgrounds
+  			secondary: "#ffffff", // White backgrounds
+  			"secondary-dark": "#000000", // Black backgrounds
   			
   			// Legacy CSS variables for backward compatibility
   			background: 'var(--background)',

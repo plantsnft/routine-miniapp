@@ -50,7 +50,7 @@ export interface AppProps {
  * ```
  */
 export default function App(
-  { title }: AppProps = { title: "Neynar Starter Kit" }
+  { title: _title }: AppProps = { title: "Neynar Starter Kit" }
 ) {
   // --- Hooks ---
   const {
@@ -112,8 +112,8 @@ export default function App(
 
       {/* Main content and footer should be centered */}
       <div className="container py-2 pb-20">
-        {/* Main title */}
-        <h1 className="text-2xl font-bold text-center mb-4">{title}</h1>
+        {/* Main title - hidden for cleaner look */}
+        {/* <h1 className="text-2xl font-bold text-center mb-4">{title}</h1> */}
 
         {/* Tab content rendering */}
         {currentTab === Tab.Home && <HomeTab />}

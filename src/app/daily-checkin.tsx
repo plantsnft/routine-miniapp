@@ -16,6 +16,7 @@ export default function DailyCheckin() {
     "idle"
   );
   const [errorMessage, setErrorMessage] = useState("");
+  const [animationKeyframes, setAnimationKeyframes] = useState<string>("");
 
   // Helper function to calculate time until next 9 AM Pacific
   const calculateTimeUntilNext = (): string => {
@@ -334,6 +335,30 @@ export default function DailyCheckin() {
         setLastCheckIn(new Date().toISOString());
         // Update countdown
         setTimeUntilNext(calculateTimeUntilNext());
+        
+        // Generate animation keyframes for success animation
+        const keyframes = Array.from({ length: 20 })
+          .map(
+            (_, i) => `
+              @keyframes chipFly${i} {
+                0% {
+                  transform: translateY(-50%) translateX(0) rotate(0deg) scale(1);
+                  opacity: 1;
+                }
+                100% {
+                  transform: translateY(-50%) translateX(${
+                    (Math.random() - 0.5) * 400
+                  }px) translateY(${
+                  Math.random() * 300 - 150
+                }px) rotate(${Math.random() * 720 - 360}deg) scale(0.3);
+                  opacity: 0;
+                }
+              }
+            `
+          )
+          .join("");
+        setAnimationKeyframes(keyframes);
+        
         setStatus("done");
       } else if (res.status === 409) {
         // Already checked in today - fetch current streak to show it
@@ -357,111 +382,201 @@ export default function DailyCheckin() {
   };
 
   return (
-    <div
-      style={{
-        marginTop: 24,
-        background: "#f4f0ff",
-        border: "1px solid rgba(139,92,246,0.25)",
-        borderRadius: 16,
-        padding: 20,
-      }}
-    >
-      <h2 style={{ margin: 0, marginBottom: 6, color: "#3b0764" }}>
-        🐾 Catwalk Daily Check-in
-      </h2>
-      <p style={{ margin: 0, marginBottom: 14, color: "#6b21a8" }}>
-        Check in once per day to keep your streak and earn $CATWALK later.
-      </p>
-
-      {/* Display current streak and check-in info if user is signed in */}
-      {fid && streak !== null && (
-        <div style={{ marginBottom: 16, padding: 12, background: "#ede9fe", borderRadius: 8, border: "1px solid #c4b5fd" }}>
-          <p style={{ margin: 0, marginBottom: 6, color: "#5b21b6", fontWeight: 700, fontSize: 20 }}>
-            🔥 {streak === 0 ? "Start your catwalk streak" : `${streak} day${streak === 1 ? "" : "s"} streak`}
-          </p>
-          {lastCheckIn && (
-            <p style={{ margin: 0, marginBottom: 4, color: "#6b21a8", fontSize: 13 }}>
-              Last check-in: {formatLastCheckIn(lastCheckIn)}
-            </p>
-          )}
-          {checkedIn && timeUntilNext && (
-            <p style={{ margin: 0, color: "#7c3aed", fontSize: 13, fontWeight: 500 }}>
-              Next check-in: {timeUntilNext} (9 AM Pacific)
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* show sign-in button only as fallback if auto-sign in failed and we're not in Warpcast */}
-      {!fid && typeof window !== "undefined" && !(window as any).farcaster && !sdk?.actions?.signIn ? (
-        <button
-          onClick={handleSignIn}
+    <>
+      {/* Success animation - logo chips flying like poker chips */}
+      {status === "done" && (
+        <div
           style={{
-            background: "#0f172a",
-            color: "#fff",
-            border: "none",
-            borderRadius: 9999,
-            padding: "10px 18px",
-            cursor: "pointer",
-            fontWeight: 600,
-            marginBottom: 10,
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 9999,
+            pointerEvents: "none",
+            overflow: "hidden",
           }}
         >
-          Sign in with Farcaster
-        </button>
-      ) : null}
-
-      {/* main check-in button */}
-      <button
-        onClick={handleCheckIn}
-        disabled={checkedIn || status === "saving"}
-        style={{
-          background: checkedIn || status === "saving" ? "#d4d4d8" : "#8b5cf6",
-          color: checkedIn ? "#4b5563" : "#fff",
-          border: "none",
-          borderRadius: 9999,
-          padding: "10px 18px",
-          cursor: checkedIn ? "not-allowed" : "pointer",
-          fontWeight: 600,
-          marginLeft: 8,
-        }}
-      >
-        {status === "saving"
-          ? "Saving..."
-          : checkedIn
-          ? "✅ Checked in for today"
-          : "Check in for today"}
-      </button>
-
-      {status === "done" && (
-        <div style={{ marginTop: 16, padding: 14, background: "#d1fae5", borderRadius: 8, border: "1px solid #86efac" }}>
-          <p style={{ margin: 0, marginBottom: 8, color: "#15803d", fontWeight: 600, fontSize: 16 }}>
-            ✅ Saved successfully!
-          </p>
-          <p style={{ margin: 0, marginBottom: 10, color: "#166534", fontSize: 14 }}>
-            Thank you for taking a virtual catwalk today
-          </p>
-          {streak !== null && (
-            <p style={{ margin: 0, color: "#7c3aed", fontWeight: 700, fontSize: 18 }}>
-              🔥 {streak} day{streak === 1 ? "" : "s"} streak
-            </p>
-          )}
-          {timeUntilNext && (
-            <p style={{ margin: 0, marginTop: 6, color: "#6b21a8", fontSize: 13 }}>
-              Next check-in: {timeUntilNext} (9 AM Pacific)
-            </p>
-          )}
+          {Array.from({ length: 20 }).map((_, i) => {
+            const leftPos = (i * 5) % 100; // Distribute chips across screen
+            return (
+              <div
+                key={i}
+                style={{
+                  position: "absolute",
+                  left: `${leftPos}%`,
+                  top: "50%",
+                  width: "60px",
+                  height: "60px",
+                  borderRadius: "50%",
+                  background: i % 2 === 0 ? "#c1b400" : "#000000",
+                  border: i % 2 === 0 ? "3px solid #000000" : "3px solid #c1b400",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "24px",
+                  animation: `chipFly${i} 2s ease-out forwards`,
+                  transform: "translateY(-50%)",
+                  boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
+                }}
+              >
+                🐾
+              </div>
+            );
+          })}
+          {animationKeyframes && <style>{animationKeyframes}</style>}
         </div>
       )}
-      {(status === "error" || errorMessage) && (
-        <p style={{ marginTop: 12, color: "#b91c1c" }}>
-          {errorMessage || "Couldn’t save to Supabase ❌"}
-        </p>
-      )}
 
-      <p style={{ marginTop: 12, fontSize: 12, color: "#6b21a8" }}>
-        Current FID: {fid ? fid : "none (not signed in)"}
-      </p>
-    </div>
+      <div
+        style={{
+          marginTop: 0,
+          background: "#000000",
+          border: "2px solid #c1b400",
+          borderRadius: 16,
+          padding: 20,
+          position: "relative",
+        }}
+      >
+        <p style={{ margin: 0, marginBottom: 16, color: "#ffffff", fontSize: 14, lineHeight: 1.5 }}>
+          Check in once per day to keep your streak and earn $CATWALK later.
+        </p>
+
+        {/* Display current streak and check-in info if user is signed in */}
+        {fid && streak !== null && (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: 14,
+              background: "#c1b400",
+              borderRadius: 12,
+              border: "2px solid #000000",
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                marginBottom: 6,
+                color: "#000000",
+                fontWeight: 700,
+                fontSize: 20,
+              }}
+            >
+              🔥 {streak === 0 ? "Start your catwalk streak" : `${streak} day${streak === 1 ? "" : "s"} streak`}
+            </p>
+            {lastCheckIn && (
+              <p style={{ margin: 0, marginBottom: 4, color: "#000000", fontSize: 13, opacity: 0.8 }}>
+                Last check-in: {formatLastCheckIn(lastCheckIn)}
+              </p>
+            )}
+            {checkedIn && timeUntilNext && (
+              <p style={{ margin: 0, color: "#000000", fontSize: 13, fontWeight: 500 }}>
+                Next check-in: {timeUntilNext} (9 AM Pacific)
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* show sign-in button only as fallback if auto-sign in failed and we're not in Warpcast */}
+        {!fid && typeof window !== "undefined" && !(window as any).farcaster && !sdk?.actions?.signIn ? (
+          <button
+            onClick={handleSignIn}
+            style={{
+              background: "#c1b400",
+              color: "#000000",
+              border: "2px solid #000000",
+              borderRadius: 9999,
+              padding: "12px 24px",
+              cursor: "pointer",
+              fontWeight: 700,
+              marginBottom: 12,
+              width: "100%",
+              fontSize: 16,
+            }}
+          >
+            Sign in with Farcaster
+          </button>
+        ) : null}
+
+        {/* main check-in button */}
+        <button
+          onClick={handleCheckIn}
+          disabled={checkedIn || status === "saving"}
+          style={{
+            background:
+              checkedIn || status === "saving"
+                ? "#666666"
+                : "#c1b400",
+            color: checkedIn ? "#999999" : "#000000",
+            border: "2px solid #000000",
+            borderRadius: 9999,
+            padding: "12px 24px",
+            cursor: checkedIn || status === "saving" ? "not-allowed" : "pointer",
+            fontWeight: 700,
+            width: "100%",
+            fontSize: 16,
+            transition: "all 0.2s",
+          }}
+          onMouseEnter={(e) => {
+            if (!checkedIn && status !== "saving") {
+              e.currentTarget.style.background = "#d4c700";
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!checkedIn && status !== "saving") {
+              e.currentTarget.style.background = "#c1b400";
+            }
+          }}
+        >
+          {status === "saving"
+            ? "Saving..."
+            : checkedIn
+            ? "✅ Checked in for today"
+            : "Check in for today"}
+        </button>
+
+        {status === "done" && (
+          <div
+            style={{
+              marginTop: 16,
+              padding: 16,
+              background: "#c1b400",
+              borderRadius: 12,
+              border: "3px solid #000000",
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                marginBottom: 8,
+                color: "#000000",
+                fontWeight: 700,
+                fontSize: 18,
+              }}
+            >
+              ✅ Saved successfully!
+            </p>
+            <p style={{ margin: 0, marginBottom: 10, color: "#000000", fontSize: 14, opacity: 0.9 }}>
+              Thank you for taking a virtual catwalk today
+            </p>
+            {streak !== null && (
+              <p style={{ margin: 0, color: "#000000", fontWeight: 700, fontSize: 20 }}>
+                🔥 {streak} day{streak === 1 ? "" : "s"} streak
+              </p>
+            )}
+            {timeUntilNext && (
+              <p style={{ margin: 0, marginTop: 6, color: "#000000", fontSize: 13, opacity: 0.8 }}>
+                Next check-in: {timeUntilNext} (9 AM Pacific)
+              </p>
+            )}
+          </div>
+        )}
+        {(status === "error" || errorMessage) && (
+          <p style={{ marginTop: 12, color: "#c1b400", fontWeight: 600 }}>
+            {errorMessage || "Couldn't save to Supabase ❌"}
+          </p>
+        )}
+      </div>
+    </>
   );
 }

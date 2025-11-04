@@ -19,9 +19,10 @@ export function Header({ neynarUser }: HeaderProps) {
   return (
     <div className="relative">
       <div 
-        className="mt-4 mb-4 mx-4 px-2 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-between border-[3px] border-double border-primary"
+        className="mt-4 mb-4 mx-4 px-4 py-3 bg-black rounded-lg flex items-center justify-between border-2 border-[#c1b400]"
+        style={{ background: "#000000", borderColor: "#c1b400" }}
       >
-        <div className="text-lg font-light">
+        <div className="text-lg font-bold" style={{ color: "#c1b400" }}>
           Welcome to {APP_NAME}!
         </div>
         {context?.user && (
@@ -35,7 +36,8 @@ export function Header({ neynarUser }: HeaderProps) {
               <img 
                 src={context.user.pfpUrl} 
                 alt="Profile" 
-                className="w-10 h-10 rounded-full border-2 border-primary"
+                className="w-10 h-10 rounded-full border-2"
+                style={{ borderColor: "#c1b400" }}
               />
             )}
           </div>
@@ -44,24 +46,28 @@ export function Header({ neynarUser }: HeaderProps) {
       {context?.user && (
         <>      
           {isUserDropdownOpen && (
-            <div className="absolute top-full right-0 z-50 w-fit mt-1 mx-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+            <div 
+              className="absolute top-full right-0 z-50 w-fit mt-1 mx-4 rounded-lg shadow-lg"
+              style={{ background: "#c1b400", border: "2px solid #000000" }}
+            >
               <div className="p-3 space-y-2">
                 <div className="text-right">
                   <h3 
                     className="font-bold text-sm hover:underline cursor-pointer inline-block"
+                    style={{ color: "#000000" }}
                     onClick={() => sdk.actions.viewProfile({ fid: context.user.fid })}
                   >
                     {context.user.displayName || context.user.username}
                   </h3>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                  <p className="text-xs" style={{ color: "#000000", opacity: 0.8 }}>
                     @{context.user.username}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-500">
+                  <p className="text-xs" style={{ color: "#000000", opacity: 0.7 }}>
                     FID: {context.user.fid}
                   </p>
                   {neynarUser && (
                     <>
-                      <p className="text-xs text-gray-500 dark:text-gray-500">
+                      <p className="text-xs" style={{ color: "#000000", opacity: 0.7 }}>
                         Neynar Score: {neynarUser.score}
                       </p>
                     </>

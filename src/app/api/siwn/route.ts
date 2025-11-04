@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getNeynarClient } from "~/lib/neynar";
 import { SiweMessage } from "siwe";
+import type { SiwnResponse } from "~/lib/types";
 
 const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
 const _NEYNAR_CLIENT_ID = process.env.NEYNAR_CLIENT_ID;
@@ -179,7 +180,7 @@ export async function GET(req: NextRequest) {
   // 1) if Warpcast actually sent us a fid directly, just return it
   const fidFromHost = searchParams.get("fid");
   if (fidFromHost) {
-    return NextResponse.json({
+    return NextResponse.json<SiwnResponse>({
       ok: true,
       fid: Number(fidFromHost),
       username: undefined,
@@ -188,7 +189,7 @@ export async function GET(req: NextRequest) {
 
   // 2) no message/signature → same warning you were seeing
   if (!message && !signature && !hash) {
-    return NextResponse.json(
+    return NextResponse.json<SiwnResponse>(
       {
         ok: false,
         error: "No SIWN params found in URL.",
@@ -203,11 +204,10 @@ export async function GET(req: NextRequest) {
   const finalSignature = signature;
 
   if (!finalMessage || !finalSignature) {
-    return NextResponse.json(
+    return NextResponse.json<SiwnResponse>(
       {
         ok: false,
         error: "Got hash/signature but one of them is missing (need both).",
-        debug: { message: finalMessage, signature: finalSignature },
       },
       { status: 400 }
     );
@@ -223,13 +223,12 @@ export async function GET(req: NextRequest) {
   } catch {}
 
   if (!result.ok) {
-    return NextResponse.json(
+    return NextResponse.json<SiwnResponse>(
       {
         ok: false,
-        error: "Neynar error in SIWN GET.",
-        neynar: result,
+        error: result.error || "Neynar error in SIWN GET.",
       },
-      { status: 400 }
+      { status: result.status || 400 }
     );
   }
 
@@ -239,17 +238,16 @@ export async function GET(req: NextRequest) {
   const username = result.data?.username ?? result.data?.user?.username ?? undefined;
 
   if (!fid) {
-    return NextResponse.json(
+    return NextResponse.json<SiwnResponse>(
       {
         ok: false,
         error: "SIWN verified but no FID was returned from Neynar.",
-        neynar: result.data,
       },
       { status: 400 }
     );
   }
 
-  return NextResponse.json({
+  return NextResponse.json<SiwnResponse>({
     ok: true,
     fid: Number(fid),
     username,
@@ -262,7 +260,7 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch (_e) {
-    return NextResponse.json(
+    return NextResponse.json<SiwnResponse>(
       { ok: false, error: "Body was not JSON" },
       { status: 400 }
     );
@@ -286,9 +284,9 @@ export async function POST(req: NextRequest) {
     });
   } catch {}
 
-  // host might send fid directly — in that case we’re good
+  // host might send fid directly — in that case we're good
   if (body.fid) {
-    return NextResponse.json({
+    return NextResponse.json<SiwnResponse>({
       ok: true,
       fid: Number(body.fid),
       username: body.username ?? undefined,
@@ -296,11 +294,10 @@ export async function POST(req: NextRequest) {
   }
 
   if ((!message && !messageBytes) || !signature) {
-    return NextResponse.json(
+    return NextResponse.json<SiwnResponse>(
       {
         ok: false,
         error: "No message/hash/messageBytes and signature in request body.",
-        debug: body,
       },
       { status: 400 }
     );
@@ -316,13 +313,12 @@ export async function POST(req: NextRequest) {
   } catch {}
 
   if (!result.ok) {
-    return NextResponse.json(
+    return NextResponse.json<SiwnResponse>(
       {
         ok: false,
-        error: "Neynar error in SIWN POST.",
-        neynar: result,
+        error: result.error || "Neynar error in SIWN POST.",
       },
-      { status: 400 }
+      { status: result.status || 400 }
     );
   }
 
@@ -330,17 +326,16 @@ export async function POST(req: NextRequest) {
   const username = result.data?.username ?? result.data?.user?.username ?? undefined;
 
   if (!fid) {
-    return NextResponse.json(
+    return NextResponse.json<SiwnResponse>(
       {
         ok: false,
         error: "SIWN verified but no FID was returned from Neynar.",
-        neynar: result.data,
       },
       { status: 400 }
     );
   }
 
-  return NextResponse.json({
+  return NextResponse.json<SiwnResponse>({
     ok: true,
     fid: Number(fid),
     username,

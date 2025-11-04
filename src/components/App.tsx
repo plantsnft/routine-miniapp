@@ -4,14 +4,14 @@ import { useEffect } from "react";
 import { useMiniApp } from "@neynar/react";
 import { Header } from "~/components/ui/Header";
 import { TokenTicker } from "~/components/ui/TokenTicker";
-// import { Footer } from "~/components/ui/Footer";
-import { HomeTab, ActionsTab, ContextTab, WalletTab } from "~/components/ui/tabs";
-// import { USE_WALLET } from "~/lib/constants";
+import { Footer } from "~/components/ui/Footer";
+import { HomeTab, LeaderboardTab, ActionsTab, ContextTab, WalletTab } from "~/components/ui/tabs";
 import { useNeynarUser } from "../hooks/useNeynarUser";
 
 // --- Types ---
 export enum Tab {
   Home = "home",
+  Leaderboard = "leaderboard",
   Actions = "actions",
   Context = "context",
   Wallet = "wallet",
@@ -43,7 +43,7 @@ export interface AppProps {
  * - Loading states for async operations
  * 
  * @param props - Component props
- * @param props.title - Optional title for the mini app (defaults to "Neynar Starter Kit")
+ * @param props.title - Optional title for the mini app (defaults to "Catwalk")
  * 
  * @example
  * ```tsx
@@ -51,14 +51,14 @@ export interface AppProps {
  * ```
  */
 export default function App(
-  { title: _title }: AppProps = { title: "Neynar Starter Kit" }
+  { title: _title }: AppProps = { title: "Catwalk" }
 ) {
   // --- Hooks ---
   const {
     isSDKLoaded,
     context,
     setInitialTab,
-    setActiveTab: _setActiveTab,
+    setActiveTab,
     currentTab,
   } = useMiniApp();
 
@@ -115,18 +115,19 @@ export default function App(
       <Header neynarUser={neynarUser} />
 
       {/* Main content and footer should be centered */}
-      <div className="container py-2 pb-20">
+      <div className="container py-2" style={{ paddingBottom: "100px" }}>
         {/* Main title - hidden for cleaner look */}
         {/* <h1 className="text-2xl font-bold text-center mb-4">{title}</h1> */}
 
         {/* Tab content rendering */}
         {currentTab === Tab.Home && <HomeTab />}
+        {currentTab === Tab.Leaderboard && <LeaderboardTab />}
         {currentTab === Tab.Actions && <ActionsTab />}
         {currentTab === Tab.Context && <ContextTab />}
         {currentTab === Tab.Wallet && <WalletTab />}
 
-        {/* Footer with navigation - hidden for now */}
-        {/* <Footer activeTab={currentTab as Tab} setActiveTab={setActiveTab} showWallet={USE_WALLET} /> */}
+        {/* Footer with navigation */}
+        <Footer activeTab={currentTab as Tab} setActiveTab={setActiveTab} />
       </div>
     </div>
   );

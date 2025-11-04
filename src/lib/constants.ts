@@ -113,3 +113,9 @@ export const SIGNED_KEY_REQUEST_TYPE = {
     { name: 'deadline', type: 'uint256' },
   ],
 };
+
+/**
+ * Check-in configuration constants.
+ */
+export const CHECK_IN_RESET_HOUR = 9; // 9 AM Pacific
+export const PACIFIC_TIMEZONE = "America/Los_Angeles";

@@ -16,7 +16,7 @@ export function cn(...inputs: ClassValue[]) {
 
 export function getMiniAppEmbedMetadata(ogImageUrl?: string, baseUrl?: string) {
   // Get base URL - prioritize provided baseUrl, then APP_URL, then env var, then fallback
-  const appUrl = baseUrl || APP_URL || process.env.NEXT_PUBLIC_URL || 'https://routine-smoky.vercel.app';
+  const appUrl = baseUrl || APP_URL || process.env.NEXT_PUBLIC_URL || 'https://catwalk-smoky.vercel.app';
   
   const imageUrl = ogImageUrl ?? `${appUrl}/api/opengraph-image`;
   const splashImageUrl = `${appUrl}/logo.png`;
@@ -39,7 +39,7 @@ export function getMiniAppEmbedMetadata(ogImageUrl?: string, baseUrl?: string) {
 
 export async function getFarcasterDomainManifest(baseUrl?: string): Promise<Manifest> {
   // Use provided baseUrl, or fall back to APP_URL, or use environment variable
-  const appUrl = baseUrl || APP_URL || process.env.NEXT_PUBLIC_URL || 'https://routine-smoky.vercel.app';
+  const appUrl = baseUrl || APP_URL || process.env.NEXT_PUBLIC_URL || 'https://catwalk-smoky.vercel.app';
   
   // Use environment variable if available, otherwise use the signed accountAssociation
   const accountAssociation = APP_ACCOUNT_ASSOCIATION || {
@@ -52,7 +52,7 @@ export async function getFarcasterDomainManifest(baseUrl?: string): Promise<Mani
     accountAssociation,
     miniapp: {
       version: '1',
-      name: APP_NAME ?? 'Neynar Starter Kit',
+      name: APP_NAME ?? 'Catwalk',
       homeUrl: appUrl,
       iconUrl: `${appUrl}/logo.png`,
       imageUrl: `${appUrl}/api/opengraph-image`,

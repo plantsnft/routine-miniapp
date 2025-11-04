@@ -14,7 +14,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { fid } = await params;
   // Get base URL - use environment variable or fallback
-  const baseUrl = process.env.NEXT_PUBLIC_URL || 'https://routine-smoky.vercel.app';
+  const baseUrl = process.env.NEXT_PUBLIC_URL || 'https://catwalk-smoky.vercel.app';
   const imageUrl = `${baseUrl}/api/opengraph-image?fid=${fid}`;
 
   return {

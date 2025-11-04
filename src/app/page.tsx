@@ -7,11 +7,11 @@ export const revalidate = 300;
 
 export async function generateMetadata(): Promise<Metadata> {
   // Get base URL - use environment variable or fallback
-  const baseUrl = process.env.NEXT_PUBLIC_URL || 'https://routine-smoky.vercel.app';
+  const baseUrl = process.env.NEXT_PUBLIC_URL || 'https://catwalk-smoky.vercel.app';
   const ogImageUrl = `${baseUrl}/api/opengraph-image`;
   
   return {
-    title: APP_NAME ?? "Routine",
+    title: APP_NAME ?? "Catwalk",
     description: APP_DESCRIPTION,
     openGraph: {
       title: APP_NAME,

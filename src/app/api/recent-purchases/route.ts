@@ -20,10 +20,35 @@ export async function GET() {
   try {
     const apiKeyParam = BASESCAN_API_KEY ? `&apikey=${BASESCAN_API_KEY}` : "";
     
-    // Get recent transfer events (buys) - limit to most recent 10
+    // Get recent transfer events (buys) - query last 1000 blocks
+    // We need to get the latest block number first, then query backwards
     const transferEventTopic = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
-    const url = `https://api.basescan.org/api?module=logs&action=getLogs&fromBlock=latest&toBlock=latest&address=${TOKEN_ADDRESS}&topic0=${transferEventTopic}&page=1&offset=10${apiKeyParam}`;
     
+    // First, get the latest block number
+    const latestBlockUrl = `https://api.basescan.org/api?module=proxy&action=eth_blockNumber${apiKeyParam}`;
+    const latestBlockRes = await fetch(latestBlockUrl, {
+      headers: { "User-Agent": "Catwalk-MiniApp" },
+    });
+    
+    let fromBlock = "latest";
+    if (latestBlockRes.ok) {
+      try {
+        const blockData = await latestBlockRes.json();
+        if (blockData.result) {
+          const latestBlock = parseInt(blockData.result, 16);
+          // Query last 10000 blocks (roughly last few hours)
+          const blocksToQuery = 10000;
+          const startBlock = Math.max(0, latestBlock - blocksToQuery);
+          fromBlock = `0x${startBlock.toString(16)}`;
+        }
+      } catch (_e) {
+        console.log("[Recent Purchases] Could not parse latest block, using 'latest'");
+      }
+    }
+    
+    const url = `https://api.basescan.org/api?module=logs&action=getLogs&fromBlock=${fromBlock}&toBlock=latest&address=${TOKEN_ADDRESS}&topic0=${transferEventTopic}&page=1&offset=10${apiKeyParam}`;
+    
+    console.log("[Recent Purchases] Fetching from URL:", url);
     const response = await fetch(url, {
       headers: {
         "User-Agent": "Catwalk-MiniApp",
@@ -31,6 +56,7 @@ export async function GET() {
     });
 
     if (!response.ok) {
+      console.error("[Recent Purchases] API request failed:", response.status, response.statusText);
       return NextResponse.json({
         ok: true,
         latestPurchase: null,
@@ -38,24 +64,47 @@ export async function GET() {
     }
 
     const data = await response.json();
+    console.log("[Recent Purchases] BaseScan response:", {
+      status: data.status,
+      resultLength: data.result?.length,
+      message: data.message,
+    });
     
     if (data.status !== "1" || !data.result || !Array.isArray(data.result) || data.result.length === 0) {
+      console.log("[Recent Purchases] No transfer events found");
       return NextResponse.json({
         ok: true,
         latestPurchase: null,
       });
     }
 
-    // Get the most recent transfer (first in array)
+    // Get the most recent transfer
+    // BaseScan returns results in reverse chronological order (latest first)
     const latestTransfer = data.result[0];
+    
+    console.log("[Recent Purchases] Latest transfer:", {
+      blockNumber: latestTransfer.blockNumber,
+      topics: latestTransfer.topics?.length,
+      data: latestTransfer.data,
+    });
     
     // Extract buyer address (to field in transfer event)
     // Transfer event: Transfer(address indexed from, address indexed to, uint256 value)
     // topic0 = Transfer event signature
-    // topic1 = from address
-    // topic2 = to address
+    // topic1 = from address (indexed)
+    // topic2 = to address (indexed)
     // data = value (amount)
-    const buyerAddress = "0x" + latestTransfer.topics[2]?.slice(26) || "";
+    const buyerAddress = latestTransfer.topics && latestTransfer.topics[2]
+      ? "0x" + latestTransfer.topics[2].slice(26)
+      : "";
+    
+    if (!buyerAddress) {
+      console.error("[Recent Purchases] Could not extract buyer address from transfer event");
+      return NextResponse.json({
+        ok: true,
+        latestPurchase: null,
+      });
+    }
     const amountHex = latestTransfer.data || "0x0";
     const blockNumber = parseInt(latestTransfer.blockNumber, 16);
     

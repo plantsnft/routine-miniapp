@@ -127,15 +127,23 @@ export async function GET() {
 
           if (basePair) {
             // Calculate market cap: price * total supply
-            // Try to get total supply from token info or use a default
-            const totalSupply = basePair.liquidity?.usd 
-              ? parseFloat(basePair.liquidity.usd) / (parseFloat(basePair.priceUsd || "1") * 0.001) // Rough estimate
-              : null;
-            const marketCap = basePair.priceUsd && totalSupply 
-              ? parseFloat(basePair.priceUsd) * totalSupply 
-              : null;
+            // For market cap calculation, we need total supply
+            // Try to get it from the pair data or calculate from liquidity
+            let marketCap: number | null = null;
+            
+            // Try to get market cap from pair data if available
+            if (basePair.marketCap) {
+              marketCap = parseFloat(basePair.marketCap);
+            } else if (basePair.fdv) {
+              // Fully diluted valuation is close to market cap
+              marketCap = parseFloat(basePair.fdv);
+            } else if (basePair.priceUsd && basePair.liquidity?.usd) {
+              // Rough estimate: use liquidity as a proxy for market cap
+              // This is not accurate but better than nothing
+              marketCap = parseFloat(basePair.liquidity.usd) * 2; // Rough multiplier
+            }
 
-            return NextResponse.json({
+            const response = {
               price: parseFloat(basePair.priceUsd || "0"),
               priceChange24h: parseFloat(basePair.priceChange?.h24 || "0"),
               volume24h: parseFloat(basePair.volume?.h24 || "0"),
@@ -147,7 +155,10 @@ export async function GET() {
               name: basePair.baseToken?.name || "Catwalk",
               address: TOKEN_ADDRESS,
               source: "dexscreener",
-            });
+            };
+            
+            console.log("[Token Price] DexScreener success:", response);
+            return NextResponse.json(response);
           }
         }
       }
@@ -186,6 +197,7 @@ export async function GET() {
     }
 
     // If all APIs fail, return placeholder data
+    console.log("[Token Price] All APIs failed, returning placeholder data");
     return NextResponse.json({
       price: null,
       priceChange24h: null,

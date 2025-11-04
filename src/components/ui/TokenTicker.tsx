@@ -27,12 +27,24 @@ export function TokenTicker() {
   useEffect(() => {
     const fetchTokenPrice = async () => {
       try {
+        console.log("[TokenTicker] Fetching token data...");
         const [priceRes, purchaseRes] = await Promise.all([
           fetch("/api/token-price"),
           fetch("/api/recent-purchases"),
         ]);
         
+        console.log("[TokenTicker] Price response status:", priceRes.status);
+        console.log("[TokenTicker] Purchase response status:", purchaseRes.status);
+        
         const priceData = await priceRes.json();
+        console.log("[TokenTicker] Price data received:", {
+          price: priceData.price,
+          priceChange24h: priceData.priceChange24h,
+          volume24h: priceData.volume24h,
+          marketCap: priceData.marketCap,
+          error: priceData.error,
+        });
+        
         setTokenData({
           price: priceData.price,
           priceChange24h: priceData.priceChange24h,
@@ -46,11 +58,14 @@ export function TokenTicker() {
         });
 
         const purchaseData = await purchaseRes.json();
+        console.log("[TokenTicker] Purchase data received:", purchaseData);
         if (purchaseData.ok && purchaseData.latestPurchase) {
           setRecentPurchase(purchaseData.latestPurchase);
+        } else {
+          console.log("[TokenTicker] No recent purchase data");
         }
-    } catch (_error) {
-      console.error("Error fetching token data:", _error);
+      } catch (_error) {
+        console.error("[TokenTicker] Error fetching token data:", _error);
       } finally {
         setLoading(false);
       }

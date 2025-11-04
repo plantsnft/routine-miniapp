@@ -40,6 +40,15 @@ body {
   color: var(--foreground);
   background: var(--background);
   font-family: 'Inter', Helvetica, Arial, sans-serif;
+  /* Gold and black pattern background */
+  background-image: repeating-linear-gradient(
+    90deg,
+    #c1b400 0px,
+    #c1b400 25px,
+    #000000 25px,
+    #000000 50px
+  );
+  background-size: 50px 100%;
 }
 
 * {

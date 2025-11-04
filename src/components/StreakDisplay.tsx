@@ -72,11 +72,6 @@ export function StreakDisplay({
       >
         🔥 {streak} day{streak === 1 ? "" : "s"} streak
       </p>
-      {checkedIn && lastCheckIn && (
-        <p style={{ margin: 0, marginBottom: 4, color: "#000000", fontSize: 13, opacity: 0.8 }}>
-          Checked in today: {new Date(lastCheckIn).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
-        </p>
-      )}
       {!checkedIn && lastCheckIn && (
         <p style={{ margin: 0, marginBottom: 4, color: "#000000", fontSize: 13, opacity: 0.8 }}>
           Last check-in: {formatLastCheckIn(lastCheckIn)}

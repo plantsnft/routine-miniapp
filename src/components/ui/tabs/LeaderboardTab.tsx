@@ -133,6 +133,7 @@ export function LeaderboardTab() {
               color: "#c1b400",
               fontSize: 12,
               fontWeight: 700,
+              fontFamily: "inherit",
             }}
           >
             🏆 Leaderboard
@@ -190,8 +191,8 @@ export function LeaderboardTab() {
         {/* Loading state */}
         {loading && (
           <div style={{ textAlign: "center", padding: "40px 20px" }}>
-            <p style={{ color: "#c1b400", fontSize: 16, marginBottom: 8 }}>Loading leaderboard...</p>
-            <p style={{ color: "#ffffff", fontSize: 12, opacity: 0.7 }}>
+            <p style={{ color: "#c1b400", fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Loading leaderboard...</p>
+            <p style={{ color: "#666666", fontSize: 12, opacity: 0.7 }}>
               Fetching token balances and rankings...
             </p>
           </div>
@@ -208,7 +209,7 @@ export function LeaderboardTab() {
               textAlign: "center",
             }}
           >
-            <p style={{ color: "#c1b400", fontSize: 14, marginBottom: 8, fontWeight: 600 }}>
+            <p style={{ color: "#c1b400", fontSize: 12, marginBottom: 8, fontWeight: 700 }}>
               ⚠️ {error}
             </p>
             <button
@@ -391,10 +392,10 @@ export function LeaderboardTab() {
             <p style={{ color: "#c1b400", fontSize: 24, margin: "0 0 12px 0" }}>
               🏁
             </p>
-            <p style={{ color: "#ffffff", fontSize: 16, margin: "0 0 8px 0", fontWeight: 600 }}>
+            <p style={{ color: "#c1b400", fontSize: 12, margin: "0 0 8px 0", fontWeight: 700 }}>
               No leaderboard entries yet
             </p>
-            <p style={{ color: "#ffffff", fontSize: 13, margin: 0, opacity: 0.7 }}>
+            <p style={{ color: "#666666", fontSize: 12, margin: 0, opacity: 0.7 }}>
               Be the first to check in and claim your spot!
             </p>
           </div>

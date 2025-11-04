@@ -132,23 +132,30 @@ export async function GET() {
 
       const data = await dexScreenerResponse.json();
       
-      if (!data || !data.pairs) {
-        console.error("[Token Price] DexScreener returned invalid data:", data);
-        throw new Error("DexScreener returned invalid data format");
+      console.log("[Token Price] DexScreener raw response:", JSON.stringify(data).substring(0, 500));
+      
+      // Check if data exists and has pairs array (even if empty)
+      if (!data) {
+        console.error("[Token Price] DexScreener returned null/undefined data");
+        throw new Error("DexScreener returned no data");
       }
 
       // Process the data
       console.log("[Token Price] DexScreener raw data:", {
-        pairsCount: data.pairs?.length,
-        pairs: data.pairs?.map((p: any) => ({
+        pairsCount: data.pairs?.length || 0,
+        pairs: data.pairs?.slice(0, 3).map((p: any) => ({
           chainId: p.chainId,
           dexId: p.dexId,
           priceUsd: p.priceUsd,
           pairAddress: p.pairAddress,
-        })),
+        })) || [],
       });
       
-      if (data.pairs && data.pairs.length > 0) {
+      // Check if pairs array exists and has items
+      if (!data.pairs || !Array.isArray(data.pairs) || data.pairs.length === 0) {
+        console.warn("[Token Price] DexScreener returned empty pairs array - token may not be listed yet");
+        // Don't throw error, continue to fallback APIs
+      } else if (data.pairs && Array.isArray(data.pairs) && data.pairs.length > 0) {
         // Find the pair on Base chain - prioritize Base pairs
         const basePairs = data.pairs.filter(
           (pair: any) => 
@@ -173,7 +180,7 @@ export async function GET() {
           volume24h: basePair.volume?.h24,
         });
 
-        if (basePair) {
+        if (basePair && basePair.priceUsd) {
           // Calculate market cap: price * total supply
           // For market cap calculation, we need total supply
           // Try to get it from the pair data or calculate from liquidity

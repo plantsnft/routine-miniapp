@@ -132,6 +132,27 @@ export function HomeTab() {
           />
         </div>
 
+        {/* Featured Photo - Add your photo here */}
+        <div style={{ textAlign: "center", marginBottom: 16 }}>
+          <img 
+            src="/featured-photo.png" 
+            alt="Catwalk Featured" 
+            style={{ 
+              maxWidth: "100%", 
+              width: "100%", 
+              height: "auto",
+              objectFit: "contain",
+              borderRadius: 12,
+              border: "2px solid #c1b400",
+            }}
+            onError={(e) => {
+              // Hide if image doesn't exist
+              const target = e.target as HTMLImageElement;
+              target.style.display = "none";
+            }}
+          />
+        </div>
+
         {/* Channel Stats */}
         <div
           style={{

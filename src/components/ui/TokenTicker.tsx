@@ -23,6 +23,7 @@ export function TokenTicker() {
   } | null>(null);
   const [recentPurchase, setRecentPurchase] = useState<RecentPurchase | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchTokenPrice = async () => {
@@ -36,6 +37,10 @@ export function TokenTicker() {
         console.log("[TokenTicker] Price response status:", priceRes.status);
         console.log("[TokenTicker] Purchase response status:", purchaseRes.status);
         
+        if (!priceRes.ok) {
+          console.error("[TokenTicker] Price API error:", priceRes.status, priceRes.statusText);
+        }
+        
         const priceData = await priceRes.json();
         console.log("[TokenTicker] Price data received:", {
           price: priceData.price,
@@ -43,7 +48,17 @@ export function TokenTicker() {
           volume24h: priceData.volume24h,
           marketCap: priceData.marketCap,
           error: priceData.error,
+          source: priceData.source,
         });
+        
+        // Check if we got actual data or just error/null values
+        if (priceData.error || (priceData.price === null && priceData.priceChange24h === null)) {
+          const errorMsg = priceData.error || "All fields are null - API may not have token data";
+          console.warn("[TokenTicker] API returned error or no data:", errorMsg);
+          setError(errorMsg);
+        } else {
+          setError(null);
+        }
         
         setTokenData({
           price: priceData.price,
@@ -64,8 +79,9 @@ export function TokenTicker() {
         } else {
           console.log("[TokenTicker] No recent purchase data");
         }
-      } catch (_error) {
+      } catch (_error: any) {
         console.error("[TokenTicker] Error fetching token data:", _error);
+        setError(_error?.message || "Network error");
       } finally {
         setLoading(false);
       }
@@ -110,12 +126,16 @@ export function TokenTicker() {
       <span key="loading" style={{ color: "#ffffff", opacity: 0.7 }}>
         Loading...
       </span>
-    ) : tokenData && tokenData.price !== null ? (
+    ) : tokenData && tokenData.price !== null && tokenData.price > 0 ? (
       <span key="price" style={{ color: "#ffffff" }}>
         ${tokenData.price.toFixed(6)}
       </span>
+    ) : !loading && tokenData ? (
+      <span key="no-price" style={{ color: "#ffffff", opacity: 0.7 }}>
+        Price: N/A
+      </span>
     ) : null,
-    tokenData && tokenData.priceChange24h !== null ? (
+    tokenData && tokenData.priceChange24h !== null && tokenData.priceChange24h !== 0 ? (
       <span
         key="change"
         style={{
@@ -127,12 +147,12 @@ export function TokenTicker() {
         {priceChange.toFixed(2)}%
       </span>
     ) : null,
-    tokenData && tokenData.marketCap !== null ? (
+    tokenData && tokenData.marketCap !== null && tokenData.marketCap > 0 ? (
       <span key="marketcap" style={{ color: "#ffffff" }}>
         MCap: {formatCurrency(tokenData.marketCap)}
       </span>
     ) : null,
-    tokenData && tokenData.volume24h !== null ? (
+    tokenData && tokenData.volume24h !== null && tokenData.volume24h > 0 ? (
       <span key="volume" style={{ color: "#ffffff" }}>
         Vol 24h: {formatCurrency(tokenData.volume24h)}
       </span>
@@ -149,6 +169,15 @@ export function TokenTicker() {
     tickerContent.push(
       <span key="symbol" style={{ color: "#c1b400", fontWeight: 600 }}>
         CATWALK
+      </span>
+    );
+  }
+  
+  // Add error indicator if there's an error
+  if (error && !loading) {
+    tickerContent.push(
+      <span key="error" style={{ color: "#ff4444", fontSize: "10px", opacity: 0.8 }}>
+        (API Error: {error.substring(0, 20)}...)
       </span>
     );
   }

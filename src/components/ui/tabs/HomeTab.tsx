@@ -16,7 +16,7 @@ import { CATWALK_CREATOR_FIDS } from "~/lib/constants";
  * ```
  */
 export function HomeTab() {
-  const keywords = ["leashes", "backpacks", "strollers", "traveling", "car rides", "+ more"];
+  const keywords = ["Leashes", "Backpacks", "Strollers", "Traveling", "Car Rides", "Off Leash", "+ More"];
   const [currentKeywordIndex, setCurrentKeywordIndex] = useState(0);
   const [followers, setFollowers] = useState<number | null>(null);
   const [loadingStats, setLoadingStats] = useState(true);
@@ -24,12 +24,13 @@ export function HomeTab() {
   const [creators, setCreators] = useState<Array<{ fid: number; username?: string; displayName?: string }>>([]);
 
   const CREATOR_COUNT = CATWALK_CREATOR_FIDS.length || 29; // Default to 29 if list is empty
+  const CATWALK_CHANNEL_URL = "https://farcaster.xyz/~/channel/catwalk";
 
-  // Cycle through keywords every 2 seconds
+  // Cycle through keywords every 4 seconds (slower)
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentKeywordIndex((prev) => (prev + 1) % keywords.length);
-    }, 2000);
+    }, 4000); // Changed from 2000 to 4000 (4 seconds)
     return () => clearInterval(interval);
   }, [keywords.length]);
 
@@ -112,37 +113,23 @@ export function HomeTab() {
       />
       
       <div className="max-w-md mx-auto" style={{ position: "relative", zIndex: 1 }}>
-        {/* Logo - Catwalk logo with cat in gold circle */}
+        {/* Logo - Catwalk logo image */}
         <div style={{ textAlign: "center", marginBottom: 16 }}>
-          <div
-            style={{
-              width: "120px",
-              height: "120px",
-              margin: "0 auto",
-              borderRadius: "50%",
-              background: "#c1b400",
-              border: "4px solid #000000",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.2)",
-              overflow: "hidden",
+          <img 
+            src="/logo.png" 
+            alt="Catwalk Logo" 
+            style={{ 
+              maxWidth: "200px", 
+              width: "100%", 
+              height: "auto",
+              objectFit: "contain",
             }}
-          >
-            <img 
-              src="/logo.png" 
-              alt="Catwalk Logo" 
-              style={{ width: "100%", height: "100%", objectFit: "contain", padding: "8px" }}
-              onError={(e) => {
-                // Fallback to emoji if image doesn't load
-                const target = e.target as HTMLImageElement;
-                target.style.display = "none";
-                if (target.parentElement) {
-                  target.parentElement.innerHTML = '<span style="font-size: 50px;">🐾</span>';
-                }
-              }}
-            />
-          </div>
+            onError={(e) => {
+              // Fallback to placeholder if image doesn't load
+              const target = e.target as HTMLImageElement;
+              target.style.display = "none";
+            }}
+          />
         </div>
 
         {/* Channel Stats */}
@@ -193,23 +180,6 @@ export function HomeTab() {
           </button>
         </div>
 
-        <h2 
-          style={{ 
-            margin: 0, 
-            marginBottom: 16, 
-            color: "#000000", 
-            fontSize: 24, 
-            fontWeight: 700, 
-            textAlign: "center",
-            background: "#c1b400",
-            padding: "12px 20px",
-            borderRadius: 12,
-            border: "3px solid #000000",
-            boxShadow: "0 4px 12px rgba(193, 180, 0, 0.3)",
-          }}
-        >
-          🐾 Welcome to Catwalk
-        </h2>
         <DailyCheckin />
 
         {/* Channel description and cycling keywords at the bottom */}
@@ -232,7 +202,20 @@ export function HomeTab() {
               fontWeight: 700,
             }}
           >
-            What is the /catwalk channel?
+            What is the{" "}
+            <a
+              href={CATWALK_CHANNEL_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                color: "#c1b400",
+                textDecoration: "underline",
+                cursor: "pointer",
+              }}
+            >
+              /catwalk
+            </a>{" "}
+            channel?
           </p>
           <p
             style={{
@@ -261,7 +244,7 @@ export function HomeTab() {
                 color: "#c1b400",
                 fontSize: 14,
                 fontWeight: 600,
-                animation: "fadeInOut 1.8s ease-in-out",
+                animation: "fadeInOut 3.5s ease-in-out",
               }}
             >
               {keywords[currentKeywordIndex]}
@@ -270,8 +253,8 @@ export function HomeTab() {
           <style>{`
             @keyframes fadeInOut {
               0% { opacity: 0; transform: translateY(10px); }
-              20% { opacity: 1; transform: translateY(0); }
-              80% { opacity: 1; transform: translateY(0); }
+              15% { opacity: 1; transform: translateY(0); }
+              85% { opacity: 1; transform: translateY(0); }
               100% { opacity: 0; transform: translateY(-10px); }
             }
           `}</style>

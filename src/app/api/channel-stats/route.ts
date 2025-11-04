@@ -17,23 +17,69 @@ export async function GET() {
     }
 
     // Try to fetch channel info from Neynar
-    // Note: This endpoint may need adjustment based on actual Neynar API
     try {
-      const _client = getNeynarClient();
+      const client = getNeynarClient();
       
-      // Try to fetch channel followers - this endpoint may vary
-      // For now, return a placeholder structure that can be updated
-      // TODO: Replace with actual Neynar API call when channel endpoint is confirmed
-      // Example: const channel = await client.lookupChannel({ id: CATWALK_CHANNEL_ID });
+      // Try to lookup channel by ID
+      try {
+        const channel = await client.lookupChannel({ id: CATWALK_CHANNEL_ID });
+        
+        // Access follower_count from the channel response (may be in different property)
+        const followerCount = (channel as any).follower_count || 
+                             (channel as any).followers || 
+                             (channel as any).channel?.follower_count;
+        
+        if (channel && followerCount !== undefined) {
+          return NextResponse.json({
+            followers: followerCount,
+            channelId: CATWALK_CHANNEL_ID,
+          });
+        }
+      } catch (lookupError: any) {
+        console.log("[Channel Stats] lookupChannel failed, trying direct API call:", lookupError?.message);
+        
+        // Fallback: Try direct API call to Neynar
+        try {
+          const response = await fetch(
+            `https://api.neynar.com/v2/farcaster/channel/search?q=${CATWALK_CHANNEL_ID}`,
+            {
+              headers: {
+                "x-api-key": apiKey,
+              },
+            }
+          );
+          
+          if (response.ok) {
+            const data = await response.json();
+            // Try to find the catwalk channel in the results
+            if (data.channels && Array.isArray(data.channels)) {
+              const catwalkChannel = data.channels.find((ch: any) => 
+                ch.id === CATWALK_CHANNEL_ID || 
+                ch.url?.includes(CATWALK_CHANNEL_ID) ||
+                ch.name?.toLowerCase() === CATWALK_CHANNEL_ID.toLowerCase()
+              );
+              
+              if (catwalkChannel && catwalkChannel.follower_count !== undefined) {
+                return NextResponse.json({
+                  followers: catwalkChannel.follower_count,
+                  channelId: CATWALK_CHANNEL_ID,
+                });
+              }
+            }
+          }
+        } catch (apiError: any) {
+          console.log("[Channel Stats] Direct API call failed:", apiError?.message);
+        }
+      }
       
-      // Placeholder response - update with actual API call
+      // If all methods fail, return null
       return NextResponse.json({
-        followers: null, // Will be fetched from actual API
+        followers: null,
         channelId: CATWALK_CHANNEL_ID,
+        error: "Unable to fetch channel stats",
       });
     } catch (error: any) {
       console.error("[Channel Stats] Error fetching from Neynar:", error);
-      // Return placeholder if API call fails
       return NextResponse.json({
         followers: null,
         channelId: CATWALK_CHANNEL_ID,

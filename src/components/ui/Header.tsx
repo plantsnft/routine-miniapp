@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { APP_NAME } from "~/lib/constants";
 import sdk from "@farcaster/miniapp-sdk";
 import { useMiniApp } from "@neynar/react";
 
@@ -22,9 +21,19 @@ export function Header({ neynarUser }: HeaderProps) {
         className="mt-4 mb-4 mx-4 px-4 py-3 bg-black rounded-lg flex items-center justify-between border-2 border-[#c1b400]"
         style={{ background: "#000000", borderColor: "#c1b400" }}
       >
-        <div className="text-lg font-bold" style={{ color: "#c1b400" }}>
-          Welcome to {APP_NAME}!
-        </div>
+        <a
+          href="https://farcaster.xyz/~/channel/catwalk"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-lg font-bold"
+          style={{ 
+            color: "#c1b400", 
+            textDecoration: "none",
+            cursor: "pointer",
+          }}
+        >
+          Welcome to /catwalk
+        </a>
         {context?.user && (
           <div 
             className="cursor-pointer"

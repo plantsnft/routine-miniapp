@@ -56,13 +56,13 @@ export const APP_ACCOUNT_ASSOCIATION: AccountAssociation | undefined = process.e
  * The URL of the splash image displayed when the mini app loads.
  * Used in the Farcaster mini app manifest.
  */
-export const APP_SPLASH_URL: string = `${APP_URL}/splash.png`;
+export const APP_SPLASH_URL: string = `${APP_URL}/logo.png`;
 
 /**
  * Background color for the splash screen.
  * Used as fallback when splash image is loading.
  */
-export const APP_SPLASH_BACKGROUND_COLOR: string = '#f7f7f7';
+export const APP_SPLASH_BACKGROUND_COLOR: string = '#000000';
 
 /**
  * Catwalk channel creator FIDs

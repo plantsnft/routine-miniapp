@@ -19,7 +19,7 @@ export function getMiniAppEmbedMetadata(ogImageUrl?: string, baseUrl?: string) {
   const appUrl = baseUrl || APP_URL || process.env.NEXT_PUBLIC_URL || 'https://routine-smoky.vercel.app';
   
   const imageUrl = ogImageUrl ?? `${appUrl}/api/opengraph-image`;
-  const splashImageUrl = `${appUrl}/splash.png`;
+  const splashImageUrl = `${appUrl}/logo.png`;
   
   return {
     version: '1', // Must be "1" not "next" per Farcaster docs
@@ -57,7 +57,7 @@ export async function getFarcasterDomainManifest(baseUrl?: string): Promise<Mani
       iconUrl: `${appUrl}/logo.png`,
       imageUrl: `${appUrl}/api/opengraph-image`,
       buttonTitle: APP_BUTTON_TEXT ?? 'Launch Mini App',
-      splashImageUrl: `${appUrl}/splash.png`,
+      splashImageUrl: `${appUrl}/logo.png`,
       splashBackgroundColor: APP_SPLASH_BACKGROUND_COLOR,
       webhookUrl: APP_WEBHOOK_URL || `https://api.neynar.com/f/app/${process.env.NEYNAR_CLIENT_ID}/event`,
     },

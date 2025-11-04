@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import DailyCheckin from "~/app/daily-checkin";
 import { CATWALK_CREATOR_FIDS } from "~/lib/constants";
+import { FollowChannelButton } from "~/components/ui/FollowChannelButton";
 
 /**
  * HomeTab component displays the main landing content for the mini app.
@@ -378,6 +379,9 @@ export function HomeTab() {
           </div>
         </div>
       )}
+
+      {/* Follow Channel Button - Fixed at bottom */}
+      <FollowChannelButton />
     </div>
   );
 } 

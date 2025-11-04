@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useMiniApp } from "@neynar/react";
 import { Header } from "~/components/ui/Header";
+import { TokenTicker } from "~/components/ui/TokenTicker";
 // import { Footer } from "~/components/ui/Footer";
 import { HomeTab, ActionsTab, ContextTab, WalletTab } from "~/components/ui/tabs";
 // import { USE_WALLET } from "~/lib/constants";
@@ -107,6 +108,9 @@ export default function App(
         paddingRight: context?.client.safeAreaInsets?.right ?? 0,
       }}
     >
+      {/* Token Ticker at the very top */}
+      <TokenTicker />
+      
       {/* Header should be full width */}
       <Header neynarUser={neynarUser} />
 

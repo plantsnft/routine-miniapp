@@ -44,9 +44,33 @@ export const Footer: React.FC<FooterProps> = ({ activeTab, setActiveTab }) => (
           transition: "color 0.2s",
         }}
       >
-        <span style={{ fontSize: 24, marginBottom: 4 }}>🏠</span>
+        <img 
+          src="/logo.png" 
+          alt="Go Home" 
+          style={{ 
+            width: "24px", 
+            height: "24px", 
+            objectFit: "contain",
+            marginBottom: 4,
+            opacity: activeTab === Tab.Home ? 1 : 0.6,
+          }}
+          onError={(e) => {
+            // Fallback to emoji if image doesn't load
+            const target = e.target as HTMLImageElement;
+            target.style.display = "none";
+            const parent = target.parentElement;
+            if (parent && !parent.querySelector("span.fallback-emoji")) {
+              const fallback = document.createElement("span");
+              fallback.className = "fallback-emoji";
+              fallback.textContent = "🏠";
+              fallback.style.fontSize = "24px";
+              fallback.style.marginBottom = "4px";
+              parent.insertBefore(fallback, target);
+            }
+          }}
+        />
         <span style={{ fontSize: 12, fontWeight: activeTab === Tab.Home ? 700 : 400 }}>
-          Home
+          go home
         </span>
       </button>
       <button

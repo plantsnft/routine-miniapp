@@ -2,34 +2,55 @@
 
 import { useState, useEffect } from "react";
 
+interface RecentPurchase {
+  buyerAddress: string;
+  amount: string;
+  username?: string;
+  displayName?: string;
+}
+
 export function TokenTicker() {
   const [tokenData, setTokenData] = useState<{
     price: number | null;
     priceChange24h: number | null;
+    volume24h: number | null;
+    marketCap: number | null;
     liquidity: number | null;
     holders: number | null;
     transactions: number | null;
     symbol: string;
     name: string;
   } | null>(null);
+  const [recentPurchase, setRecentPurchase] = useState<RecentPurchase | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchTokenPrice = async () => {
       try {
-        const res = await fetch("/api/token-price");
-        const data = await res.json();
+        const [priceRes, purchaseRes] = await Promise.all([
+          fetch("/api/token-price"),
+          fetch("/api/recent-purchases"),
+        ]);
+        
+        const priceData = await priceRes.json();
         setTokenData({
-          price: data.price,
-          priceChange24h: data.priceChange24h,
-          liquidity: data.liquidity,
-          holders: data.holders,
-          transactions: data.transactions,
-          symbol: data.symbol || "CATWALK",
-          name: data.name || "Catwalk",
+          price: priceData.price,
+          priceChange24h: priceData.priceChange24h,
+          volume24h: priceData.volume24h,
+          marketCap: priceData.marketCap,
+          liquidity: priceData.liquidity,
+          holders: priceData.holders,
+          transactions: priceData.transactions,
+          symbol: priceData.symbol || "CATWALK",
+          name: priceData.name || "Catwalk",
         });
-      } catch (error) {
-        console.error("Error fetching token price:", error);
+
+        const purchaseData = await purchaseRes.json();
+        if (purchaseData.ok && purchaseData.latestPurchase) {
+          setRecentPurchase(purchaseData.latestPurchase);
+        }
+    } catch (_error) {
+      console.error("Error fetching token data:", _error);
       } finally {
         setLoading(false);
       }
@@ -48,20 +69,22 @@ export function TokenTicker() {
   const priceChange = tokenData?.priceChange24h || 0;
   const isPositive = priceChange >= 0;
 
-  // Format liquidity for display
-  const formatLiquidity = (liq: number | null): string => {
-    if (liq === null || liq === 0) return "—";
-    if (liq >= 1000000) return `$${(liq / 1000000).toFixed(2)}M`;
-    if (liq >= 1000) return `$${(liq / 1000).toFixed(2)}K`;
-    return `$${liq.toFixed(2)}`;
+  // Format large numbers for display
+  const formatCurrency = (value: number | null): string => {
+    if (value === null || value === 0) return "—";
+    if (value >= 1000000000) return `$${(value / 1000000000).toFixed(2)}B`;
+    if (value >= 1000000) return `$${(value / 1000000).toFixed(2)}M`;
+    if (value >= 1000) return `$${(value / 1000).toFixed(2)}K`;
+    return `$${value.toFixed(2)}`;
   };
 
-  // Format number for display (holders, transactions)
-  const formatNumber = (num: number | null): string => {
-    if (num === null || num === 0) return "—";
+
+  // Format token amount for display
+  const formatTokenAmount = (amount: string): string => {
+    const num = parseFloat(amount);
     if (num >= 1000000) return `${(num / 1000000).toFixed(2)}M`;
-    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-    return num.toLocaleString();
+    if (num >= 1000) return `${(num / 1000).toFixed(2)}K`;
+    return num.toFixed(2);
   };
 
   // Create scrolling content
@@ -86,19 +109,19 @@ export function TokenTicker() {
         {priceChange.toFixed(2)}%
       </span>
     ) : null,
-    tokenData && tokenData.liquidity !== null ? (
-      <span key="liquidity" style={{ color: "#ffffff" }}>
-        Liq: {formatLiquidity(tokenData.liquidity)}
+    tokenData && tokenData.marketCap !== null ? (
+      <span key="marketcap" style={{ color: "#ffffff" }}>
+        MCap: {formatCurrency(tokenData.marketCap)}
       </span>
     ) : null,
-    tokenData && tokenData.holders !== null ? (
-      <span key="holders" style={{ color: "#ffffff" }}>
-        Holders: {formatNumber(tokenData.holders)}
+    tokenData && tokenData.volume24h !== null ? (
+      <span key="volume" style={{ color: "#ffffff" }}>
+        Vol 24h: {formatCurrency(tokenData.volume24h)}
       </span>
     ) : null,
-    tokenData && tokenData.transactions !== null ? (
-      <span key="transactions" style={{ color: "#ffffff" }}>
-        TXs: {formatNumber(tokenData.transactions)}
+    recentPurchase ? (
+      <span key="latest" style={{ color: "#c1b400", fontWeight: 600 }}>
+        Latest: {recentPurchase.displayName || recentPurchase.username || `${recentPurchase.buyerAddress.slice(0, 6)}...${recentPurchase.buyerAddress.slice(-4)}`} bought {formatTokenAmount(recentPurchase.amount)} $CATWALK
       </span>
     ) : null,
   ].filter(Boolean);
@@ -113,8 +136,28 @@ export function TokenTicker() {
     </span>
   ));
 
+  // Create swap URL for Farcaster wallet
+  // Using Uniswap on Base as it's the most common DEX
+  const TOKEN_ADDRESS = "0xa5eb1cad0dfc1c4f8d4f84f995aeda9a7a047b07";
+  const swapUrl = `https://app.uniswap.org/swap?chain=base&outputCurrency=${TOKEN_ADDRESS}`;
+
+  const handleTickerClick = () => {
+    // Try to open in Farcaster wallet if available, otherwise open in browser
+    if (typeof window !== "undefined") {
+      // Check if we're in a Farcaster context
+      const isFarcaster = (window as any).farcaster;
+      if (isFarcaster) {
+        // Try to use Farcaster's native wallet if available
+        window.open(swapUrl, "_blank");
+      } else {
+        window.open(swapUrl, "_blank");
+      }
+    }
+  };
+
   return (
     <div
+      onClick={handleTickerClick}
       style={{
         width: "100%",
         background: "#000000",
@@ -125,6 +168,14 @@ export function TokenTicker() {
         fontSize: "11px",
         fontWeight: 500,
         lineHeight: "1.2",
+        cursor: "pointer",
+        transition: "background 0.2s",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = "#1a1a1a";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = "#000000";
       }}
     >
       <div
@@ -138,22 +189,17 @@ export function TokenTicker() {
       >
         {/* Render multiple copies for seamless scroll */}
         {[...Array(3)].map((_, copyIdx) => (
-          <a
+          <div
             key={copyIdx}
-            href="https://basescan.org/token/0xa5eb1cad0dfc1c4f8d4f84f995aeda9a7a047b07"
-            target="_blank"
-            rel="noopener noreferrer"
             style={{
               display: "inline-flex",
               alignItems: "center",
               gap: "8px",
-              textDecoration: "none",
               color: "#c1b400",
-              cursor: "pointer",
             }}
           >
             {tickerRow}
-          </a>
+          </div>
         ))}
       </div>
       <style>{`

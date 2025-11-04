@@ -126,11 +126,21 @@ export async function GET() {
           ) || data.pairs[0]; // Fallback to first pair if no Base pair found
 
           if (basePair) {
+            // Calculate market cap: price * total supply
+            // Try to get total supply from token info or use a default
+            const totalSupply = basePair.liquidity?.usd 
+              ? parseFloat(basePair.liquidity.usd) / (parseFloat(basePair.priceUsd || "1") * 0.001) // Rough estimate
+              : null;
+            const marketCap = basePair.priceUsd && totalSupply 
+              ? parseFloat(basePair.priceUsd) * totalSupply 
+              : null;
+
             return NextResponse.json({
               price: parseFloat(basePair.priceUsd || "0"),
               priceChange24h: parseFloat(basePair.priceChange?.h24 || "0"),
               volume24h: parseFloat(basePair.volume?.h24 || "0"),
               liquidity: parseFloat(basePair.liquidity?.usd || "0"),
+              marketCap,
               holders: tokenStats.holders,
               transactions: tokenStats.transactions,
               symbol: basePair.baseToken?.symbol || "CATWALK",
@@ -161,6 +171,7 @@ export async function GET() {
             priceChange24h: tokenData.usd_24h_change || 0,
             volume24h: null,
             liquidity: null,
+            marketCap: null,
             holders: tokenStats.holders,
             transactions: tokenStats.transactions,
             symbol: "CATWALK",
@@ -180,6 +191,7 @@ export async function GET() {
       priceChange24h: null,
       volume24h: null,
       liquidity: null,
+      marketCap: null,
       holders: tokenStats.holders,
       transactions: tokenStats.transactions,
       symbol: "CATWALK",

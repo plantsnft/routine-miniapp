@@ -114,14 +114,14 @@ export function HomeTab() {
       />
       
       <div className="max-w-md mx-auto" style={{ position: "relative", zIndex: 1 }}>
-        {/* Logo - Catwalk logo image */}
-        <div style={{ textAlign: "center", marginBottom: 16 }}>
+        {/* Logo - Catwalk logo image - 10% smaller and centered */}
+        <div style={{ textAlign: "center", marginBottom: 16, display: "flex", flexDirection: "column", alignItems: "center" }}>
           <img 
             src="/logo.png" 
             alt="Catwalk Logo" 
             style={{ 
-              maxWidth: "200px", 
-              width: "100%", 
+              maxWidth: "18%", // 10% smaller (was ~20%, now 18%)
+              width: "18%",
               height: "auto",
               objectFit: "contain",
             }}
@@ -260,35 +260,33 @@ export function HomeTab() {
             It&apos;s a Cat owners sharing content and tips of our feline family outside the home…..
           </p>
           
-          {/* Cycling keywords animation */}
+          {/* Cycling keywords animation - fixed double flash */}
           <div
             style={{
               minHeight: "30px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
+              position: "relative",
             }}
           >
-            <div
-              key={currentKeywordIndex}
-              style={{
-                color: "#c1b400",
-                fontSize: 14,
-                fontWeight: 600,
-                animation: "fadeInOut 2.5s ease-in-out",
-              }}
-            >
-              {keywords[currentKeywordIndex]}
-            </div>
+            {keywords.map((keyword, index) => (
+              <div
+                key={keyword}
+                style={{
+                  position: index === currentKeywordIndex ? "relative" : "absolute",
+                  opacity: index === currentKeywordIndex ? 1 : 0,
+                  color: "#c1b400",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  transition: "opacity 0.3s ease-in-out",
+                  pointerEvents: index === currentKeywordIndex ? "auto" : "none",
+                }}
+              >
+                {keyword}
+              </div>
+            ))}
           </div>
-          <style>{`
-            @keyframes fadeInOut {
-              0% { opacity: 0; transform: translateY(10px); }
-              5% { opacity: 1; transform: translateY(0); }
-              95% { opacity: 1; transform: translateY(0); }
-              100% { opacity: 0; transform: translateY(-10px); }
-            }
-          `}</style>
         </div>
       </div>
 

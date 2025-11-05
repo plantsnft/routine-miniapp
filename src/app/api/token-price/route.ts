@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 // CATWALK token on Base - using checksummed address
-const TOKEN_ADDRESS = "0xa5eb1cAD0dFC1c4f8d4f84f995aeDA9a7A047B07";
+const TOKEN_ADDRESS = "0xa5eb1cAD0dFC1c4f8d4f84f995aeDA9a7A047B07"; // CATWALK token
 // Uniswap V3 pair address for CATWALK/WETH on Base (found from DexScreener)
 const PAIR_ADDRESS = "0xAcf65dDaF08570076D1Dfba9539f21ae5A30b8Bc";
 const BASE_CHAIN_ID = "base";

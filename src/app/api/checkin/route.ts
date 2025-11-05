@@ -103,10 +103,19 @@ export async function GET(req: NextRequest) {
     });
   } catch (err: any) {
     console.error("[API] /api/checkin GET error:", err);
-    return NextResponse.json<CheckinResponse>(
-      { ok: false, error: err?.message ?? "Unknown server error" },
-      { status: 500 }
-    );
+    // Ensure we always return valid JSON
+    try {
+      return NextResponse.json<CheckinResponse>(
+        { ok: false, error: err?.message ?? "Unknown server error" },
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    } catch (jsonErr) {
+      // Fallback if JSON serialization fails
+      return new NextResponse(
+        JSON.stringify({ ok: false, error: "Internal server error" }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
   }
 }
 
@@ -115,7 +124,17 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    let body;
+    try {
+      body = await req.json();
+    } catch (jsonError: any) {
+      console.error("[API] /api/checkin POST - JSON parse error:", jsonError);
+      return NextResponse.json<CheckinResponse>(
+        { ok: false, error: "Invalid JSON in request body" },
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    
     const fid = Number(body.fid);
 
     if (!fid) {
@@ -208,9 +227,27 @@ export async function POST(req: NextRequest) {
     );
   } catch (err: any) {
     console.error("[API] /api/checkin POST error:", err);
-    return NextResponse.json<CheckinResponse>(
-      { ok: false, error: err?.message ?? "Unknown server error" },
-      { status: 500 }
-    );
+    
+    // Handle JSON parsing errors specifically
+    if (err instanceof SyntaxError && err.message.includes("JSON")) {
+      return NextResponse.json<CheckinResponse>(
+        { ok: false, error: "Invalid request format" },
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    
+    // Ensure we always return valid JSON
+    try {
+      return NextResponse.json<CheckinResponse>(
+        { ok: false, error: err?.message ?? "Unknown server error" },
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    } catch (jsonErr) {
+      // Fallback if JSON serialization fails
+      return new NextResponse(
+        JSON.stringify({ ok: false, error: "Internal server error" }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
   }
 }

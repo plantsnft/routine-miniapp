@@ -50,10 +50,37 @@ export function useCheckin(): UseCheckinResult {
       clearTimeout(timeoutId);
       
       if (!res.ok) {
-        throw new Error(`HTTP error! status: ${res.status}`);
+        // Try to get error message from response
+        let errorMessage = `HTTP error! status: ${res.status}`;
+        try {
+          const contentType = res.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const errorData = await res.json();
+            errorMessage = errorData?.error || errorData?.message || errorMessage;
+          } else {
+            const text = await res.text();
+            if (text) errorMessage = text.substring(0, 200);
+          }
+        } catch (e) {
+          // If we can't parse the error, use the status message
+        }
+        throw new Error(errorMessage);
       }
       
-      const data = await res.json();
+      // Check content type before parsing JSON
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await res.text();
+        throw new Error(`Expected JSON but got ${contentType || 'unknown type'}. Response: ${text.substring(0, 100)}`);
+      }
+      
+      let data;
+      try {
+        data = await res.json();
+      } catch (jsonError: any) {
+        console.error("[useCheckin] JSON parse error:", jsonError);
+        throw new Error("Failed to parse response from server");
+      }
 
       if (data?.ok) {
         const hasCheckedInToday = data.hasCheckedInToday || false;
@@ -68,10 +95,21 @@ export function useCheckin(): UseCheckinResult {
       }
     } catch (err: any) {
       console.error("[useCheckin] Error fetching streak:", err);
+      
       // Don't show error if it's an abort (timeout) - just log it
       if (err.name !== 'AbortError') {
-        setError("Failed to fetch streak");
+        let errorMessage = "Failed to fetch streak";
+        if (err?.message) {
+          // Only show user-friendly error messages
+          if (err.message.includes("parse") || err.message.includes("JSON")) {
+            errorMessage = "Server response error. Please try again.";
+          } else if (err.message.length < 100) {
+            errorMessage = err.message;
+          }
+        }
+        setError(errorMessage);
       }
+      
       // Set default state on error to prevent app from hanging
       setStatus({
         checkedIn: false,
@@ -100,9 +138,24 @@ export function useCheckin(): UseCheckinResult {
         body: JSON.stringify({ fid: userId }),
       });
 
-      const data = await res.json();
+      // Check content type before parsing JSON
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await res.text();
+        throw new Error(`Expected JSON but got ${contentType || 'unknown type'}. Response: ${text.substring(0, 100)}`);
+      }
 
+      let data;
+      try {
+        data = await res.json();
+      } catch (jsonError: any) {
+        console.error("[useCheckin] JSON parse error in performCheckIn:", jsonError);
+        throw new Error("Failed to parse response from server");
+      }
+
+      // Clear any previous errors on successful check-in
       if (res.ok && data.ok) {
+        setError(null); // Clear error on success
         const newStreak = data.streak ?? (status.streak ?? 0) + 1;
         setStatus({
           checkedIn: true,
@@ -125,7 +178,18 @@ export function useCheckin(): UseCheckinResult {
       }
     } catch (err: any) {
       console.error("[useCheckin] Check-in error:", err);
-      setError(err?.message || "Network error");
+      
+      // Handle specific error types
+      let errorMessage = "Network error";
+      if (err?.message) {
+        errorMessage = err.message;
+      } else if (err?.name === "AbortError") {
+        errorMessage = "Request timed out. Please try again.";
+      } else if (err?.name === "TypeError" && err?.message?.includes("fetch")) {
+        errorMessage = "Network connection failed. Please check your internet.";
+      }
+      
+      setError(errorMessage);
       return { success: false };
     } finally {
       setSaving(false);

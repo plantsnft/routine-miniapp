@@ -3,6 +3,7 @@ import {
   getCheckinByFid,
   createCheckin,
   updateCheckin,
+  type CheckinRecord,
 } from "~/lib/supabase";
 import {
   getCheckInDayId,

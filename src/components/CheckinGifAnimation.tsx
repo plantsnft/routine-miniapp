@@ -1,0 +1,152 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+interface CheckinGifAnimationProps {
+  isVisible: boolean;
+  gifUrl?: string; // Optional: allow custom GIF URL
+  duration?: number; // Animation duration in milliseconds (default: 5000ms)
+  onComplete?: () => void;
+}
+
+/**
+ * Full-screen GIF animation component for check-in success.
+ * Displays a full-screen GIF that plays for 5 seconds (or custom duration).
+ * 
+ * @param isVisible - Whether the animation should be visible
+ * @param gifUrl - URL to the GIF file (defaults to /checkin-animation.gif in public folder)
+ * @param duration - Duration in milliseconds (default: 5000ms = 5 seconds)
+ * @param onComplete - Callback when animation completes
+ */
+export function CheckinGifAnimation({
+  isVisible,
+  gifUrl = "/checkin-animation.gif",
+  duration = 5000,
+  onComplete,
+}: CheckinGifAnimationProps) {
+  const [shouldRender, setShouldRender] = useState(false);
+  const [gifLoaded, setGifLoaded] = useState(false);
+  const [showGif, setShowGif] = useState(false);
+
+  useEffect(() => {
+    if (!isVisible) {
+      setShouldRender(false);
+      setShowGif(false);
+      setGifLoaded(false);
+      return;
+    }
+
+    // Start rendering when visible
+    setShouldRender(true);
+
+    // Small delay to ensure smooth transition
+    const showTimer = setTimeout(() => {
+      setShowGif(true);
+    }, 50);
+
+    // Auto-hide after duration
+    const hideTimer = setTimeout(() => {
+      setShowGif(false);
+      setShouldRender(false);
+      onComplete?.();
+    }, duration);
+
+    return () => {
+      clearTimeout(showTimer);
+      clearTimeout(hideTimer);
+    };
+  }, [isVisible, duration, onComplete]);
+
+  // Handle GIF load
+  const handleGifLoad = () => {
+    setGifLoaded(true);
+  };
+
+  const handleGifError = () => {
+    console.error("[CheckinGifAnimation] Failed to load GIF:", gifUrl);
+    // Still show something even if GIF fails to load
+    setGifLoaded(true);
+  };
+
+  if (!shouldRender) return null;
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 99999,
+        backgroundColor: "#000000",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        overflow: "hidden",
+        pointerEvents: "none",
+        opacity: showGif ? 1 : 0,
+        transition: "opacity 0.3s ease-in-out",
+      }}
+    >
+      {/* GIF container - full screen, centered */}
+      <div
+        style={{
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          position: "relative",
+        }}
+      >
+        {/* Loading state - show while GIF loads */}
+        {!gifLoaded && (
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              color: "#c1b400",
+              fontSize: 24,
+              fontWeight: 700,
+            }}
+          >
+            Loading...
+          </div>
+        )}
+
+        {/* GIF image - full screen */}
+        <img
+          src={gifUrl}
+          alt="Check-in animation"
+          onLoad={handleGifLoad}
+          onError={handleGifError}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "contain", // Maintain aspect ratio, fit within screen
+            objectPosition: "center",
+            display: gifLoaded ? "block" : "none",
+          }}
+        />
+
+        {/* Optional: Add a subtle overlay or effects */}
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            pointerEvents: "none",
+            // Subtle gradient overlay for better visibility
+            background: "radial-gradient(circle at center, transparent 0%, rgba(0, 0, 0, 0.1) 100%)",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+

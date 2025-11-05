@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "~/hooks/useAuth";
 import { useCheckin } from "~/hooks/useCheckin";
-import { CheckinAnimation } from "~/components/CheckinAnimation";
+import { CheckinGifAnimation } from "~/components/CheckinGifAnimation";
 import { CheckinButton } from "~/components/CheckinButton";
 import { StreakDisplay } from "~/components/StreakDisplay";
 import { isInWarpcast } from "~/lib/auth";
@@ -80,9 +80,11 @@ export default function DailyCheckin() {
 
   return (
     <>
-      {/* Success animation */}
-      <CheckinAnimation
+      {/* Full-screen GIF animation on check-in success */}
+      <CheckinGifAnimation
         isVisible={showAnimation}
+        gifUrl="/checkin-animation.gif"
+        duration={5000}
         onComplete={() => {
           setShowAnimation(false);
         }}

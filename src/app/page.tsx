@@ -6,8 +6,9 @@ import { getMiniAppEmbedMetadata } from "~/lib/utils";
 export const revalidate = 300;
 
 export async function generateMetadata(): Promise<Metadata> {
-  // Get base URL - use environment variable or fallback
-  const baseUrl = process.env.NEXT_PUBLIC_URL || 'https://catwalk-smoky.vercel.app';
+  // Get base URL - use environment variable or fallback to working domain
+  // The actual domain will be determined at runtime from the request
+  const baseUrl = process.env.NEXT_PUBLIC_URL || 'https://routine-plants-projects-156afffe.vercel.app';
   const ogImageUrl = `${baseUrl}/api/opengraph-image`;
   
   return {

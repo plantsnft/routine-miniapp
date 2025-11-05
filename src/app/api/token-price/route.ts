@@ -331,7 +331,7 @@ export async function GET() {
             console.log("[Token Price] Fetched WETH price:", wethPrice);
           }
         }
-      } catch (wethError) {
+      } catch (_wethError) {
         console.log("[Token Price] Failed to fetch WETH price, using default:", wethPrice);
       }
       
@@ -340,12 +340,52 @@ export async function GET() {
       const token1Selector = "0xd21220a7"; // token1() function selector
       
       console.log("[Token Price] Strategy 5: Fetching pool token addresses...");
+      
+      // Use direct JSON-RPC call instead of BaseScan proxy endpoint
+      const rpcUrl = "https://mainnet.base.org"; // Base public RPC
+      
+      const token0Call = {
+        jsonrpc: "2.0",
+        method: "eth_call",
+        params: [
+          {
+            to: PAIR_ADDRESS,
+            data: token0Selector,
+          },
+          "latest",
+        ],
+        id: 1,
+      };
+      
+      const token1Call = {
+        jsonrpc: "2.0",
+        method: "eth_call",
+        params: [
+          {
+            to: PAIR_ADDRESS,
+            data: token1Selector,
+          },
+          "latest",
+        ],
+        id: 2,
+      };
+
       const [token0Res, token1Res] = await Promise.all([
-        fetch(`https://api.basescan.org/api?module=proxy&action=eth_call&to=${PAIR_ADDRESS}&data=${token0Selector}&tag=latest${apiKeyParam}`, {
-          headers: { "User-Agent": "Catwalk-MiniApp" },
+        fetch(rpcUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "User-Agent": "Catwalk-MiniApp",
+          },
+          body: JSON.stringify(token0Call),
         }),
-        fetch(`https://api.basescan.org/api?module=proxy&action=eth_call&to=${PAIR_ADDRESS}&data=${token1Selector}&tag=latest${apiKeyParam}`, {
-          headers: { "User-Agent": "Catwalk-MiniApp" },
+        fetch(rpcUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "User-Agent": "Catwalk-MiniApp",
+          },
+          body: JSON.stringify(token1Call),
         }),
       ]);
 
@@ -355,10 +395,18 @@ export async function GET() {
         
         console.log("[Token Price] Token responses:", { 
           token0Result: token0Data.result?.substring(0, 50), 
-          token1Result: token1Data.result?.substring(0, 50) 
+          token1Result: token1Data.result?.substring(0, 50),
+          token0Error: token0Data.error,
+          token1Error: token1Data.error,
         });
         
-        if (token0Data.result && token1Data.result) {
+        // Check for errors in RPC response
+        if (token0Data.error || token1Data.error) {
+          console.log("[Token Price] RPC errors:", { token0Error: token0Data.error, token1Error: token1Data.error });
+          throw new Error("RPC call failed");
+        }
+        
+        if (token0Data.result && token1Data.result && token0Data.result !== "0x" && token1Data.result !== "0x") {
           // Extract token addresses (last 40 chars of 64-char hex string)
           const token0Addr = "0x" + token0Data.result.slice(-40);
           const token1Addr = "0x" + token1Data.result.slice(-40);
@@ -378,16 +426,41 @@ export async function GET() {
             // Get slot0 which contains sqrtPriceX96
             const slot0Selector = "0x3850c7bd"; // slot0() function selector
             console.log("[Token Price] Fetching slot0...");
-            const slot0Res = await fetch(`https://api.basescan.org/api?module=proxy&action=eth_call&to=${PAIR_ADDRESS}&data=${slot0Selector}&tag=latest${apiKeyParam}`, {
-              headers: { "User-Agent": "Catwalk-MiniApp" },
+            
+            const slot0Call = {
+              jsonrpc: "2.0",
+              method: "eth_call",
+              params: [
+                {
+                  to: PAIR_ADDRESS,
+                  data: slot0Selector,
+                },
+                "latest",
+              ],
+              id: 3,
+            };
+            
+            const slot0Res = await fetch(rpcUrl, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "User-Agent": "Catwalk-MiniApp",
+              },
+              body: JSON.stringify(slot0Call),
             });
 
             if (slot0Res.ok) {
               const slot0Data = await slot0Res.json();
               console.log("[Token Price] Slot0 response:", { 
                 hasResult: !!slot0Data.result, 
-                resultLength: slot0Data.result?.length 
+                resultLength: slot0Data.result?.length,
+                error: slot0Data.error,
               });
+              
+              if (slot0Data.error) {
+                console.log("[Token Price] Slot0 RPC error:", slot0Data.error);
+                throw new Error("Slot0 RPC call failed");
+              }
               
               if (slot0Data.result && slot0Data.result !== "0x") {
                 // Parse sqrtPriceX96 from slot0 (first 32 bytes = 64 hex chars)

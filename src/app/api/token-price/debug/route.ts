@@ -10,21 +10,49 @@ export async function GET() {
     tests: [],
   };
 
-  // Test 1: Check token0 and token1 of the pool
+  // Test 1: Check token0 and token1 of the pool using direct JSON-RPC
   try {
+    const rpcUrl = "https://mainnet.base.org";
     const token0Selector = "0x0dfe1681";
     const token1Selector = "0xd21220a7";
     
+    const token0Call = {
+      jsonrpc: "2.0",
+      method: "eth_call",
+      params: [{ to: PAIR_ADDRESS, data: token0Selector }, "latest"],
+      id: 1,
+    };
+    
+    const token1Call = {
+      jsonrpc: "2.0",
+      method: "eth_call",
+      params: [{ to: PAIR_ADDRESS, data: token1Selector }, "latest"],
+      id: 2,
+    };
+    
     const [token0Res, token1Res] = await Promise.all([
-      fetch(`https://api.basescan.org/api?module=proxy&action=eth_call&to=${PAIR_ADDRESS}&data=${token0Selector}&tag=latest`),
-      fetch(`https://api.basescan.org/api?module=proxy&action=eth_call&to=${PAIR_ADDRESS}&data=${token1Selector}&tag=latest`),
+      fetch(rpcUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(token0Call),
+      }),
+      fetch(rpcUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(token1Call),
+      }),
     ]);
 
     if (token0Res.ok && token1Res.ok) {
       const token0Data = await token0Res.json();
       const token1Data = await token1Res.json();
       
-      if (token0Data.result && token1Data.result) {
+      if (token0Data.error || token1Data.error) {
+        results.tests.push({
+          name: "Pool Token Addresses",
+          error: { token0Error: token0Data.error, token1Error: token1Data.error },
+        });
+      } else if (token0Data.result && token1Data.result && token0Data.result !== "0x" && token1Data.result !== "0x") {
         const token0Addr = "0x" + token0Data.result.slice(-40);
         const token1Addr = "0x" + token1Data.result.slice(-40);
         
@@ -37,6 +65,13 @@ export async function GET() {
           isToken0USDC: token0Addr.toLowerCase() === USDC_ADDRESS.toLowerCase(),
           isToken1USDC: token1Addr.toLowerCase() === USDC_ADDRESS.toLowerCase(),
         });
+      } else {
+        results.tests.push({
+          name: "Pool Token Addresses",
+          error: "Invalid result format",
+          token0Result: token0Data.result,
+          token1Result: token1Data.result,
+        });
       }
     }
   } catch (error: any) {
@@ -46,14 +81,32 @@ export async function GET() {
     });
   }
 
-  // Test 2: Get slot0
+  // Test 2: Get slot0 using direct JSON-RPC
   try {
+    const rpcUrl = "https://mainnet.base.org";
     const slot0Selector = "0x3850c7bd";
-    const slot0Res = await fetch(`https://api.basescan.org/api?module=proxy&action=eth_call&to=${PAIR_ADDRESS}&data=${slot0Selector}&tag=latest`);
+    
+    const slot0Call = {
+      jsonrpc: "2.0",
+      method: "eth_call",
+      params: [{ to: PAIR_ADDRESS, data: slot0Selector }, "latest"],
+      id: 3,
+    };
+    
+    const slot0Res = await fetch(rpcUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(slot0Call),
+    });
     
     if (slot0Res.ok) {
       const slot0Data = await slot0Res.json();
-      if (slot0Data.result && slot0Data.result !== "0x") {
+      if (slot0Data.error) {
+        results.tests.push({
+          name: "Pool Slot0",
+          error: slot0Data.error,
+        });
+      } else if (slot0Data.result && slot0Data.result !== "0x") {
         const sqrtPriceX96Hex = slot0Data.result.slice(2, 66);
         const sqrtPriceX96 = BigInt("0x" + sqrtPriceX96Hex);
         const Q96 = BigInt(2) ** BigInt(96);
@@ -64,6 +117,12 @@ export async function GET() {
           sqrtPriceX96: sqrtPriceX96.toString(),
           priceRatio,
           rawResult: slot0Data.result.substring(0, 200),
+        });
+      } else {
+        results.tests.push({
+          name: "Pool Slot0",
+          error: "Invalid result format",
+          result: slot0Data.result,
         });
       }
     }

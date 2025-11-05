@@ -148,3 +148,129 @@ export async function getTopUsersByStreak(limit: number = 100): Promise<CheckinR
   return await res.json();
 }
 
+/**
+ * Price history record interface matching Supabase schema.
+ */
+export interface PriceHistoryRecord {
+  id?: string;
+  token_address: string;
+  price: number;
+  price_usd: number;
+  market_cap?: number | null;
+  volume_24h?: number | null;
+  timestamp: string;
+  inserted_at?: string;
+}
+
+/**
+ * Store a price snapshot in the database.
+ * 
+ * @param tokenAddress - Token contract address
+ * @param price - Current token price
+ * @param priceUsd - Price in USD
+ * @param marketCap - Market cap (optional)
+ * @param volume24h - 24h volume (optional)
+ * @returns The created price history record
+ */
+export async function storePriceSnapshot(
+  tokenAddress: string,
+  price: number,
+  priceUsd: number,
+  marketCap?: number | null,
+  volume24h?: number | null
+): Promise<PriceHistoryRecord> {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/price_history`, {
+    method: "POST",
+    headers: {
+      ...SUPABASE_HEADERS,
+      Prefer: "return=representation",
+    },
+    body: JSON.stringify([
+      {
+        token_address: tokenAddress.toLowerCase(),
+        price,
+        price_usd: priceUsd,
+        market_cap: marketCap || null,
+        volume_24h: volume24h || null,
+        timestamp: new Date().toISOString(),
+      },
+    ]),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("[Supabase] Price snapshot insert error:", text);
+    // Don't throw - price tracking is non-critical
+    throw new Error(`Failed to store price snapshot: ${text}`);
+  }
+
+  const data = await res.json();
+  return data[0];
+}
+
+/**
+ * Get price from 24 hours ago for calculating 24h change.
+ * 
+ * @param tokenAddress - Token contract address
+ * @returns Price history record from ~24h ago, or null if not found
+ */
+export async function getPrice24hAgo(tokenAddress: string): Promise<PriceHistoryRecord | null> {
+  const tokenAddressLower = tokenAddress.toLowerCase();
+  const now = new Date();
+  const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const oneHourBuffer = new Date(now.getTime() - 25 * 60 * 60 * 1000); // 25h ago for buffer
+  
+  // Get the closest price record to 24h ago (within 1 hour window)
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/price_history?token_address=eq.${tokenAddressLower}&timestamp=gte.${oneHourBuffer.toISOString()}&timestamp=lt.${twentyFourHoursAgo.toISOString()}&order=timestamp.desc&limit=1`,
+    {
+      method: "GET",
+      headers: SUPABASE_HEADERS,
+    }
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("[Supabase] Price history query error:", text);
+    return null;
+  }
+
+  const data = await res.json();
+  return data && data.length > 0 ? data[0] : null;
+}
+
+/**
+ * Calculate 24h price change percentage from stored data.
+ * 
+ * @param currentPrice - Current price in USD
+ * @param price24hAgo - Price from 24h ago in USD
+ * @returns Percentage change (positive for increase, negative for decrease)
+ */
+export function calculate24hChangePercent(currentPrice: number, price24hAgo: number): number {
+  if (price24hAgo === 0 || !isFinite(price24hAgo)) {
+    return 0;
+  }
+  return ((currentPrice - price24hAgo) / price24hAgo) * 100;
+}
+
+/**
+ * Clean up old price history records (keep only last 7 days).
+ * This should be called periodically via a cron job or edge function.
+ */
+export async function cleanupOldPriceHistory(): Promise<void> {
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/price_history?timestamp=lt.${sevenDaysAgo.toISOString()}`,
+    {
+      method: "DELETE",
+      headers: SUPABASE_HEADERS,
+    }
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("[Supabase] Price history cleanup error:", text);
+  }
+}
+

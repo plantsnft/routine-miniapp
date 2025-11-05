@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server";
+import { 
+  storePriceSnapshot, 
+  getPrice24hAgo, 
+  calculate24hChangePercent 
+} from "~/lib/supabase";
 
 // CATWALK token on Base - using checksummed address
 const TOKEN_ADDRESS = "0xa5eb1cAD0dFC1c4f8d4f84f995aeDA9a7A047B07"; // CATWALK token
@@ -149,6 +154,44 @@ function calculateMarketCap(price: number | null, totalSupply: number | null): n
   if (price && price > 0 && totalSupply && totalSupply > 0) {
     return price * totalSupply;
   }
+  return null;
+}
+
+// Helper to store price and calculate 24h change from stored data if needed
+async function storePriceAndGet24hChange(
+  price: number,
+  marketCap: number | null,
+  volume24h: number | null,
+  external24hChange: number | null
+): Promise<number | null> {
+  // Store price snapshot (fire and forget)
+  storePriceSnapshot(
+    TOKEN_ADDRESS,
+    price,
+    price, // price is already in USD
+    marketCap,
+    volume24h
+  ).catch((err) => {
+    console.error("[Token Price] Failed to store price snapshot (non-critical):", err);
+  });
+  
+  // If we have external 24h change, use it
+  if (external24hChange !== null) {
+    return external24hChange;
+  }
+  
+  // Otherwise, try to calculate from stored data
+  try {
+    const price24hAgo = await getPrice24hAgo(TOKEN_ADDRESS);
+    if (price24hAgo && price24hAgo.price_usd) {
+      const calculated = calculate24hChangePercent(price, price24hAgo.price_usd);
+      console.log("[Token Price] Calculated 24h change from stored data:", calculated);
+      return calculated;
+    }
+  } catch (err) {
+    console.log("[Token Price] Failed to calculate 24h change from stored data:", err);
+  }
+  
   return null;
 }
 
@@ -472,11 +515,20 @@ export async function GET() {
 
           // Calculate market cap if we have price and total supply
           const calculatedMarketCap = marketCap || calculateMarketCap(price, totalSupply);
+          const volume24h = parseFloat(String(selectedPair.volume?.h24 || selectedPair.volume24h || "0"));
+          
+          // Store price and calculate 24h change if needed
+          const final24hChange = await storePriceAndGet24hChange(
+            price,
+            calculatedMarketCap,
+            volume24h,
+            finalPriceChange24h
+          );
           
           const response = {
             price,
-            priceChange24h: finalPriceChange24h,
-            volume24h: parseFloat(String(selectedPair.volume?.h24 || selectedPair.volume24h || "0")),
+            priceChange24h: final24hChange,
+            volume24h,
             liquidity: parseFloat(String(selectedPair.liquidity?.usd || "0")),
             marketCap: calculatedMarketCap,
             totalSupply,
@@ -751,10 +803,18 @@ export async function GET() {
                     hasMarketCap: !!marketCap
                   });
                   
+                  // Store price and calculate 24h change if needed
+                  const final24hChange = await storePriceAndGet24hChange(
+                    price,
+                    marketCap,
+                    null,
+                    priceChange24h
+                  );
+                  
                   // Always return data, even if market cap couldn't be calculated
                   return NextResponse.json({
                     price,
-                    priceChange24h: priceChange24h || null, // Use fetched 24h change
+                    priceChange24h: final24hChange,
                     volume24h: null,
                     liquidity: null,
                     marketCap: marketCap || null,
@@ -876,9 +936,16 @@ export async function GET() {
 
         if (tokenData && tokenData.usd) {
           const marketCap = calculateMarketCap(tokenData.usd, totalSupply);
+          const final24hChange = await storePriceAndGet24hChange(
+            tokenData.usd,
+            marketCap,
+            null,
+            tokenData.usd_24h_change || null
+          );
+          
           return NextResponse.json({
             price: tokenData.usd,
-            priceChange24h: tokenData.usd_24h_change || 0,
+            priceChange24h: final24hChange,
             volume24h: null,
             liquidity: null,
             marketCap,

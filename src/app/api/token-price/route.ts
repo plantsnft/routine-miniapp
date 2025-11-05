@@ -107,11 +107,16 @@ export async function GET() {
     ]);
 
     // Try DexScreener API first (free, no API key needed)
-    // Method 1: Try tokens endpoint with lowercase address
+    // The URL format from DexScreener suggests the address might be a pair address
+    // Try both token and pair endpoints
     try {
       const tokenAddressLower = TOKEN_ADDRESS.toLowerCase();
-      let dexScreenerUrl = `https://api.dexscreener.com/latest/dex/tokens/${tokenAddressLower}`;
-      console.log("[Token Price] Fetching from DexScreener (tokens):", dexScreenerUrl);
+      let pairs: any[] | null = null;
+      let data: any = null;
+      
+      // Method 1: Try pair endpoint first (since the DexScreener URL uses this format)
+      let dexScreenerUrl = `https://api.dexscreener.com/latest/dex/pairs/base/${tokenAddressLower}`;
+      console.log("[Token Price] Fetching from DexScreener (pair endpoint):", dexScreenerUrl);
       
       let dexScreenerResponse = await fetch(dexScreenerUrl, {
         headers: {
@@ -119,56 +124,58 @@ export async function GET() {
         },
       });
 
-      console.log("[Token Price] DexScreener response status:", dexScreenerResponse.status);
-
-      if (!dexScreenerResponse.ok) {
-        const errorText = await dexScreenerResponse.text();
-        console.error("[Token Price] DexScreener API error:", {
-          status: dexScreenerResponse.status,
-          statusText: dexScreenerResponse.statusText,
-          body: errorText,
-        });
-        throw new Error(`DexScreener API returned ${dexScreenerResponse.status}: ${dexScreenerResponse.statusText}`);
+      if (dexScreenerResponse.ok) {
+        const pairData = await dexScreenerResponse.json();
+        console.log("[Token Price] Pair endpoint response:", JSON.stringify(pairData).substring(0, 500));
+        
+        if (pairData.pair) {
+          // Single pair response
+          pairs = [pairData.pair];
+          data = { pairs };
+          console.log("[Token Price] Found pair via pair endpoint");
+        } else if (pairData.pairs && Array.isArray(pairData.pairs) && pairData.pairs.length > 0) {
+          pairs = pairData.pairs;
+          data = pairData;
+          console.log("[Token Price] Found pairs array via pair endpoint");
+        }
       }
-
-      let data = await dexScreenerResponse.json();
       
-      console.log("[Token Price] DexScreener raw response:", JSON.stringify(data).substring(0, 500));
-      
-      // Check if data exists
-      if (!data) {
-        console.error("[Token Price] DexScreener returned null/undefined data");
-        throw new Error("DexScreener returned no data");
-      }
-
-      // Process the data - pairs can be null, empty array, or have items
-      let pairs = data.pairs;
-      
-      // If pairs is null, try using the pair endpoint directly (the URL format suggests it might be a pair address)
-      if (pairs === null || (Array.isArray(pairs) && pairs.length === 0)) {
-        console.log("[Token Price] Pairs is null/empty, trying pair endpoint directly");
-        dexScreenerUrl = `https://api.dexscreener.com/latest/dex/pairs/base/${tokenAddressLower}`;
-        console.log("[Token Price] Trying DexScreener pair endpoint:", dexScreenerUrl);
+      // Method 2: If pair endpoint didn't work, try tokens endpoint
+      if (!pairs || pairs.length === 0) {
+        console.log("[Token Price] Pair endpoint didn't work, trying tokens endpoint");
+        dexScreenerUrl = `https://api.dexscreener.com/latest/dex/tokens/${tokenAddressLower}`;
+        console.log("[Token Price] Fetching from DexScreener (tokens):", dexScreenerUrl);
         
         dexScreenerResponse = await fetch(dexScreenerUrl, {
           headers: {
             "User-Agent": "Catwalk-MiniApp",
           },
         });
-        
-        if (dexScreenerResponse.ok) {
-          const pairData = await dexScreenerResponse.json();
-          if (pairData.pair) {
-            // Single pair response
-            pairs = [pairData.pair];
-            data = { pairs };
-            console.log("[Token Price] Found pair via pair endpoint");
-          } else if (pairData.pairs && Array.isArray(pairData.pairs)) {
-            pairs = pairData.pairs;
-            data = pairData;
-            console.log("[Token Price] Found pairs via pair endpoint");
-          }
+
+        console.log("[Token Price] DexScreener response status:", dexScreenerResponse.status);
+
+        if (!dexScreenerResponse.ok) {
+          const errorText = await dexScreenerResponse.text();
+          console.error("[Token Price] DexScreener API error:", {
+            status: dexScreenerResponse.status,
+            statusText: dexScreenerResponse.statusText,
+            body: errorText,
+          });
+          throw new Error(`DexScreener API returned ${dexScreenerResponse.status}: ${dexScreenerResponse.statusText}`);
         }
+
+        data = await dexScreenerResponse.json();
+        
+        console.log("[Token Price] DexScreener tokens endpoint raw response:", JSON.stringify(data).substring(0, 500));
+        
+        // Check if data exists
+        if (!data) {
+          console.error("[Token Price] DexScreener returned null/undefined data");
+          throw new Error("DexScreener returned no data");
+        }
+
+        // Process the data - pairs can be null, empty array, or have items
+        pairs = data.pairs;
       }
       
       const pairsCount = Array.isArray(pairs) ? pairs.length : (pairs === null ? 0 : 0);
@@ -264,6 +271,76 @@ export async function GET() {
         error: error,
       });
       // Continue to fallback APIs
+    }
+
+    // Fallback: Try Uniswap V3 Subgraph API (for Base chain)
+    try {
+      // Uniswap V3 subgraph query for token price on Base
+      const uniswapQuery = `
+        {
+          token(id: "${TOKEN_ADDRESS.toLowerCase()}") {
+            id
+            symbol
+            name
+            decimals
+            derivedUSD
+            totalLiquidity
+            txCount
+            poolCount
+          }
+          pools(
+            where: { token0: "${TOKEN_ADDRESS.toLowerCase()}", or: { token1: "${TOKEN_ADDRESS.toLowerCase()}" } }
+            orderBy: totalValueLockedUSD
+            orderDirection: desc
+            first: 1
+          ) {
+            id
+            token0 {
+              symbol
+            }
+            token1 {
+              symbol
+            }
+            totalValueLockedUSD
+            volumeUSD
+            token0Price
+            token1Price
+          }
+        }
+      `;
+      
+      const uniswapUrl = `https://api.studio.thegraph.com/query/48211/uniswap-v3-base/version/latest`;
+      const uniswapResponse = await fetch(uniswapUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ query: uniswapQuery }),
+      });
+
+      if (uniswapResponse.ok) {
+        const uniswapData = await uniswapResponse.json();
+        if (uniswapData?.data?.token?.derivedUSD) {
+          const price = parseFloat(uniswapData.data.token.derivedUSD);
+          const pool = uniswapData.data.pools?.[0];
+          
+          return NextResponse.json({
+            price,
+            priceChange24h: null, // Uniswap subgraph doesn't provide 24h change easily
+            volume24h: pool ? parseFloat(pool.volumeUSD || "0") : null,
+            liquidity: pool ? parseFloat(pool.totalValueLockedUSD || "0") : null,
+            marketCap: null,
+            holders: tokenStats.holders,
+            transactions: tokenStats.transactions,
+            symbol: uniswapData.data.token.symbol || "CATWALK",
+            name: uniswapData.data.token.name || "Catwalk",
+            address: TOKEN_ADDRESS,
+            source: "uniswap",
+          });
+        }
+      }
+    } catch (uniswapError) {
+      console.log("[Token Price] Uniswap subgraph failed:", uniswapError);
     }
 
     // Fallback: Try CoinGecko API (if token is listed)

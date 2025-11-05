@@ -318,11 +318,28 @@ export async function GET() {
     // Strategy 5: Try to get price from Uniswap V3 pool reserves using BaseScan
     try {
       const apiKeyParam = BASESCAN_API_KEY ? `&apikey=${BASESCAN_API_KEY}` : "";
+      const WETH_ADDRESS = "0x4200000000000000000000000000000000000006"; // WETH on Base
+      
+      // Fetch WETH price from CoinGecko for USD conversion
+      let wethPrice = 3000; // Default fallback
+      try {
+        const wethPriceRes = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=weth&vs_currencies=usd");
+        if (wethPriceRes.ok) {
+          const wethData = await wethPriceRes.json();
+          if (wethData.weth?.usd) {
+            wethPrice = wethData.weth.usd;
+            console.log("[Token Price] Fetched WETH price:", wethPrice);
+          }
+        }
+      } catch (wethError) {
+        console.log("[Token Price] Failed to fetch WETH price, using default:", wethPrice);
+      }
       
       // First, get token0 and token1 addresses to determine order
       const token0Selector = "0x0dfe1681"; // token0() function selector
       const token1Selector = "0xd21220a7"; // token1() function selector
       
+      console.log("[Token Price] Strategy 5: Fetching pool token addresses...");
       const [token0Res, token1Res] = await Promise.all([
         fetch(`https://api.basescan.org/api?module=proxy&action=eth_call&to=${PAIR_ADDRESS}&data=${token0Selector}&tag=latest${apiKeyParam}`, {
           headers: { "User-Agent": "Catwalk-MiniApp" },
@@ -336,25 +353,42 @@ export async function GET() {
         const token0Data = await token0Res.json();
         const token1Data = await token1Res.json();
         
+        console.log("[Token Price] Token responses:", { 
+          token0Result: token0Data.result?.substring(0, 50), 
+          token1Result: token1Data.result?.substring(0, 50) 
+        });
+        
         if (token0Data.result && token1Data.result) {
           // Extract token addresses (last 40 chars of 64-char hex string)
           const token0Addr = "0x" + token0Data.result.slice(-40);
           const token1Addr = "0x" + token1Data.result.slice(-40);
           
+          console.log("[Token Price] Pool tokens:", { token0Addr, token1Addr });
+          
           const isToken0 = token0Addr.toLowerCase() === TOKEN_ADDRESS.toLowerCase();
           const isToken1 = token1Addr.toLowerCase() === TOKEN_ADDRESS.toLowerCase();
+          const isToken0WETH = token0Addr.toLowerCase() === WETH_ADDRESS.toLowerCase();
+          const isToken1WETH = token1Addr.toLowerCase() === WETH_ADDRESS.toLowerCase();
+          const isToken0USDC = token0Addr.toLowerCase() === USDC_ADDRESS.toLowerCase();
+          const isToken1USDC = token1Addr.toLowerCase() === USDC_ADDRESS.toLowerCase();
           
           if (!isToken0 && !isToken1) {
-            console.log("[Token Price] Pool doesn't contain CATWALK token");
+            console.log("[Token Price] Pool doesn't contain CATWALK token", { token0Addr, token1Addr });
           } else {
             // Get slot0 which contains sqrtPriceX96
             const slot0Selector = "0x3850c7bd"; // slot0() function selector
+            console.log("[Token Price] Fetching slot0...");
             const slot0Res = await fetch(`https://api.basescan.org/api?module=proxy&action=eth_call&to=${PAIR_ADDRESS}&data=${slot0Selector}&tag=latest${apiKeyParam}`, {
               headers: { "User-Agent": "Catwalk-MiniApp" },
             });
 
             if (slot0Res.ok) {
               const slot0Data = await slot0Res.json();
+              console.log("[Token Price] Slot0 response:", { 
+                hasResult: !!slot0Data.result, 
+                resultLength: slot0Data.result?.length 
+              });
+              
               if (slot0Data.result && slot0Data.result !== "0x") {
                 // Parse sqrtPriceX96 from slot0 (first 32 bytes = 64 hex chars)
                 const sqrtPriceX96Hex = slot0Data.result.slice(2, 66);
@@ -364,25 +398,56 @@ export async function GET() {
                 const Q96 = BigInt(2) ** BigInt(96);
                 const priceRatio = Number(sqrtPriceX96 * sqrtPriceX96) / Number(Q96 * Q96);
                 
+                console.log("[Token Price] Price calculation:", { 
+                  sqrtPriceX96: sqrtPriceX96.toString(), 
+                  priceRatio,
+                  isToken0,
+                  isToken0WETH,
+                  isToken1WETH,
+                  isToken0USDC,
+                  isToken1USDC
+                });
+                
                 // Calculate price in USD
-                // priceRatio = token1Amount / token0Amount (in raw units)
-                // To get CATWALK price in USDC, we need to adjust for decimals
-                // CATWALK has 18 decimals, USDC has 6 decimals
+                // Handle both WETH and USDC pairs
                 let price: number;
+                
                 if (isToken0) {
-                  // CATWALK is token0, USDC is token1
-                  // priceRatio = USDC / CATWALK, so we need 1/priceRatio to get CATWALK/USDC
-                  // Adjust for decimals: (1/priceRatio) * (10^18 / 10^6) = (1/priceRatio) * 10^12
-                  price = (1 / priceRatio) * Math.pow(10, 18 - 6);
+                  // CATWALK is token0
+                  if (isToken1USDC) {
+                    // CATWALK/USDC pair - priceRatio = USDC / CATWALK, so 1/priceRatio * 10^12
+                    price = (1 / priceRatio) * Math.pow(10, 18 - 6);
+                  } else if (isToken1WETH) {
+                    // CATWALK/WETH pair - need to get WETH price in USD
+                    // priceRatio = WETH / CATWALK, so CATWALK price in WETH = 1/priceRatio
+                    // Then multiply by WETH price
+                    price = (1 / priceRatio) * wethPrice;
+                  } else {
+                    // Unknown pair, skip
+                    console.log("[Token Price] Unknown pair type, skipping");
+                    throw new Error("Unknown pair type");
+                  }
                 } else {
-                  // USDC is token0, CATWALK is token1
-                  // priceRatio = CATWALK / USDC, so we need priceRatio to get CATWALK/USDC
-                  // Adjust for decimals: priceRatio * (10^18 / 10^6) = priceRatio * 10^12
-                  price = priceRatio * Math.pow(10, 18 - 6);
+                  // CATWALK is token1
+                  if (isToken0USDC) {
+                    // USDC/CATWALK pair - priceRatio = CATWALK / USDC, so priceRatio * 10^12
+                    price = priceRatio * Math.pow(10, 18 - 6);
+                  } else if (isToken0WETH) {
+                    // WETH/CATWALK pair - priceRatio = CATWALK / WETH
+                    // CATWALK price in USD = priceRatio * WETH price
+                    price = priceRatio * wethPrice;
+                  } else {
+                    // Unknown pair, skip
+                    console.log("[Token Price] Unknown pair type, skipping");
+                    throw new Error("Unknown pair type");
+                  }
                 }
                 
-                if (price > 0 && price < 1000 && !isNaN(price) && isFinite(price)) {
-                  console.log("[Token Price] Calculated price from pool reserves:", price, { isToken0, priceRatio });
+                console.log("[Token Price] Final calculated price:", price);
+                
+                // Allow prices from 0.000001 to 1000000 (very small to very large)
+                if (price > 0.000001 && price < 1000000 && !isNaN(price) && isFinite(price)) {
+                  console.log("[Token Price] Success! Calculated price from pool reserves:", price);
                   
                   return NextResponse.json({
                     price,
@@ -397,14 +462,35 @@ export async function GET() {
                     address: TOKEN_ADDRESS,
                     source: "basescan-pool-reserves",
                   });
+                } else {
+                  console.log("[Token Price] Price validation failed:", { 
+                    price, 
+                    isValid: price > 0.000001 && price < 1000000 && !isNaN(price) && isFinite(price),
+                    checks: {
+                      greaterThanZero: price > 0,
+                      greaterThanMin: price > 0.000001,
+                      lessThanMax: price < 1000000,
+                      isNumber: !isNaN(price),
+                      isFinite: isFinite(price)
+                    }
+                  });
                 }
+              } else {
+                console.log("[Token Price] Slot0 result is empty or invalid");
               }
+            } else {
+              console.log("[Token Price] Slot0 request failed:", slot0Res.status);
             }
           }
+        } else {
+          console.log("[Token Price] Token data results are missing");
         }
+      } else {
+        console.log("[Token Price] Token address requests failed:", { token0Status: token0Res.status, token1Status: token1Res.status });
       }
-    } catch (poolReservesError) {
-      console.log("[Token Price] Pool reserves calculation failed:", poolReservesError);
+    } catch (poolReservesError: unknown) {
+      const err = poolReservesError as Error;
+      console.error("[Token Price] Pool reserves calculation failed:", err.message, err.stack);
     }
 
     // Strategy 6: Try Uniswap V3 API directly (quote endpoint)

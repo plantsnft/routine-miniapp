@@ -171,7 +171,7 @@ export default function DailyCheckin() {
                   margin: 0,
                   marginBottom: 16,
                   color: "#c1b400",
-                  fontSize: 22,
+                  fontSize: 16,
                   fontWeight: 700,
                   textShadow: "0 0 10px rgba(193, 180, 0, 0.5)",
                 }}
@@ -180,7 +180,7 @@ export default function DailyCheckin() {
               </p>
             </div>
             
-            {/* Large pulsing arrow pointing down to the button */}
+            {/* Large pulsing red arrow pointing down to the button */}
             <div
               className="arrow-pointer"
               style={{
@@ -193,7 +193,7 @@ export default function DailyCheckin() {
               }}
             >
               <div style={{ position: "relative" }}>
-                {/* Glow effect behind arrow */}
+                {/* Red glow effect behind arrow */}
                 <div
                   style={{
                     position: "absolute",
@@ -203,7 +203,7 @@ export default function DailyCheckin() {
                     width: "100px",
                     height: "100px",
                     borderRadius: "50%",
-                    background: "radial-gradient(circle, rgba(193, 180, 0, 0.4) 0%, transparent 70%)",
+                    background: "radial-gradient(circle, rgba(255, 68, 68, 0.4) 0%, transparent 70%)",
                     animation: "pulseGlow 1.2s ease-in-out infinite",
                   }}
                 />
@@ -212,14 +212,14 @@ export default function DailyCheckin() {
                   height="100"
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke="#c1b400"
+                  stroke="#ff4444"
                   strokeWidth="5"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   style={{
                     position: "relative",
                     zIndex: 1,
-                    filter: "drop-shadow(0 0 12px rgba(193, 180, 0, 1)) drop-shadow(0 0 24px rgba(193, 180, 0, 0.6))",
+                    filter: "drop-shadow(0 0 12px rgba(255, 68, 68, 1)) drop-shadow(0 0 24px rgba(255, 68, 68, 0.6))",
                   }}
                 >
                   <path d="M12 5v14M5 12l7-7 7 7" />

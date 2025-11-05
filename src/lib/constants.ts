@@ -16,6 +16,9 @@ import { type AccountAssociation } from '@farcaster/miniapp-core/src/manifest';
  * The base URL of the application.
  * Used for generating absolute URLs for assets and API endpoints.
  */
+// Use environment variable with fallback
+// Note: On client side, we can use window.location.origin, but for server-side
+// we need a fallback. The actual URL should be set via NEXT_PUBLIC_URL env var.
 export const APP_URL: string = process.env.NEXT_PUBLIC_URL || 'https://catwalk-smoky.vercel.app';
 
 /**

@@ -7,6 +7,7 @@ import { TokenTicker } from "~/components/ui/TokenTicker";
 import { Footer } from "~/components/ui/Footer";
 import { HomeTab, LeaderboardTab, FeedTab, ActionsTab, ContextTab, WalletTab } from "~/components/ui/tabs";
 import { useNeynarUser } from "../hooks/useNeynarUser";
+import { ErrorBoundary } from "~/components/ErrorBoundary";
 
 // --- Types ---
 export enum Tab {
@@ -110,26 +111,34 @@ export default function App(
       }}
     >
       {/* Token Ticker at the very top */}
-      <TokenTicker />
+      <ErrorBoundary>
+        <TokenTicker />
+      </ErrorBoundary>
       
       {/* Header should be full width */}
-      <Header neynarUser={neynarUser} />
+      <ErrorBoundary>
+        <Header neynarUser={neynarUser} />
+      </ErrorBoundary>
 
       {/* Main content and footer should be centered */}
       <div className="container py-2" style={{ paddingBottom: "100px" }}>
         {/* Main title - hidden for cleaner look */}
         {/* <h1 className="text-2xl font-bold text-center mb-4">{title}</h1> */}
 
-        {/* Tab content rendering */}
-        {currentTab === Tab.Home && <HomeTab />}
-        {currentTab === Tab.Leaderboard && <LeaderboardTab />}
-        {currentTab === Tab.Feed && <FeedTab />}
-        {currentTab === Tab.Actions && <ActionsTab />}
-        {currentTab === Tab.Context && <ContextTab />}
-        {currentTab === Tab.Wallet && <WalletTab />}
+        {/* Tab content rendering with error boundaries */}
+        <ErrorBoundary>
+          {currentTab === Tab.Home && <HomeTab />}
+          {currentTab === Tab.Leaderboard && <LeaderboardTab />}
+          {currentTab === Tab.Feed && <FeedTab />}
+          {currentTab === Tab.Actions && <ActionsTab />}
+          {currentTab === Tab.Context && <ContextTab />}
+          {currentTab === Tab.Wallet && <WalletTab />}
+        </ErrorBoundary>
 
         {/* Footer with navigation */}
-        <Footer activeTab={currentTab as Tab} setActiveTab={setActiveTab} />
+        <ErrorBoundary>
+          <Footer activeTab={currentTab as Tab} setActiveTab={setActiveTab} />
+        </ErrorBoundary>
       </div>
     </div>
   );

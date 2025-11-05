@@ -611,19 +611,27 @@ export async function GET() {
                   priceInScientific: price.toExponential(),
                 });
                 
-                // Allow prices from 0.0000000001 to 1000000 (very small to very large)
+                // Allow prices from 0.0000000000001 to 1000000 (very small to very large)
                 // For tokens with very small prices, we need to allow even smaller values
-                if (price > 0.0000000001 && price < 1000000 && !isNaN(price) && isFinite(price)) {
+                if (price > 0 && price < 1000000 && !isNaN(price) && isFinite(price)) {
                   const marketCap = calculateMarketCap(price, totalSupply);
-                  console.log("[Token Price] Success! Calculated price from pool reserves:", { price, marketCap, totalSupply });
+                  console.log("[Token Price] Success! Calculated price from pool reserves:", { 
+                    price, 
+                    priceFormatted: price.toExponential(6),
+                    marketCap, 
+                    totalSupply,
+                    hasTotalSupply: !!totalSupply,
+                    hasMarketCap: !!marketCap
+                  });
                   
+                  // Always return data, even if market cap couldn't be calculated
                   return NextResponse.json({
                     price,
                     priceChange24h: null, // Will need historical tracking for this
                     volume24h: null,
                     liquidity: null,
-                    marketCap,
-                    totalSupply,
+                    marketCap: marketCap || null,
+                    totalSupply: totalSupply || null,
                     holders: tokenStats.holders,
                     transactions: tokenStats.transactions,
                     symbol: "CATWALK",
@@ -634,15 +642,16 @@ export async function GET() {
                 } else {
                   console.log("[Token Price] Price validation failed:", { 
                     price, 
-                    isValid: price > 0.000001 && price < 1000000 && !isNaN(price) && isFinite(price),
+                    isValid: price > 0 && price < 1000000 && !isNaN(price) && isFinite(price),
                     checks: {
                       greaterThanZero: price > 0,
-                      greaterThanMin: price > 0.000001,
                       lessThanMax: price < 1000000,
                       isNumber: !isNaN(price),
                       isFinite: isFinite(price)
                     }
                   });
+                  // Even if price validation fails, still return what we have for debugging
+                  // But don't return invalid data - let it fall through to other strategies
                 }
               } else {
                 console.log("[Token Price] Slot0 result is empty or invalid");

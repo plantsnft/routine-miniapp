@@ -123,10 +123,10 @@ export function TokenTicker() {
     <span key="symbol" style={{ color: "#c1b400", fontWeight: 600 }}>
       {tokenData?.symbol || "CATWALK"}
     </span>,
-    // Market cap first (most important)
-    tokenData && tokenData.marketCap !== null && tokenData.marketCap > 0 ? (
+    // Market cap first (most important) - show even if 0 or null for debugging
+    tokenData && tokenData.marketCap !== null ? (
       <span key="marketcap" style={{ color: "#ffffff", fontWeight: 600 }}>
-        MCap: {formatCurrency(tokenData.marketCap)}
+        MCap: {tokenData.marketCap > 0 ? formatCurrency(tokenData.marketCap) : "N/A"}
       </span>
     ) : null,
     // 24h change second (performance indicator)
@@ -167,30 +167,31 @@ export function TokenTicker() {
   ].filter(Boolean);
   
   // If no content, show at least the symbol
-  if (tickerContent.length === 0) {
-    tickerContent.push(
-      <span key="symbol" style={{ color: "#c1b400", fontWeight: 600 }}>
-        CATWALK
-      </span>
-    );
-  }
-  
-  // Don't show error messages - just show available data
-  // If we have holders/transactions but no price, show those instead
-  if (tokenData && (!tokenData.price || tokenData.price === null) && tokenData.holders) {
-    tickerContent.push(
-      <span key="holders" style={{ color: "#ffffff", opacity: 0.8 }}>
-        {tokenData.holders.toLocaleString()} holders
-      </span>
-    );
-  }
-  
-  if (tokenData && (!tokenData.price || tokenData.price === null) && tokenData.transactions) {
-    tickerContent.push(
-      <span key="txns" style={{ color: "#ffffff", opacity: 0.8 }}>
-        {tokenData.transactions.toLocaleString()} txns
-      </span>
-    );
+  if (tickerContent.length === 0 || (tickerContent.length === 1 && tickerContent[0]?.key === "symbol")) {
+    // If we have data but no market cap/price, show holders/transactions
+    if (tokenData) {
+      if (tokenData.holders) {
+        tickerContent.push(
+          <span key="holders" style={{ color: "#ffffff", opacity: 0.8 }}>
+            {tokenData.holders.toLocaleString()} holders
+          </span>
+        );
+      }
+      if (tokenData.transactions) {
+        tickerContent.push(
+          <span key="txns" style={{ color: "#ffffff", opacity: 0.8 }}>
+            {tokenData.transactions.toLocaleString()} txns
+          </span>
+        );
+      }
+      if (!tokenData.marketCap && !tokenData.price) {
+        tickerContent.push(
+          <span key="loading-data" style={{ color: "#ffffff", opacity: 0.7 }}>
+            Loading market data...
+          </span>
+        );
+      }
+    }
   }
 
   // Create a single row of content with separators

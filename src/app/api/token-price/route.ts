@@ -373,7 +373,6 @@ export async function GET() {
 
     // Strategy 5: Try to get price from Uniswap V3 pool reserves using BaseScan
     try {
-      const apiKeyParam = BASESCAN_API_KEY ? `&apikey=${BASESCAN_API_KEY}` : "";
       const WETH_ADDRESS = "0x4200000000000000000000000000000000000006"; // WETH on Base
       
       // Fetch WETH price from CoinGecko for USD conversion
@@ -530,7 +529,8 @@ export async function GET() {
                 console.log("[Token Price] Price calculation:", { 
                   sqrtPriceX96: sqrtPriceX96.toString(), 
                   priceRatio,
-                  isToken0,
+                  isToken0CATWALK,
+                  isToken1CATWALK,
                   isToken0WETH,
                   isToken1WETH,
                   isToken0USDC,

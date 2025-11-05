@@ -46,19 +46,21 @@ export function CheckinGifAnimation({
     }, 50);
 
     // Auto-hide after duration - MANDATORY 5 seconds
-    // Calculate remaining time to ensure full duration even if component loads quickly
+    // Timer starts immediately when component becomes visible, ensuring full duration
     const hideTimer = setTimeout(() => {
       const elapsed = Date.now() - startTime;
+      // Ensure we've waited at least the full duration
       const remaining = Math.max(0, duration - elapsed);
       
-      // If we haven't waited the full duration, wait a bit more
       if (remaining > 0) {
+        // If we haven't waited the full duration yet, wait the remaining time
         setTimeout(() => {
           setShowGif(false);
           setShouldRender(false);
           onComplete?.();
         }, remaining);
       } else {
+        // Full duration has elapsed, hide immediately
         setShowGif(false);
         setShouldRender(false);
         onComplete?.();

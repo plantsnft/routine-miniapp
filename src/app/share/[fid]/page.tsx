@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { APP_NAME, APP_DESCRIPTION } from "~/lib/constants";
+import { APP_NAME, APP_DESCRIPTION, APP_URL } from "~/lib/constants";
 import { getMiniAppEmbedMetadata } from "~/lib/utils";
 export const revalidate = 300;
 
@@ -13,9 +13,7 @@ export async function generateMetadata({
   params: Promise<{ fid: string }>;
 }): Promise<Metadata> {
   const { fid } = await params;
-  // Get base URL - use environment variable or fallback
-  const baseUrl = process.env.NEXT_PUBLIC_URL || 'https://catwalk-smoky.vercel.app';
-  const imageUrl = `${baseUrl}/api/opengraph-image?fid=${fid}`;
+  const imageUrl = `${APP_URL}/api/opengraph-image?fid=${fid}`;
 
   return {
     title: `${APP_NAME} - Share`,
@@ -26,7 +24,7 @@ export async function generateMetadata({
     },
     other: {
       // Use fc:miniapp for new Mini Apps (not fc:frame which is legacy)
-      "fc:miniapp": JSON.stringify(getMiniAppEmbedMetadata(imageUrl, baseUrl)),
+      "fc:miniapp": JSON.stringify(getMiniAppEmbedMetadata(imageUrl, APP_URL)),
     },
   };
 }

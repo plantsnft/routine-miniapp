@@ -93,6 +93,26 @@ export const Footer: React.FC<FooterProps> = ({ activeTab, setActiveTab }) => (
           Leaderboard
         </span>
       </button>
+      <button
+        onClick={() => setActiveTab(Tab.Feed)}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "transparent",
+          border: "none",
+          cursor: "pointer",
+          padding: "8px 16px",
+          color: activeTab === Tab.Feed ? "#c1b400" : "#666666",
+          transition: "color 0.2s",
+        }}
+      >
+        <span style={{ fontSize: 24, marginBottom: 4 }}>📱</span>
+        <span style={{ fontSize: 12, fontWeight: activeTab === Tab.Feed ? 700 : 400 }}>
+          Feed
+        </span>
+      </button>
     </div>
   </div>
 );

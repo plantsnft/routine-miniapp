@@ -5,13 +5,14 @@ import { useMiniApp } from "@neynar/react";
 import { Header } from "~/components/ui/Header";
 import { TokenTicker } from "~/components/ui/TokenTicker";
 import { Footer } from "~/components/ui/Footer";
-import { HomeTab, LeaderboardTab, ActionsTab, ContextTab, WalletTab } from "~/components/ui/tabs";
+import { HomeTab, LeaderboardTab, FeedTab, ActionsTab, ContextTab, WalletTab } from "~/components/ui/tabs";
 import { useNeynarUser } from "../hooks/useNeynarUser";
 
 // --- Types ---
 export enum Tab {
   Home = "home",
   Leaderboard = "leaderboard",
+  Feed = "feed",
   Actions = "actions",
   Context = "context",
   Wallet = "wallet",
@@ -122,6 +123,7 @@ export default function App(
         {/* Tab content rendering */}
         {currentTab === Tab.Home && <HomeTab />}
         {currentTab === Tab.Leaderboard && <LeaderboardTab />}
+        {currentTab === Tab.Feed && <FeedTab />}
         {currentTab === Tab.Actions && <ActionsTab />}
         {currentTab === Tab.Context && <ContextTab />}
         {currentTab === Tab.Wallet && <WalletTab />}

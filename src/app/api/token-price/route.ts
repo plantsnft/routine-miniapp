@@ -460,8 +460,8 @@ export async function GET() {
             priceChange24hFromPair = parseFloat(String(selectedPair.priceChange.percent24h));
           }
           
-          // Use price change from pair if available, otherwise use the fetched one
-          const priceChange24h = priceChange24hFromPair !== null ? priceChange24hFromPair : (priceChange24h || null);
+          // Use price change from pair if available, otherwise use the fetched one from Promise.all
+          const finalPriceChange24h = priceChange24hFromPair !== null ? priceChange24hFromPair : (priceChange24h || null);
 
           let marketCap: number | null = null;
           if (selectedPair.fdv) {
@@ -475,7 +475,7 @@ export async function GET() {
           
           const response = {
             price,
-            priceChange24h,
+            priceChange24h: finalPriceChange24h,
             volume24h: parseFloat(String(selectedPair.volume?.h24 || selectedPair.volume24h || "0")),
             liquidity: parseFloat(String(selectedPair.liquidity?.usd || "0")),
             marketCap: calculatedMarketCap,

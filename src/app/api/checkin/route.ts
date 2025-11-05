@@ -144,22 +144,52 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Get existing check-in record
-    const existing = await getCheckinByFid(fid);
+    // Get existing check-in record with error handling
+    let existing;
+    try {
+      existing = await getCheckinByFid(fid);
+    } catch (dbError: any) {
+      console.error("[API] /api/checkin POST - Error fetching existing checkin:", dbError);
+      // If we can't fetch existing, try to create new one
+      existing = null;
+    }
+    
     const nowDate = new Date();
     const now = nowDate.toISOString();
 
     // If no record exists, create a new one
     if (!existing) {
-      const newCheckin = await createCheckin(fid, now, 1, 1); // streak: 1, total_checkins: 1
-      return NextResponse.json<CheckinResponse>(
-        {
-          ok: true,
-          streak: newCheckin.streak,
-          mode: "insert",
-        },
-        { status: 200 }
-      );
+      try {
+        const newCheckin = await createCheckin(fid, now, 1, 1); // streak: 1, total_checkins: 1
+        return NextResponse.json<CheckinResponse>(
+          {
+            ok: true,
+            streak: newCheckin.streak,
+            mode: "insert",
+          },
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      } catch (createError: any) {
+        console.error("[API] /api/checkin POST - Error creating checkin:", createError);
+        // If create fails, it might be a race condition - try to fetch again
+        try {
+          const retryCheckin = await getCheckinByFid(fid);
+          if (retryCheckin) {
+            // Check-in was actually created by another request
+            return NextResponse.json<CheckinResponse>(
+              {
+                ok: true,
+                streak: retryCheckin.streak || 1,
+                mode: "insert",
+              },
+              { status: 200, headers: { "Content-Type": "application/json" } }
+            );
+          }
+        } catch (retryError) {
+          // Fall through to error handling
+        }
+        throw createError;
+      }
     }
 
     // Check if user can check in (based on 9 AM Pacific reset)
@@ -211,11 +241,34 @@ export async function POST(req: NextRequest) {
     const newTotalCheckins = currentTotalCheckins + 1;
 
     // Update the check-in record
-    const updated = await updateCheckin(fid, {
-      last_checkin: now,
-      streak: newStreak,
-      total_checkins: newTotalCheckins,
-    });
+    let updated;
+    try {
+      updated = await updateCheckin(fid, {
+        last_checkin: now,
+        streak: newStreak,
+        total_checkins: newTotalCheckins,
+      });
+    } catch (updateError: any) {
+      console.error("[API] /api/checkin POST - Error updating checkin:", updateError);
+      // If update fails, try to fetch the current state - it might have been updated
+      try {
+        const retryCheckin = await getCheckinByFid(fid);
+        if (retryCheckin) {
+          // Check-in was updated (maybe by another request)
+          return NextResponse.json<CheckinResponse>(
+            {
+              ok: true,
+              streak: retryCheckin.streak || newStreak,
+              mode: "update",
+            },
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          );
+        }
+      } catch (retryError) {
+        // Fall through to error handling
+      }
+      throw updateError;
+    }
 
     return NextResponse.json<CheckinResponse>(
       {
@@ -223,23 +276,35 @@ export async function POST(req: NextRequest) {
         streak: updated.streak,
         mode: "update",
       },
-      { status: 200 }
+      { status: 200, headers: { "Content-Type": "application/json" } }
     );
   } catch (err: any) {
     console.error("[API] /api/checkin POST error:", err);
     
-    // Handle JSON parsing errors specifically
-    if (err instanceof SyntaxError && err.message.includes("JSON")) {
+    // Handle JSON parsing errors specifically - but only if they happen before processing
+    // If we get here and the request body was already parsed, it's a different error
+    if (err instanceof SyntaxError && err.message.includes("JSON") && err.message.includes("request")) {
       return NextResponse.json<CheckinResponse>(
         { ok: false, error: "Invalid request format" },
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
     
+    // For other errors, provide more context
+    let errorMessage = "Unknown server error";
+    if (err?.message) {
+      // Don't expose internal error details, but log them
+      if (err.message.includes("Supabase") || err.message.includes("database")) {
+        errorMessage = "Database error. Please try again.";
+      } else if (err.message.length < 100) {
+        errorMessage = err.message;
+      }
+    }
+    
     // Ensure we always return valid JSON
     try {
       return NextResponse.json<CheckinResponse>(
-        { ok: false, error: err?.message ?? "Unknown server error" },
+        { ok: false, error: errorMessage },
         { status: 500, headers: { "Content-Type": "application/json" } }
       );
     } catch (jsonErr) {

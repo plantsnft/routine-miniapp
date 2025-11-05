@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { getNeynarClient } from "~/lib/neynar";
 
 const CATWALK_CHANNEL_ID = "catwalk";
 
@@ -14,18 +13,24 @@ export async function GET() {
       );
     }
 
+    // Fetch casts from the Catwalk channel using Neynar API
+    // Using direct API call since the SDK doesn't have fetchCasts method
     try {
-      const client = getNeynarClient();
-      
-      // Fetch casts from the Catwalk channel
-      // Using the Neynar SDK's fetchCasts method with channel filter
-      const result = await client.fetchCasts({
-        channelId: CATWALK_CHANNEL_ID,
-        limit: 5,
-      });
+      const response = await fetch(
+        `https://api.neynar.com/v2/farcaster/channel/casts?channel_id=${CATWALK_CHANNEL_ID}&limit=5`,
+        {
+          headers: {
+            "x-api-key": apiKey,
+          },
+        }
+      );
 
-      // Extract casts from the response
-      const casts = result.casts || [];
+      if (!response.ok) {
+        throw new Error(`Neynar API error: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const casts = data.result?.casts || data.casts || [];
       
       // Format the casts for the feed
       const formattedCasts = casts.map((cast: any) => {
@@ -33,29 +38,35 @@ export async function GET() {
         const images: string[] = [];
         if (cast.embeds) {
           cast.embeds.forEach((embed: any) => {
-            if (embed.url && (embed.url.match(/\.(jpg|jpeg|png|gif|webp)$/i) || embed.images)) {
+            if (embed.url && embed.url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
               images.push(embed.url);
-            } else if (embed.images && embed.images.length > 0) {
-              images.push(...embed.images.map((img: any) => img.url || img));
+            } else if (embed.images && Array.isArray(embed.images)) {
+              embed.images.forEach((img: any) => {
+                if (typeof img === 'string') {
+                  images.push(img);
+                } else if (img.url) {
+                  images.push(img.url);
+                }
+              });
             }
           });
         }
 
         return {
           hash: cast.hash,
-          text: cast.text,
+          text: cast.text || "",
           author: {
-            fid: cast.author.fid,
-            username: cast.author.username,
-            displayName: cast.author.display_name || cast.author.username,
-            pfp: cast.author.pfp?.url || cast.author.pfp_url,
+            fid: cast.author?.fid || 0,
+            username: cast.author?.username || "unknown",
+            displayName: cast.author?.display_name || cast.author?.username || "Unknown",
+            pfp: cast.author?.pfp?.url || cast.author?.pfp_url || null,
           },
-          timestamp: cast.timestamp,
+          timestamp: cast.timestamp || new Date().toISOString(),
           images,
-          likes: cast.reactions?.likes?.length || 0,
-          recasts: cast.reactions?.recasts?.length || 0,
+          likes: cast.reactions?.likes?.length || cast.reactions?.likes_count || 0,
+          recasts: cast.reactions?.recasts?.length || cast.reactions?.recasts_count || 0,
           replies: cast.replies?.count || 0,
-          url: `https://warpcast.com/${cast.author.username}/${cast.hash}`,
+          url: `https://warpcast.com/${cast.author?.username || "unknown"}/${cast.hash || ""}`,
         };
       });
 
@@ -65,58 +76,6 @@ export async function GET() {
       });
     } catch (error: any) {
       console.error("[Channel Feed] Error fetching casts:", error);
-      
-      // Fallback: Try direct API call
-      try {
-        const response = await fetch(
-          `https://api.neynar.com/v2/farcaster/cast?channel_id=${CATWALK_CHANNEL_ID}&limit=5`,
-          {
-            headers: {
-              "x-api-key": apiKey,
-            },
-          }
-        );
-
-        if (response.ok) {
-          const data = await response.json();
-          const casts = data.result?.casts || data.casts || [];
-          
-          const formattedCasts = casts.map((cast: any) => {
-            const images: string[] = [];
-            if (cast.embeds) {
-              cast.embeds.forEach((embed: any) => {
-                if (embed.url && embed.url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
-                  images.push(embed.url);
-                }
-              });
-            }
-
-            return {
-              hash: cast.hash,
-              text: cast.text,
-              author: {
-                fid: cast.author?.fid,
-                username: cast.author?.username,
-                displayName: cast.author?.display_name || cast.author?.username,
-                pfp: cast.author?.pfp?.url || cast.author?.pfp_url,
-              },
-              timestamp: cast.timestamp,
-              images,
-              likes: cast.reactions?.likes?.length || 0,
-              recasts: cast.reactions?.recasts?.length || 0,
-              replies: cast.replies?.count || 0,
-              url: `https://warpcast.com/${cast.author?.username}/${cast.hash}`,
-            };
-          });
-
-          return NextResponse.json({
-            casts: formattedCasts,
-            count: formattedCasts.length,
-          });
-        }
-      } catch (apiError: any) {
-        console.error("[Channel Feed] Direct API call also failed:", apiError);
-      }
       
       return NextResponse.json(
         { error: "Unable to fetch channel feed", casts: [] },

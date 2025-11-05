@@ -158,7 +158,7 @@ export default function DailyCheckin() {
             <div
               style={{
                 marginBottom: 20,
-                padding: "20px",
+                padding: "12px 16px",
                 background: "#000000",
                 border: "3px solid #c1b400",
                 borderRadius: 12,
@@ -170,7 +170,6 @@ export default function DailyCheckin() {
               <p
                 style={{
                   margin: 0,
-                  marginBottom: 16,
                   color: "#c1b400",
                   fontSize: 16,
                   fontWeight: 700,
@@ -219,7 +218,7 @@ export default function DailyCheckin() {
               className="arrow-pointer"
               style={{
                 position: "absolute",
-                right: "-50px",
+                right: "-35px",
                 top: "50%",
                 transform: "translateY(-50%)",
                 zIndex: 10,

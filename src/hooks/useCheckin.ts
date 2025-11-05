@@ -179,12 +179,55 @@ export function useCheckin(): UseCheckinResult {
         // The UI will show the checked-in state from fetchStreak
         return { success: false };
       } else {
+        // For other errors, verify if the check-in actually succeeded
+        // Sometimes the response might be malformed but the check-in succeeded
+        console.warn("[useCheckin] Non-200 response, verifying check-in status:", res.status, data);
+        
+        // Try to verify if check-in actually succeeded by fetching current status
+        try {
+          const verifyRes = await fetch(`/api/checkin?fid=${userId}`);
+          if (verifyRes.ok) {
+            const verifyData = await verifyRes.json();
+            if (verifyData.hasCheckedInToday) {
+              // Check-in actually succeeded, just refresh the UI
+              console.log("[useCheckin] Check-in verified successful despite error response");
+              await fetchStreak(userId, false);
+              setStatus((prev) => ({ ...prev, checkedIn: true }));
+              setError(null);
+              return { success: true };
+            }
+          }
+        } catch (verifyError) {
+          console.error("[useCheckin] Error verifying check-in:", verifyError);
+        }
+        
+        // If verification failed or shows not checked in, show the error
         const errorMessage = data?.detail || data?.error || "Unknown error occurred";
         setError(errorMessage);
         return { success: false };
       }
     } catch (err: any) {
       console.error("[useCheckin] Check-in error:", err);
+      
+      // Even if there was an error, verify if the check-in actually succeeded
+      // Sometimes network errors or parsing errors occur after the server processes the request
+      try {
+        console.log("[useCheckin] Verifying check-in status after error...");
+        const verifyRes = await fetch(`/api/checkin?fid=${userId}`);
+        if (verifyRes.ok) {
+          const verifyData = await verifyRes.json();
+          if (verifyData.hasCheckedInToday) {
+            // Check-in actually succeeded despite the error
+            console.log("[useCheckin] Check-in verified successful despite error");
+            await fetchStreak(userId, false);
+            setStatus((prev) => ({ ...prev, checkedIn: true }));
+            setError(null);
+            return { success: true };
+          }
+        }
+      } catch (verifyError) {
+        console.error("[useCheckin] Error verifying check-in after error:", verifyError);
+      }
       
       // Handle specific error types
       let errorMessage = "Network error";

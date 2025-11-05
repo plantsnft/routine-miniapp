@@ -152,12 +152,72 @@ function calculateMarketCap(price: number | null, totalSupply: number | null): n
   return null;
 }
 
+// Helper to fetch 24h price change from CoinGecko or DexScreener
+async function fetch24hChange(): Promise<number | null> {
+  const tokenAddressLower = TOKEN_ADDRESS.toLowerCase();
+  
+  // Try CoinGecko first
+  try {
+    const coinGeckoResponse = await fetch(
+      `https://api.coingecko.com/api/v3/simple/token_price/base?contract_addresses=${tokenAddressLower}&vs_currencies=usd&include_24hr_change=true`
+    );
+
+    if (coinGeckoResponse.ok) {
+      const data = await coinGeckoResponse.json();
+      const tokenData = data[tokenAddressLower];
+      if (tokenData && tokenData.usd_24h_change !== null && tokenData.usd_24h_change !== undefined) {
+        console.log("[24h Change] Fetched from CoinGecko:", tokenData.usd_24h_change);
+        return tokenData.usd_24h_change;
+      }
+    }
+  } catch (cgError) {
+    console.log("[24h Change] CoinGecko failed:", cgError);
+  }
+
+  // Try DexScreener as fallback
+  try {
+    const dexScreenerUrl = `https://api.dexscreener.com/latest/dex/tokens/${tokenAddressLower}`;
+    const dexResponse = await fetch(dexScreenerUrl, {
+      headers: { "User-Agent": "Catwalk-MiniApp" },
+    });
+
+    if (dexResponse.ok) {
+      const data = await dexResponse.json();
+      if (data.pairs && Array.isArray(data.pairs) && data.pairs.length > 0) {
+        // Find the pair on Base chain with highest liquidity
+        const basePairs = data.pairs.filter(
+          (p: any) => p.chainId === "base" || p.chainId === BASE_CHAIN_ID
+        );
+        
+        if (basePairs.length > 0) {
+          const bestPair = basePairs.reduce((best: any, current: any) => {
+            const bestLiq = parseFloat(best.liquidity?.usd || "0");
+            const currentLiq = parseFloat(current.liquidity?.usd || "0");
+            return currentLiq > bestLiq ? current : best;
+          });
+
+          if (bestPair.priceChange24h !== null && bestPair.priceChange24h !== undefined) {
+            const change24h = parseFloat(String(bestPair.priceChange24h));
+            console.log("[24h Change] Fetched from DexScreener:", change24h);
+            return change24h;
+          }
+        }
+      }
+    }
+  } catch (dexError) {
+    console.log("[24h Change] DexScreener failed:", dexError);
+  }
+
+  return null;
+}
+
 export async function GET() {
   try {
-    // Fetch token stats (holders, transactions, total supply) in parallel
-    const [tokenStats, totalSupply] = await Promise.all([
+    // Fetch token stats (holders, transactions, total supply, 24h change) in parallel
+    const [tokenStats, totalSupply, priceChange24h] = await Promise.all([
       fetchTokenStats(),
       fetchTotalSupply(),
+      fetch24hChange(), // Fetch 24h change separately
     ]);
 
     const tokenAddressLower = TOKEN_ADDRESS.toLowerCase();
@@ -627,7 +687,7 @@ export async function GET() {
                   // Always return data, even if market cap couldn't be calculated
                   return NextResponse.json({
                     price,
-                    priceChange24h: null, // Will need historical tracking for this
+                    priceChange24h: priceChange24h || null, // Use fetched 24h change
                     volume24h: null,
                     liquidity: null,
                     marketCap: marketCap || null,
@@ -697,7 +757,7 @@ export async function GET() {
             console.log("[Token Price] Uniswap quote API success:", { price, marketCap });
             return NextResponse.json({
               price,
-              priceChange24h: null,
+              priceChange24h: priceChange24h || null,
               volume24h: null,
               liquidity: null,
               marketCap,
@@ -773,7 +833,7 @@ export async function GET() {
     console.log("[Token Price] All strategies failed, returning data without price");
     return NextResponse.json({
       price: null,
-      priceChange24h: null,
+      priceChange24h: priceChange24h || null, // Still return 24h change if we fetched it
       volume24h: null,
       liquidity: null,
       marketCap: null,

@@ -144,7 +144,7 @@ export function TokenTicker() {
       </span>
     ) : null,
     // 24h change second (performance indicator) - always show if available
-    tokenData && tokenData.priceChange24h !== null ? (
+    tokenData && tokenData.priceChange24h !== null && tokenData.priceChange24h !== 0 ? (
       <span
         key="change"
         style={{
@@ -156,14 +156,10 @@ export function TokenTicker() {
         {priceChange.toFixed(2)}%
       </span>
     ) : null,
-    // Price (less important, but still useful) - format nicely without scientific notation
+    // Loading state (only show if no data at all)
     loading && !tokenData ? (
       <span key="loading" style={{ color: "#ffffff", opacity: 0.7 }}>
         Loading...
-      </span>
-    ) : tokenData && tokenData.price !== null && tokenData.price > 0 ? (
-      <span key="price" style={{ color: "#ffffff", opacity: 0.8 }}>
-        ${formatPrice(tokenData.price)}
       </span>
     ) : null,
     // Volume 24h

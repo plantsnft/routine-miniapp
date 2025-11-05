@@ -12,7 +12,7 @@ interface UseCheckinResult {
   loading: boolean;
   saving: boolean;
   error: string | null;
-  fetchStreak: (userId: number) => Promise<void>;
+  fetchStreak: (userId: number, showErrors?: boolean) => Promise<void>;
   performCheckIn: (userId: number) => Promise<{ success: boolean; streak?: number }>;
   clearError: () => void;
 }
@@ -33,8 +33,10 @@ export function useCheckin(): UseCheckinResult {
 
   /**
    * Fetch user's current streak and check-in status.
+   * @param userId - Farcaster user ID
+   * @param showErrors - Whether to show errors to the user (default: false for background fetches)
    */
-  const fetchStreak = useCallback(async (userId: number) => {
+  const fetchStreak = useCallback(async (userId: number, showErrors: boolean = false) => {
     try {
       setLoading(true);
       setError(null);
@@ -97,7 +99,8 @@ export function useCheckin(): UseCheckinResult {
       console.error("[useCheckin] Error fetching streak:", err);
       
       // Don't show error if it's an abort (timeout) - just log it
-      if (err.name !== 'AbortError') {
+      // Also don't show errors for background fetches (initial load) - only show for user-initiated actions
+      if (err.name !== 'AbortError' && showErrors) {
         let errorMessage = "Failed to fetch streak";
         if (err?.message) {
           // Only show user-friendly error messages
@@ -108,6 +111,9 @@ export function useCheckin(): UseCheckinResult {
           }
         }
         setError(errorMessage);
+      } else if (err.name !== 'AbortError') {
+        // For background fetches, just log the error but don't show it to user
+        console.warn("[useCheckin] Background fetch error (not shown to user):", err.message);
       }
       
       // Set default state on error to prevent app from hanging
@@ -166,7 +172,8 @@ export function useCheckin(): UseCheckinResult {
         return { success: true, streak: newStreak };
       } else if (res.status === 409) {
         // Already checked in today - refresh streak to show current state
-        await fetchStreak(userId);
+        // Don't show errors for this refresh
+        await fetchStreak(userId, false);
         setStatus((prev) => ({ ...prev, checkedIn: true }));
         // Don't show error for already checked in - this is expected behavior
         // The UI will show the checked-in state from fetchStreak

@@ -22,8 +22,9 @@ export default function DailyCheckin() {
   // Use auth hook for authentication
   const { fid, error: authError, signIn } = useAuth((fid) => {
     // When user signs in, fetch their streak (only if not already loading)
+    // Don't show errors for this automatic fetch
     if (fid && !checkin.loading) {
-      checkin.fetchStreak(fid);
+      checkin.fetchStreak(fid, false);
     }
   });
 
@@ -32,7 +33,8 @@ export default function DailyCheckin() {
     if (!fid || checkin.loading || checkin.status.streak !== null) return;
     
     // Only fetch if we don't have streak data yet
-    checkin.fetchStreak(fid);
+    // Don't show errors for initial background fetch
+    checkin.fetchStreak(fid, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fid]); // Only depend on fid to prevent infinite loops
 
@@ -42,8 +44,9 @@ export default function DailyCheckin() {
 
     const updateTimer = () => {
       // Only update if not currently loading to prevent overlapping requests
+      // Don't show errors for background timer updates
       if (fid && !checkin.loading) {
-        checkin.fetchStreak(fid);
+        checkin.fetchStreak(fid, false);
       }
     };
 

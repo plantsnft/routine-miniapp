@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { 
   storePriceSnapshot, 
   getPrice24hAgo, 
+  getLatestPriceSnapshot,
   calculate24hChangePercent 
 } from "~/lib/supabase";
 
@@ -164,16 +165,45 @@ async function storePriceAndGet24hChange(
   volume24h: number | null,
   external24hChange: number | null
 ): Promise<number | null> {
-  // Store price snapshot (fire and forget)
-  storePriceSnapshot(
-    TOKEN_ADDRESS,
-    price,
-    price, // price is already in USD
-    marketCap,
-    volume24h
-  ).catch((err) => {
-    console.error("[Token Price] Failed to store price snapshot (non-critical):", err);
-  });
+  // Store price snapshot only if last one was more than 30 minutes ago
+  // This prevents excessive database writes while still maintaining good data granularity
+  try {
+    const latestSnapshot = await getLatestPriceSnapshot(TOKEN_ADDRESS);
+    
+    const shouldStore = !latestSnapshot || (() => {
+      const lastTimestamp = new Date(latestSnapshot.timestamp).getTime();
+      const now = Date.now();
+      const thirtyMinutes = 30 * 60 * 1000; // 30 minutes in milliseconds
+      return (now - lastTimestamp) >= thirtyMinutes;
+    })();
+    
+    if (shouldStore) {
+      storePriceSnapshot(
+        TOKEN_ADDRESS,
+        price,
+        price, // price is already in USD
+        marketCap,
+        volume24h
+      ).catch((err) => {
+        console.error("[Token Price] Failed to store price snapshot (non-critical):", err);
+      });
+      console.log("[Token Price] Stored price snapshot (30min interval)");
+    } else {
+      console.log("[Token Price] Skipping price snapshot (less than 30min since last)");
+    }
+  } catch (err) {
+    console.error("[Token Price] Error checking latest price snapshot:", err);
+    // If check fails, still try to store (fallback behavior)
+    storePriceSnapshot(
+      TOKEN_ADDRESS,
+      price,
+      price,
+      marketCap,
+      volume24h
+    ).catch((storeErr) => {
+      console.error("[Token Price] Failed to store price snapshot (non-critical):", storeErr);
+    });
+  }
   
   // If we have external 24h change, use it
   if (external24hChange !== null) {

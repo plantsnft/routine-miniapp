@@ -209,6 +209,33 @@ export async function storePriceSnapshot(
 }
 
 /**
+ * Get the most recent price snapshot for a token.
+ * 
+ * @param tokenAddress - Token contract address
+ * @returns Most recent price history record, or null if not found
+ */
+export async function getLatestPriceSnapshot(tokenAddress: string): Promise<PriceHistoryRecord | null> {
+  const tokenAddressLower = tokenAddress.toLowerCase();
+  
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/price_history?token_address=eq.${tokenAddressLower}&order=timestamp.desc&limit=1`,
+    {
+      method: "GET",
+      headers: SUPABASE_HEADERS,
+    }
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("[Supabase] Latest price snapshot query error:", text);
+    return null;
+  }
+
+  const data = await res.json();
+  return data && data.length > 0 ? data[0] : null;
+}
+
+/**
  * Get price from 24 hours ago for calculating 24h change.
  * 
  * @param tokenAddress - Token contract address

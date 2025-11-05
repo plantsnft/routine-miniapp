@@ -263,36 +263,55 @@ export async function GET() {
         : pairs[0];
 
       if (selectedPair && selectedPair.priceUsd) {
-        const price = parseFloat(selectedPair.priceUsd || "0");
-        const priceChange24h = selectedPair.priceChange24h 
-          ? parseFloat(selectedPair.priceChange24h)
-          : selectedPair.priceChange?.h24 
-            ? parseFloat(selectedPair.priceChange.h24)
-            : 0;
-
-        let marketCap: number | null = null;
-        if (selectedPair.fdv) {
-          marketCap = parseFloat(selectedPair.fdv);
-        } else if (selectedPair.marketCap) {
-          marketCap = parseFloat(selectedPair.marketCap);
-        }
-
-        const response = {
-          price,
-          priceChange24h,
-          volume24h: parseFloat(selectedPair.volume?.h24 || selectedPair.volume24h || "0"),
-          liquidity: parseFloat(selectedPair.liquidity?.usd || "0"),
-          marketCap,
-          holders: tokenStats.holders,
-          transactions: tokenStats.transactions,
-          symbol: selectedPair.baseToken?.symbol || "CATWALK",
-          name: selectedPair.baseToken?.name || "Catwalk",
-          address: TOKEN_ADDRESS,
-          source: "dexscreener",
-        };
+        // Handle very small numbers and scientific notation
+        const priceStr = String(selectedPair.priceUsd);
+        const price = parseFloat(priceStr) || 0;
         
-        console.log("[Token Price] DexScreener success:", response);
-        return NextResponse.json(response);
+        // Log for debugging
+        console.log("[Token Price] Selected pair price:", {
+          priceUsd: selectedPair.priceUsd,
+          priceUsdType: typeof selectedPair.priceUsd,
+          priceStr,
+          priceParsed: price,
+          isValid: price > 0,
+        });
+        
+        // Only proceed if we have a valid price
+        if (price > 0) {
+          const priceChange24h = selectedPair.priceChange24h 
+            ? parseFloat(String(selectedPair.priceChange24h))
+            : selectedPair.priceChange?.h24 
+              ? parseFloat(String(selectedPair.priceChange.h24))
+              : 0;
+
+          let marketCap: number | null = null;
+          if (selectedPair.fdv) {
+            marketCap = parseFloat(String(selectedPair.fdv));
+          } else if (selectedPair.marketCap) {
+            marketCap = parseFloat(String(selectedPair.marketCap));
+          }
+
+          const response = {
+            price,
+            priceChange24h,
+            volume24h: parseFloat(String(selectedPair.volume?.h24 || selectedPair.volume24h || "0")),
+            liquidity: parseFloat(String(selectedPair.liquidity?.usd || "0")),
+            marketCap,
+            holders: tokenStats.holders,
+            transactions: tokenStats.transactions,
+            symbol: selectedPair.baseToken?.symbol || "CATWALK",
+            name: selectedPair.baseToken?.name || "Catwalk",
+            address: TOKEN_ADDRESS,
+            source: "dexscreener",
+          };
+          
+          console.log("[Token Price] DexScreener success:", response);
+          return NextResponse.json(response);
+        } else {
+          console.log("[Token Price] Price is 0 or invalid, continuing to fallback strategies");
+        }
+      } else {
+        console.log("[Token Price] Selected pair has no priceUsd field:", selectedPair);
       }
     }
 

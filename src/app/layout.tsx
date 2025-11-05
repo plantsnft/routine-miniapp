@@ -19,30 +19,15 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  try {
-    return (
-      <html lang="en">
-        <body>
-          <ErrorBoundary>
-            <Providers>
-              {children}
-            </Providers>
-          </ErrorBoundary>
-        </body>
-      </html>
-    );
-  } catch (error) {
-    console.error('[RootLayout] Error:', error);
-    // Return minimal layout if there's an error
-    return (
-      <html lang="en">
-        <body>
-          <div style={{ padding: '20px', textAlign: 'center' }}>
-            <h1>Error loading app</h1>
-            <p>Please refresh the page or try again later.</p>
-          </div>
-        </body>
-      </html>
-    );
-  }
+  return (
+    <html lang="en">
+      <body>
+        <ErrorBoundary>
+          <Providers>
+            {children}
+          </Providers>
+        </ErrorBoundary>
+      </body>
+    </html>
+  );
 }

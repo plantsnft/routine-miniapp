@@ -8,6 +8,49 @@ const BASE_CHAIN_ID = "base";
 const BASESCAN_API_KEY = process.env.BASESCAN_API_KEY || ""; // Optional API key for BaseScan
 const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"; // USDC on Base
 
+// Helper to fetch total supply via RPC call
+async function fetchTotalSupply(): Promise<number | null> {
+  try {
+    const rpcUrl = "https://mainnet.base.org";
+    // totalSupply() function selector: 0x18160ddd
+    const totalSupplyCall = {
+      jsonrpc: "2.0",
+      method: "eth_call",
+      params: [
+        {
+          to: TOKEN_ADDRESS,
+          data: "0x18160ddd", // totalSupply() function selector
+        },
+        "latest",
+      ],
+      id: 1,
+    };
+
+    const response = await fetch(rpcUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "User-Agent": "Catwalk-MiniApp",
+      },
+      body: JSON.stringify(totalSupplyCall),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data.result && data.result !== "0x" && !data.error) {
+        // Convert from hex to BigInt, then divide by 10^18 (assuming 18 decimals)
+        const supplyRaw = BigInt(data.result);
+        const supply = Number(supplyRaw) / Math.pow(10, 18);
+        console.log("[Token Stats] Total supply fetched:", supply);
+        return supply;
+      }
+    }
+  } catch (error) {
+    console.log("[Token Stats] Total supply fetch failed:", error);
+  }
+  return null;
+}
+
 // Helper to fetch holder count and transaction count from BaseScan
 async function fetchTokenStats() {
   const apiKeyParam = BASESCAN_API_KEY ? `&apikey=${BASESCAN_API_KEY}` : "";
@@ -101,11 +144,20 @@ async function findUniswapPairAddress(): Promise<string | null> {
   return null;
 }
 
+// Helper to calculate market cap from price and total supply
+function calculateMarketCap(price: number | null, totalSupply: number | null): number | null {
+  if (price && price > 0 && totalSupply && totalSupply > 0) {
+    return price * totalSupply;
+  }
+  return null;
+}
+
 export async function GET() {
   try {
-    // Fetch token stats (holders, transactions) in parallel
-    const [tokenStats] = await Promise.all([
+    // Fetch token stats (holders, transactions, total supply) in parallel
+    const [tokenStats, totalSupply] = await Promise.all([
       fetchTokenStats(),
+      fetchTotalSupply(),
     ]);
 
     const tokenAddressLower = TOKEN_ADDRESS.toLowerCase();
@@ -291,12 +343,16 @@ export async function GET() {
             marketCap = parseFloat(String(selectedPair.marketCap));
           }
 
+          // Calculate market cap if we have price and total supply
+          const calculatedMarketCap = marketCap || calculateMarketCap(price, totalSupply);
+          
           const response = {
             price,
             priceChange24h,
             volume24h: parseFloat(String(selectedPair.volume?.h24 || selectedPair.volume24h || "0")),
             liquidity: parseFloat(String(selectedPair.liquidity?.usd || "0")),
-            marketCap,
+            marketCap: calculatedMarketCap,
+            totalSupply,
             holders: tokenStats.holders,
             transactions: tokenStats.transactions,
             symbol: selectedPair.baseToken?.symbol || "CATWALK",
@@ -558,14 +614,16 @@ export async function GET() {
                 // Allow prices from 0.0000000001 to 1000000 (very small to very large)
                 // For tokens with very small prices, we need to allow even smaller values
                 if (price > 0.0000000001 && price < 1000000 && !isNaN(price) && isFinite(price)) {
-                  console.log("[Token Price] Success! Calculated price from pool reserves:", price);
+                  const marketCap = calculateMarketCap(price, totalSupply);
+                  console.log("[Token Price] Success! Calculated price from pool reserves:", { price, marketCap, totalSupply });
                   
                   return NextResponse.json({
                     price,
-                    priceChange24h: null,
+                    priceChange24h: null, // Will need historical tracking for this
                     volume24h: null,
                     liquidity: null,
-                    marketCap: null,
+                    marketCap,
+                    totalSupply,
                     holders: tokenStats.holders,
                     transactions: tokenStats.transactions,
                     symbol: "CATWALK",
@@ -626,13 +684,15 @@ export async function GET() {
           const price = amountIn / amountOut;
           
           if (price > 0) {
-            console.log("[Token Price] Uniswap quote API success:", price);
+            const marketCap = calculateMarketCap(price, totalSupply);
+            console.log("[Token Price] Uniswap quote API success:", { price, marketCap });
             return NextResponse.json({
               price,
               priceChange24h: null,
               volume24h: null,
               liquidity: null,
-              marketCap: null,
+              marketCap,
+              totalSupply,
               holders: tokenStats.holders,
               transactions: tokenStats.transactions,
               symbol: "CATWALK",
@@ -679,12 +739,14 @@ export async function GET() {
         const tokenData = data[tokenAddressLower];
 
         if (tokenData && tokenData.usd) {
+          const marketCap = calculateMarketCap(tokenData.usd, totalSupply);
           return NextResponse.json({
             price: tokenData.usd,
             priceChange24h: tokenData.usd_24h_change || 0,
             volume24h: null,
             liquidity: null,
-            marketCap: null,
+            marketCap,
+            totalSupply,
             holders: tokenStats.holders,
             transactions: tokenStats.transactions,
             symbol: "CATWALK",
@@ -706,6 +768,7 @@ export async function GET() {
       volume24h: null,
       liquidity: null,
       marketCap: null,
+      totalSupply,
       holders: tokenStats.holders,
       transactions: tokenStats.transactions,
       symbol: "CATWALK",

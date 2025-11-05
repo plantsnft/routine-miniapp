@@ -118,24 +118,18 @@ export function TokenTicker() {
     return num.toFixed(2);
   };
 
-  // Create scrolling content - always show something
+  // Create scrolling content - prioritize market cap and 24h change
   const tickerContent = [
     <span key="symbol" style={{ color: "#c1b400", fontWeight: 600 }}>
       {tokenData?.symbol || "CATWALK"}
     </span>,
-    loading && !tokenData ? (
-      <span key="loading" style={{ color: "#ffffff", opacity: 0.7 }}>
-        Loading...
-      </span>
-    ) : tokenData && tokenData.price !== null && tokenData.price > 0 ? (
-      <span key="price" style={{ color: "#ffffff" }}>
-        ${tokenData.price.toFixed(6)}
-      </span>
-    ) : !loading && tokenData ? (
-      <span key="no-price" style={{ color: "#ffffff", opacity: 0.7 }}>
-        Price: N/A
+    // Market cap first (most important)
+    tokenData && tokenData.marketCap !== null && tokenData.marketCap > 0 ? (
+      <span key="marketcap" style={{ color: "#ffffff", fontWeight: 600 }}>
+        MCap: {formatCurrency(tokenData.marketCap)}
       </span>
     ) : null,
+    // 24h change second (performance indicator)
     tokenData && tokenData.priceChange24h !== null && tokenData.priceChange24h !== 0 ? (
       <span
         key="change"
@@ -144,20 +138,27 @@ export function TokenTicker() {
           fontWeight: 600,
         }}
       >
-        {isPositive ? "+" : ""}
+        24h: {isPositive ? "+" : ""}
         {priceChange.toFixed(2)}%
       </span>
     ) : null,
-    tokenData && tokenData.marketCap !== null && tokenData.marketCap > 0 ? (
-      <span key="marketcap" style={{ color: "#ffffff" }}>
-        MCap: {formatCurrency(tokenData.marketCap)}
+    // Price (less important, but still useful)
+    loading && !tokenData ? (
+      <span key="loading" style={{ color: "#ffffff", opacity: 0.7 }}>
+        Loading...
+      </span>
+    ) : tokenData && tokenData.price !== null && tokenData.price > 0 ? (
+      <span key="price" style={{ color: "#ffffff", opacity: 0.8 }}>
+        ${tokenData.price.toExponential(3)}
       </span>
     ) : null,
+    // Volume 24h
     tokenData && tokenData.volume24h !== null && tokenData.volume24h > 0 ? (
-      <span key="volume" style={{ color: "#ffffff" }}>
-        Vol 24h: {formatCurrency(tokenData.volume24h)}
+      <span key="volume" style={{ color: "#ffffff", opacity: 0.8 }}>
+        Vol: {formatCurrency(tokenData.volume24h)}
       </span>
     ) : null,
+    // Recent purchase
     recentPurchase ? (
       <span key="latest" style={{ color: "#c1b400", fontWeight: 600 }}>
         Latest: {recentPurchase.displayName || recentPurchase.username || `${recentPurchase.buyerAddress.slice(0, 6)}...${recentPurchase.buyerAddress.slice(-4)}`} bought {formatTokenAmount(recentPurchase.amount)} $CATWALK

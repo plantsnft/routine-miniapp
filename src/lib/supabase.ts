@@ -3,8 +3,8 @@
  * Centralizes all Supabase API calls and provides type-safe interfaces.
  */
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
 /**
  * Standard Supabase headers for API requests.
@@ -38,7 +38,8 @@ export async function getCheckinByFid(fid: number): Promise<CheckinRecord | null
   // Validate Supabase URL is configured
   if (!SUPABASE_URL) {
     console.error("[Supabase] SUPABASE_URL not configured");
-    throw new Error("Supabase URL not configured");
+    // Return null instead of throwing to allow graceful degradation
+    return null;
   }
 
   try {

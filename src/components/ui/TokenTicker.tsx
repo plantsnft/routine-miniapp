@@ -46,6 +46,9 @@ export function TokenTicker() {
         console.log("[TokenTicker] Price data received:", {
           price: priceData.price,
           priceChange24h: priceData.priceChange24h,
+          priceChange24hType: typeof priceData.priceChange24h,
+          priceChange24hIsNull: priceData.priceChange24h === null,
+          priceChange24hIsUndefined: priceData.priceChange24h === undefined,
           volume24h: priceData.volume24h,
           marketCap: priceData.marketCap,
           error: priceData.error,
@@ -109,21 +112,6 @@ export function TokenTicker() {
     return `$${value.toFixed(2)}`;
   };
 
-  // Format price nicely - handle very small numbers without scientific notation
-  const formatPrice = (price: number): string => {
-    if (price >= 0.01) {
-      return price.toFixed(6);
-    } else if (price >= 0.0001) {
-      return price.toFixed(8);
-    } else if (price >= 0.000001) {
-      return price.toFixed(10);
-    } else {
-      // For very small prices, show up to 12 decimal places
-      return price.toFixed(12).replace(/\.?0+$/, '');
-    }
-  };
-
-
   // Format token amount for display
   const formatTokenAmount = (amount: string): string => {
     const num = parseFloat(amount);
@@ -143,8 +131,8 @@ export function TokenTicker() {
         MCap: {tokenData.marketCap > 0 ? formatCurrency(tokenData.marketCap) : "N/A"}
       </span>
     ) : null,
-    // 24h change second (performance indicator) - always show if available
-    tokenData && tokenData.priceChange24h !== null && tokenData.priceChange24h !== 0 ? (
+    // 24h change second (performance indicator) - show if available (including 0%)
+    tokenData && tokenData.priceChange24h !== null && tokenData.priceChange24h !== undefined ? (
       <span
         key="change"
         style={{
@@ -152,7 +140,7 @@ export function TokenTicker() {
           fontWeight: 600,
         }}
       >
-        24HR: {isPositive ? "+" : ""}
+        24HR: {isPositive && priceChange > 0 ? "+" : ""}
         {priceChange.toFixed(2)}%
       </span>
     ) : null,

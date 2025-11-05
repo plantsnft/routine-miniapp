@@ -38,7 +38,21 @@ export function useCheckin(): UseCheckinResult {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch(`/api/checkin?fid=${userId}`);
+      
+      // Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      const res = await fetch(`/api/checkin?fid=${userId}`, {
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+      
       const data = await res.json();
 
       if (data?.ok) {
@@ -52,9 +66,19 @@ export function useCheckin(): UseCheckinResult {
       } else {
         setError(data?.error || "Failed to fetch streak");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("[useCheckin] Error fetching streak:", err);
-      setError("Failed to fetch streak");
+      // Don't show error if it's an abort (timeout) - just log it
+      if (err.name !== 'AbortError') {
+        setError("Failed to fetch streak");
+      }
+      // Set default state on error to prevent app from hanging
+      setStatus({
+        checkedIn: false,
+        streak: 0,
+        lastCheckIn: null,
+        timeUntilNext: null,
+      });
     } finally {
       setLoading(false);
     }

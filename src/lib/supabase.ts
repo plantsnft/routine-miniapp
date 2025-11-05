@@ -35,22 +35,37 @@ export interface CheckinRecord {
  * @returns The check-in record or null if not found
  */
 export async function getCheckinByFid(fid: number): Promise<CheckinRecord | null> {
-  const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/checkins?fid=eq.${fid}&limit=1`,
-    {
-      method: "GET",
-      headers: SUPABASE_HEADERS,
-    }
-  );
-
-  if (!res.ok) {
-    const text = await res.text();
-    console.error("[Supabase] Select error:", text);
-    throw new Error(`Failed to fetch check-in: ${text}`);
+  // Validate Supabase URL is configured
+  if (!SUPABASE_URL) {
+    console.error("[Supabase] SUPABASE_URL not configured");
+    throw new Error("Supabase URL not configured");
   }
 
-  const data = await res.json();
-  return data && data.length > 0 ? data[0] : null;
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/checkins?fid=eq.${fid}&limit=1`,
+      {
+        method: "GET",
+        headers: SUPABASE_HEADERS,
+        // Add timeout
+        signal: AbortSignal.timeout(8000), // 8 second timeout
+      }
+    );
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("[Supabase] Select error:", res.status, text);
+      // Don't throw - return null to allow graceful degradation
+      return null;
+    }
+
+    const data = await res.json();
+    return data && data.length > 0 ? data[0] : null;
+  } catch (error: any) {
+    console.error("[Supabase] getCheckinByFid error:", error);
+    // Return null instead of throwing to allow graceful degradation
+    return null;
+  }
 }
 
 /**

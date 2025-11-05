@@ -153,64 +153,108 @@ export default function DailyCheckin() {
 
         {/* Question prompt with arrow - only show when user hasn't checked in */}
         {fid && !checkin.status.checkedIn && !checkin.saving && (
-          <div
-            style={{
-              marginBottom: 16,
-              padding: "16px",
-              background: "#000000",
-              border: "2px solid #c1b400",
-              borderRadius: 12,
-              textAlign: "center",
-              position: "relative",
-            }}
-          >
-            <p
+          <>
+            <div
               style={{
-                margin: 0,
-                marginBottom: 12,
-                color: "#c1b400",
-                fontSize: 18,
-                fontWeight: 700,
+                marginBottom: 20,
+                padding: "20px",
+                background: "#000000",
+                border: "3px solid #c1b400",
+                borderRadius: 12,
+                textAlign: "center",
+                position: "relative",
+                boxShadow: "0 0 20px rgba(193, 180, 0, 0.3)",
               }}
             >
-              Did you walk your cat today?
-            </p>
-            {/* Arrow pointing down to the button */}
+              <p
+                style={{
+                  margin: 0,
+                  marginBottom: 16,
+                  color: "#c1b400",
+                  fontSize: 22,
+                  fontWeight: 700,
+                  textShadow: "0 0 10px rgba(193, 180, 0, 0.5)",
+                }}
+              >
+                Did you walk your cat today?
+              </p>
+            </div>
+            
+            {/* Large pulsing arrow pointing down to the button */}
             <div
+              className="arrow-pointer"
               style={{
                 display: "flex",
                 justifyContent: "center",
                 alignItems: "center",
-                animation: "bounce 1s infinite",
+                marginBottom: 16,
+                height: "80px",
+                position: "relative",
               }}
             >
-              <svg
-                width="32"
-                height="32"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#c1b400"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                style={{
-                  transform: "rotate(90deg)",
-                }}
-              >
-                <path d="M5 12h14M12 5l7 7-7 7" />
-              </svg>
+              <div style={{ position: "relative" }}>
+                {/* Glow effect behind arrow */}
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "50%",
+                    left: "50%",
+                    transform: "translate(-50%, -50%)",
+                    width: "100px",
+                    height: "100px",
+                    borderRadius: "50%",
+                    background: "radial-gradient(circle, rgba(193, 180, 0, 0.4) 0%, transparent 70%)",
+                    animation: "pulseGlow 1.2s ease-in-out infinite",
+                  }}
+                />
+                <svg
+                  width="100"
+                  height="100"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#c1b400"
+                  strokeWidth="5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{
+                    position: "relative",
+                    zIndex: 1,
+                    filter: "drop-shadow(0 0 12px rgba(193, 180, 0, 1)) drop-shadow(0 0 24px rgba(193, 180, 0, 0.6))",
+                  }}
+                >
+                  <path d="M12 5v14M5 12l7-7 7 7" />
+                </svg>
+              </div>
             </div>
+            
             <style>{`
-              @keyframes bounce {
+              @keyframes pulseArrow {
                 0%, 100% {
-                  transform: translateX(0);
+                  transform: translateY(0) scale(1);
+                  opacity: 1;
                 }
                 50% {
-                  transform: translateX(8px);
+                  transform: translateY(15px) scale(1.15);
+                  opacity: 0.9;
                 }
               }
+              
+              @keyframes pulseGlow {
+                0%, 100% {
+                  opacity: 0.6;
+                  transform: translate(-50%, -50%) scale(1);
+                }
+                50% {
+                  opacity: 1;
+                  transform: translate(-50%, -50%) scale(1.3);
+                }
+              }
+              
+              .arrow-pointer {
+                animation: pulseArrow 1.2s ease-in-out infinite;
+              }
             `}</style>
-          </div>
+          </>
         )}
 
         {/* Main check-in button */}

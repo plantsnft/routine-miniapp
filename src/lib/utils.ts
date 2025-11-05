@@ -25,10 +25,10 @@ export function getMiniAppEmbedMetadata(ogImageUrl?: string, baseUrl?: string) {
     version: '1', // Must be "1" not "next" per Farcaster docs
     imageUrl,
     button: {
-      title: APP_BUTTON_TEXT,
+      title: APP_BUTTON_TEXT || 'Launch Mini App',
       action: {
         type: 'launch_frame',
-        name: APP_NAME,
+        name: APP_NAME || 'Catwalk',
         url: appUrl,
         splashImageUrl,
         splashBackgroundColor: APP_SPLASH_BACKGROUND_COLOR,

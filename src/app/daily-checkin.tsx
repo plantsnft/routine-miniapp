@@ -181,12 +181,45 @@ export default function DailyCheckin() {
               </p>
             </div>
             
-            {/* Small red arrow coming from right side pointing at the button */}
+            <style>{`
+              @keyframes pulseArrow {
+                0%, 100% {
+                  transform: translateY(-50%) translateX(0) scale(1);
+                  opacity: 1;
+                }
+                50% {
+                  transform: translateY(-50%) translateX(-10px) scale(1.1);
+                  opacity: 0.9;
+                }
+              }
+              
+              @keyframes pulseGlow {
+                0%, 100% {
+                  opacity: 0.6;
+                  transform: translate(-50%, -50%) scale(1);
+                }
+                50% {
+                  opacity: 1;
+                  transform: translate(-50%, -50%) scale(1.3);
+                }
+              }
+              
+              .arrow-pointer {
+                animation: pulseArrow 1.2s ease-in-out infinite;
+              }
+            `}</style>
+          </>
+        )}
+
+        {/* Main check-in button with arrow pointing at it */}
+        <div style={{ position: "relative" }}>
+          {/* Small red arrow coming from right side pointing at the button */}
+          {fid && !checkin.status.checkedIn && !checkin.saving && (
             <div
               className="arrow-pointer"
               style={{
                 position: "absolute",
-                right: "-40px",
+                right: "-50px",
                 top: "50%",
                 transform: "translateY(-50%)",
                 zIndex: 10,
@@ -226,43 +259,13 @@ export default function DailyCheckin() {
                 </svg>
               </div>
             </div>
-            
-            <style>{`
-              @keyframes pulseArrow {
-                0%, 100% {
-                  transform: translateY(-50%) translateX(0) scale(1);
-                  opacity: 1;
-                }
-                50% {
-                  transform: translateY(-50%) translateX(-10px) scale(1.1);
-                  opacity: 0.9;
-                }
-              }
-              
-              @keyframes pulseGlow {
-                0%, 100% {
-                  opacity: 0.6;
-                  transform: translate(-50%, -50%) scale(1);
-                }
-                50% {
-                  opacity: 1;
-                  transform: translate(-50%, -50%) scale(1.3);
-                }
-              }
-              
-              .arrow-pointer {
-                animation: pulseArrow 1.2s ease-in-out infinite;
-              }
-            `}</style>
-          </>
-        )}
-
-        {/* Main check-in button */}
-        <CheckinButton
-          checkedIn={checkin.status.checkedIn}
-          saving={checkin.saving}
-          onClick={handleCheckIn}
-        />
+          )}
+          <CheckinButton
+            checkedIn={checkin.status.checkedIn}
+            saving={checkin.saving}
+            onClick={handleCheckIn}
+          />
+        </div>
 
         {/* Success message */}
         {showSuccessMessage && (

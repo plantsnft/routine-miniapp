@@ -107,12 +107,13 @@ export async function GET() {
     ]);
 
     // Try DexScreener API first (free, no API key needed)
-    // Use the direct URL format: /base/TOKEN_ADDRESS
+    // Method 1: Try tokens endpoint with lowercase address
     try {
-      const dexScreenerUrl = `https://api.dexscreener.com/latest/dex/tokens/${TOKEN_ADDRESS}`;
-      console.log("[Token Price] Fetching from DexScreener:", dexScreenerUrl);
+      const tokenAddressLower = TOKEN_ADDRESS.toLowerCase();
+      let dexScreenerUrl = `https://api.dexscreener.com/latest/dex/tokens/${tokenAddressLower}`;
+      console.log("[Token Price] Fetching from DexScreener (tokens):", dexScreenerUrl);
       
-      const dexScreenerResponse = await fetch(dexScreenerUrl, {
+      let dexScreenerResponse = await fetch(dexScreenerUrl, {
         headers: {
           "User-Agent": "Catwalk-MiniApp",
         },
@@ -130,34 +131,66 @@ export async function GET() {
         throw new Error(`DexScreener API returned ${dexScreenerResponse.status}: ${dexScreenerResponse.statusText}`);
       }
 
-      const data = await dexScreenerResponse.json();
+      let data = await dexScreenerResponse.json();
       
       console.log("[Token Price] DexScreener raw response:", JSON.stringify(data).substring(0, 500));
       
-      // Check if data exists and has pairs array (even if empty)
+      // Check if data exists
       if (!data) {
         console.error("[Token Price] DexScreener returned null/undefined data");
         throw new Error("DexScreener returned no data");
       }
 
-      // Process the data
-      console.log("[Token Price] DexScreener raw data:", {
-        pairsCount: data.pairs?.length || 0,
-        pairs: data.pairs?.slice(0, 3).map((p: any) => ({
+      // Process the data - pairs can be null, empty array, or have items
+      let pairs = data.pairs;
+      
+      // If pairs is null, try using the pair endpoint directly (the URL format suggests it might be a pair address)
+      if (pairs === null || (Array.isArray(pairs) && pairs.length === 0)) {
+        console.log("[Token Price] Pairs is null/empty, trying pair endpoint directly");
+        dexScreenerUrl = `https://api.dexscreener.com/latest/dex/pairs/base/${tokenAddressLower}`;
+        console.log("[Token Price] Trying DexScreener pair endpoint:", dexScreenerUrl);
+        
+        dexScreenerResponse = await fetch(dexScreenerUrl, {
+          headers: {
+            "User-Agent": "Catwalk-MiniApp",
+          },
+        });
+        
+        if (dexScreenerResponse.ok) {
+          const pairData = await dexScreenerResponse.json();
+          if (pairData.pair) {
+            // Single pair response
+            pairs = [pairData.pair];
+            data = { pairs };
+            console.log("[Token Price] Found pair via pair endpoint");
+          } else if (pairData.pairs && Array.isArray(pairData.pairs)) {
+            pairs = pairData.pairs;
+            data = pairData;
+            console.log("[Token Price] Found pairs via pair endpoint");
+          }
+        }
+      }
+      
+      const pairsCount = Array.isArray(pairs) ? pairs.length : (pairs === null ? 0 : 0);
+      
+      console.log("[Token Price] DexScreener pairs data:", {
+        pairsType: pairs === null ? "null" : Array.isArray(pairs) ? "array" : typeof pairs,
+        pairsCount,
+        pairs: Array.isArray(pairs) ? pairs.slice(0, 3).map((p: any) => ({
           chainId: p.chainId,
           dexId: p.dexId,
           priceUsd: p.priceUsd,
           pairAddress: p.pairAddress,
-        })) || [],
+        })) : [],
       });
       
-      // Check if pairs array exists and has items
-      if (!data.pairs || !Array.isArray(data.pairs) || data.pairs.length === 0) {
-        console.warn("[Token Price] DexScreener returned empty pairs array - token may not be listed yet");
+      // Check if pairs array exists and has items (handle null case)
+      if (!pairs || !Array.isArray(pairs) || pairs.length === 0) {
+        console.warn("[Token Price] DexScreener returned null/empty pairs - will try fallback APIs");
         // Don't throw error, continue to fallback APIs
-      } else if (data.pairs && Array.isArray(data.pairs) && data.pairs.length > 0) {
+      } else if (Array.isArray(pairs) && pairs.length > 0) {
         // Find the pair on Base chain - prioritize Base pairs
-        const basePairs = data.pairs.filter(
+        const basePairs = pairs.filter(
           (pair: any) => 
             pair.chainId === "base" || 
             pair.chainId === BASE_CHAIN_ID
@@ -170,7 +203,7 @@ export async function GET() {
               const currentLiq = parseFloat(current.liquidity?.usd || "0");
               return currentLiq > bestLiq ? current : best;
             })
-          : data.pairs[0]; // Fallback to first pair if no Base pair found
+          : pairs[0]; // Fallback to first pair if no Base pair found
         
         console.log("[Token Price] Selected pair:", {
           chainId: basePair.chainId,

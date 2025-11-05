@@ -263,7 +263,8 @@ export async function GET() {
       console.log("[Token Price] CoinGecko failed:", cgError);
     }
 
-    // If all APIs fail, return placeholder data
+    // If all APIs fail, return placeholder data (but don't set error)
+    // This allows the banner to still show token info even without price
     console.log("[Token Price] All APIs failed, returning placeholder data");
     return NextResponse.json({
       price: null,
@@ -277,7 +278,7 @@ export async function GET() {
       name: "Catwalk",
       address: TOKEN_ADDRESS,
       source: null,
-      error: "Unable to fetch token data",
+      // Don't set error - let the UI handle missing price gracefully
     });
   } catch (error: unknown) {
     const err = error as Error;

@@ -25,7 +25,6 @@ export function TokenTicker() {
   } | null>(null);
   const [recentPurchase, setRecentPurchase] = useState<RecentPurchase | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchTokenPrice = async () => {
@@ -53,15 +52,8 @@ export function TokenTicker() {
           source: priceData.source,
         });
         
-        // Check if we got actual data or just error/null values
-        if (priceData.error || (priceData.price === null && priceData.priceChange24h === null)) {
-          const errorMsg = priceData.error || "All fields are null - API may not have token data";
-          console.warn("[TokenTicker] API returned error or no data:", errorMsg);
-          setError(errorMsg);
-        } else {
-          setError(null);
-        }
-        
+        // Set token data regardless of whether we have price data
+        // This allows the banner to show token info even if price isn't available
         setTokenData({
           price: priceData.price,
           priceChange24h: priceData.priceChange24h,
@@ -73,6 +65,12 @@ export function TokenTicker() {
           symbol: priceData.symbol || "CATWALK",
           name: priceData.name || "Catwalk",
         });
+        
+        // Don't show errors to users - just log them
+        // The banner will show available data gracefully
+        if (priceData.error) {
+          console.warn("[TokenTicker] API returned error (not showing to user):", priceData.error);
+        }
 
         const purchaseData = await purchaseRes.json();
         console.log("[TokenTicker] Purchase data received:", purchaseData);
@@ -81,9 +79,10 @@ export function TokenTicker() {
         } else {
           console.log("[TokenTicker] No recent purchase data");
         }
-      } catch (_error: any) {
-        console.error("[TokenTicker] Error fetching token data:", _error);
-        setError(_error?.message || "Network error");
+      } catch (_error: unknown) {
+        const err = _error as Error;
+        console.error("[TokenTicker] Error fetching token data:", err);
+        // Don't show errors to users - just log them
       } finally {
         setLoading(false);
       }
@@ -175,11 +174,20 @@ export function TokenTicker() {
     );
   }
   
-  // Add error indicator if there's an error
-  if (error && !loading) {
+  // Don't show error messages - just show available data
+  // If we have holders/transactions but no price, show those instead
+  if (tokenData && (!tokenData.price || tokenData.price === null) && tokenData.holders) {
     tickerContent.push(
-      <span key="error" style={{ color: "#ff4444", fontSize: "10px", opacity: 0.8 }}>
-        (API Error: {error.substring(0, 20)}...)
+      <span key="holders" style={{ color: "#ffffff", opacity: 0.8 }}>
+        {tokenData.holders.toLocaleString()} holders
+      </span>
+    );
+  }
+  
+  if (tokenData && (!tokenData.price || tokenData.price === null) && tokenData.transactions) {
+    tickerContent.push(
+      <span key="txns" style={{ color: "#ffffff", opacity: 0.8 }}>
+        {tokenData.transactions.toLocaleString()} txns
       </span>
     );
   }

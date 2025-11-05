@@ -174,7 +174,46 @@ async function fetch24hChange(): Promise<number | null> {
     console.log("[24h Change] CoinGecko failed:", cgError);
   }
 
-  // Try DexScreener as fallback
+  // Try DexScreener pair endpoint first (most reliable)
+  try {
+    const pairAddressLower = PAIR_ADDRESS.toLowerCase();
+    const dexScreenerPairUrl = `https://api.dexscreener.com/latest/dex/pairs/base/${pairAddressLower}`;
+    const dexResponse = await fetch(dexScreenerPairUrl, {
+      headers: { "User-Agent": "Catwalk-MiniApp" },
+    });
+
+    if (dexResponse.ok) {
+      const data = await dexResponse.json();
+      const pair = data.pair || (data.pairs && data.pairs[0]);
+      
+      if (pair) {
+        // Try multiple possible field names
+        let change24h: number | null = null;
+        if (pair.priceChange24h !== null && pair.priceChange24h !== undefined) {
+          change24h = parseFloat(String(pair.priceChange24h));
+        } else if (pair.priceChange?.h24 !== null && pair.priceChange?.h24 !== undefined) {
+          change24h = parseFloat(String(pair.priceChange.h24));
+        } else if (pair.priceChange?.pct24h !== null && pair.priceChange?.pct24h !== undefined) {
+          change24h = parseFloat(String(pair.priceChange.pct24h));
+        }
+        
+        if (change24h !== null && !isNaN(change24h)) {
+          console.log("[24h Change] Fetched from DexScreener pair:", change24h);
+          return change24h;
+        } else {
+          console.log("[24h Change] DexScreener pair found but no valid 24h change field:", {
+            priceChange24h: pair.priceChange24h,
+            priceChange: pair.priceChange,
+            allKeys: Object.keys(pair).filter(k => k.toLowerCase().includes('change') || k.toLowerCase().includes('24')),
+          });
+        }
+      }
+    }
+  } catch (dexError) {
+    console.log("[24h Change] DexScreener pair endpoint failed:", dexError);
+  }
+  
+  // Try DexScreener tokens endpoint as fallback
   try {
     const dexScreenerUrl = `https://api.dexscreener.com/latest/dex/tokens/${tokenAddressLower}`;
     const dexResponse = await fetch(dexScreenerUrl, {
@@ -196,16 +235,25 @@ async function fetch24hChange(): Promise<number | null> {
             return currentLiq > bestLiq ? current : best;
           });
 
+          // Try multiple possible field names
+          let change24h: number | null = null;
           if (bestPair.priceChange24h !== null && bestPair.priceChange24h !== undefined) {
-            const change24h = parseFloat(String(bestPair.priceChange24h));
-            console.log("[24h Change] Fetched from DexScreener:", change24h);
+            change24h = parseFloat(String(bestPair.priceChange24h));
+          } else if (bestPair.priceChange?.h24 !== null && bestPair.priceChange?.h24 !== undefined) {
+            change24h = parseFloat(String(bestPair.priceChange.h24));
+          } else if (bestPair.priceChange?.pct24h !== null && bestPair.priceChange?.pct24h !== undefined) {
+            change24h = parseFloat(String(bestPair.priceChange.pct24h));
+          }
+          
+          if (change24h !== null && !isNaN(change24h)) {
+            console.log("[24h Change] Fetched from DexScreener tokens:", change24h);
             return change24h;
           }
         }
       }
     }
   } catch (dexError) {
-    console.log("[24h Change] DexScreener failed:", dexError);
+    console.log("[24h Change] DexScreener tokens endpoint failed:", dexError);
   }
 
   return null;
@@ -390,11 +438,30 @@ export async function GET() {
         
         // Only proceed if we have a valid price
         if (price > 0) {
-          const priceChange24h = selectedPair.priceChange24h 
-            ? parseFloat(String(selectedPair.priceChange24h))
-            : selectedPair.priceChange?.h24 
-              ? parseFloat(String(selectedPair.priceChange.h24))
-              : 0;
+          // Log available price change fields for debugging
+          console.log("[Token Price] Available price change fields:", {
+            priceChange24h: selectedPair.priceChange24h,
+            priceChange: selectedPair.priceChange,
+            priceChange_h24: selectedPair.priceChange?.h24,
+            priceChange_pct24h: selectedPair.priceChange?.pct24h,
+            priceChange_percent24h: selectedPair.priceChange?.percent24h,
+            allKeys: Object.keys(selectedPair).filter(k => k.toLowerCase().includes('change') || k.toLowerCase().includes('24')),
+          });
+          
+          // Try multiple possible field names for 24h change
+          let priceChange24hFromPair: number | null = null;
+          if (selectedPair.priceChange24h !== null && selectedPair.priceChange24h !== undefined) {
+            priceChange24hFromPair = parseFloat(String(selectedPair.priceChange24h));
+          } else if (selectedPair.priceChange?.h24 !== null && selectedPair.priceChange?.h24 !== undefined) {
+            priceChange24hFromPair = parseFloat(String(selectedPair.priceChange.h24));
+          } else if (selectedPair.priceChange?.pct24h !== null && selectedPair.priceChange?.pct24h !== undefined) {
+            priceChange24hFromPair = parseFloat(String(selectedPair.priceChange.pct24h));
+          } else if (selectedPair.priceChange?.percent24h !== null && selectedPair.priceChange?.percent24h !== undefined) {
+            priceChange24hFromPair = parseFloat(String(selectedPair.priceChange.percent24h));
+          }
+          
+          // Use price change from pair if available, otherwise use the fetched one
+          const priceChange24h = priceChange24hFromPair !== null ? priceChange24hFromPair : (priceChange24h || null);
 
           let marketCap: number | null = null;
           if (selectedPair.fdv) {

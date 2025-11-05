@@ -35,8 +35,26 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Fetch user's check-in data from Supabase
-    const checkin = await getCheckinByFid(fid);
+    // Fetch user's check-in data from Supabase with timeout and error handling
+    let checkin;
+    try {
+      checkin = await Promise.race([
+        getCheckinByFid(fid),
+        new Promise<null>((_, reject) => 
+          setTimeout(() => reject(new Error("Supabase query timeout")), 8000)
+        )
+      ]) as CheckinRecord | null;
+    } catch (dbError: any) {
+      console.error("[API] /api/checkin GET - Supabase error:", dbError);
+      // Return default values if database query fails - don't crash the app
+      return NextResponse.json<CheckinResponse>({
+        ok: true,
+        streak: 0,
+        last_checkin: null,
+        hasCheckedIn: false,
+        hasCheckedInToday: false,
+      });
+    }
 
     if (!checkin) {
       // No check-in record yet - return default values

@@ -21,26 +21,38 @@ export default function DailyCheckin() {
 
   // Use auth hook for authentication
   const { fid, error: authError, signIn } = useAuth((fid) => {
-    // When user signs in, fetch their streak
-    checkin.fetchStreak(fid);
+    // When user signs in, fetch their streak (only if not already loading)
+    if (fid && !checkin.loading) {
+      checkin.fetchStreak(fid);
+    }
   });
 
-  // Update countdown timer every minute when checked in
+  // Initial fetch when fid is available (only once, prevent infinite loops)
   useEffect(() => {
-    if (!checkin.status.checkedIn) return;
+    if (!fid || checkin.loading || checkin.status.streak !== null) return;
+    
+    // Only fetch if we don't have streak data yet
+    checkin.fetchStreak(fid);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fid]); // Only depend on fid to prevent infinite loops
+
+  // Update countdown timer every minute when checked in (only if not loading)
+  useEffect(() => {
+    if (!checkin.status.checkedIn || !fid || checkin.loading) return;
 
     const updateTimer = () => {
-      // This will be handled by the hook, but we can update the display
-      if (fid) {
+      // Only update if not currently loading to prevent overlapping requests
+      if (fid && !checkin.loading) {
         checkin.fetchStreak(fid);
       }
     };
 
-    updateTimer();
+    // Don't fetch immediately - wait for the interval
     const interval = setInterval(updateTimer, 60000); // Update every minute
 
     return () => clearInterval(interval);
-  }, [checkin.status.checkedIn, fid, checkin]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkin.status.checkedIn, fid, checkin.loading]);
 
   /**
    * Handle check-in button click.

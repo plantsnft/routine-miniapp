@@ -19,8 +19,8 @@ import { type AccountAssociation } from '@farcaster/miniapp-core/src/manifest';
 // Use environment variable with fallback
 // Note: On client side, we can use window.location.origin, but for server-side
 // we need a fallback. The actual URL should be set via NEXT_PUBLIC_URL env var.
-// Fallback to working domain if catwalk-smoky isn't configured
-export const APP_URL: string = process.env.NEXT_PUBLIC_URL || 'https://routine-plants-projects-156afffe.vercel.app';
+// Primary domain: catwalk-smoky.vercel.app (set this in Vercel environment variables)
+export const APP_URL: string = process.env.NEXT_PUBLIC_URL || 'https://catwalk-smoky.vercel.app';
 
 /**
  * The name of the mini app as displayed to users.

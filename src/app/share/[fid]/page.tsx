@@ -13,8 +13,8 @@ export async function generateMetadata({
   params: Promise<{ fid: string }>;
 }): Promise<Metadata> {
   const { fid } = await params;
-  // Get base URL - use environment variable or fallback to working domain
-  const baseUrl = process.env.NEXT_PUBLIC_URL || 'https://routine-plants-projects-156afffe.vercel.app';
+  // Get base URL - use environment variable or fallback
+  const baseUrl = process.env.NEXT_PUBLIC_URL || 'https://catwalk-smoky.vercel.app';
   const imageUrl = `${baseUrl}/api/opengraph-image?fid=${fid}`;
 
   return {

@@ -98,6 +98,7 @@ export default function DailyCheckin() {
           borderRadius: 16,
           padding: 20,
           position: "relative",
+          overflow: "visible",
         }}
       >
         <p style={{ margin: 0, marginBottom: 16, color: "#ffffff", fontSize: 14, lineHeight: 1.5 }}>
@@ -180,16 +181,15 @@ export default function DailyCheckin() {
               </p>
             </div>
             
-            {/* Large pulsing red arrow pointing down to the button */}
+            {/* Small red arrow coming from right side pointing at the button */}
             <div
               className="arrow-pointer"
               style={{
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                marginBottom: 16,
-                height: "80px",
-                position: "relative",
+                position: "absolute",
+                right: "-40px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                zIndex: 10,
               }}
             >
               <div style={{ position: "relative" }}>
@@ -200,29 +200,29 @@ export default function DailyCheckin() {
                     top: "50%",
                     left: "50%",
                     transform: "translate(-50%, -50%)",
-                    width: "100px",
-                    height: "100px",
+                    width: "40px",
+                    height: "40px",
                     borderRadius: "50%",
                     background: "radial-gradient(circle, rgba(255, 68, 68, 0.4) 0%, transparent 70%)",
                     animation: "pulseGlow 1.2s ease-in-out infinite",
                   }}
                 />
                 <svg
-                  width="100"
-                  height="100"
+                  width="33"
+                  height="33"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="#ff4444"
-                  strokeWidth="5"
+                  strokeWidth="3"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   style={{
                     position: "relative",
                     zIndex: 1,
-                    filter: "drop-shadow(0 0 12px rgba(255, 68, 68, 1)) drop-shadow(0 0 24px rgba(255, 68, 68, 0.6))",
+                    filter: "drop-shadow(0 0 8px rgba(255, 68, 68, 1)) drop-shadow(0 0 16px rgba(255, 68, 68, 0.6))",
                   }}
                 >
-                  <path d="M12 5v14M5 12l7-7 7 7" />
+                  <path d="M19 12H5M12 19l-7-7 7-7" />
                 </svg>
               </div>
             </div>
@@ -230,11 +230,11 @@ export default function DailyCheckin() {
             <style>{`
               @keyframes pulseArrow {
                 0%, 100% {
-                  transform: translateY(0) scale(1);
+                  transform: translateY(-50%) translateX(0) scale(1);
                   opacity: 1;
                 }
                 50% {
-                  transform: translateY(15px) scale(1.15);
+                  transform: translateY(-50%) translateX(-10px) scale(1.1);
                   opacity: 0.9;
                 }
               }

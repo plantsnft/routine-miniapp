@@ -38,17 +38,31 @@ export function CheckinGifAnimation({
 
     // Start rendering when visible
     setShouldRender(true);
+    const startTime = Date.now();
 
     // Small delay to ensure smooth transition
     const showTimer = setTimeout(() => {
       setShowGif(true);
     }, 50);
 
-    // Auto-hide after duration
+    // Auto-hide after duration - MANDATORY 5 seconds
+    // Calculate remaining time to ensure full duration even if component loads quickly
     const hideTimer = setTimeout(() => {
-      setShowGif(false);
-      setShouldRender(false);
-      onComplete?.();
+      const elapsed = Date.now() - startTime;
+      const remaining = Math.max(0, duration - elapsed);
+      
+      // If we haven't waited the full duration, wait a bit more
+      if (remaining > 0) {
+        setTimeout(() => {
+          setShowGif(false);
+          setShouldRender(false);
+          onComplete?.();
+        }, remaining);
+      } else {
+        setShowGif(false);
+        setShouldRender(false);
+        onComplete?.();
+      }
     }, duration);
 
     return () => {
@@ -84,9 +98,11 @@ export function CheckinGifAnimation({
         alignItems: "center",
         justifyContent: "center",
         overflow: "hidden",
-        pointerEvents: "none",
+        pointerEvents: "all", // Block all interactions - mandatory viewing
         opacity: showGif ? 1 : 0,
         transition: "opacity 0.3s ease-in-out",
+        userSelect: "none", // Prevent text selection
+        WebkitUserSelect: "none",
       }}
     >
       {/* GIF container - full screen, centered */}
@@ -144,6 +160,22 @@ export function CheckinGifAnimation({
             // Subtle gradient overlay for better visibility
             background: "radial-gradient(circle at center, transparent 0%, rgba(0, 0, 0, 0.1) 100%)",
           }}
+        />
+        
+        {/* Prevent any clicks or interactions during mandatory viewing */}
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            pointerEvents: "all",
+            cursor: "default",
+          }}
+          onClick={(e) => e.preventDefault()}
+          onTouchStart={(e) => e.preventDefault()}
+          aria-hidden="true"
         />
       </div>
     </div>

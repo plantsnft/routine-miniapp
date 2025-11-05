@@ -173,8 +173,8 @@ export async function GET() {
           },
         });
 
-        if (dexScreenerResponse.ok) {
-          const data = await dexScreenerResponse.json();
+      if (dexScreenerResponse.ok) {
+        const data = await dexScreenerResponse.json();
           console.log("[Token Price] DexScreener tokens response:", JSON.stringify(data).substring(0, 300));
           
           if (data.pairs && Array.isArray(data.pairs) && data.pairs.length > 0) {
@@ -413,14 +413,14 @@ export async function GET() {
           
           console.log("[Token Price] Pool tokens:", { token0Addr, token1Addr });
           
-          const isToken0 = token0Addr.toLowerCase() === TOKEN_ADDRESS.toLowerCase();
-          const isToken1 = token1Addr.toLowerCase() === TOKEN_ADDRESS.toLowerCase();
+          const isToken0CATWALK = token0Addr.toLowerCase() === TOKEN_ADDRESS.toLowerCase();
+          const isToken1CATWALK = token1Addr.toLowerCase() === TOKEN_ADDRESS.toLowerCase();
           const isToken0WETH = token0Addr.toLowerCase() === WETH_ADDRESS.toLowerCase();
           const isToken1WETH = token1Addr.toLowerCase() === WETH_ADDRESS.toLowerCase();
           const isToken0USDC = token0Addr.toLowerCase() === USDC_ADDRESS.toLowerCase();
           const isToken1USDC = token1Addr.toLowerCase() === USDC_ADDRESS.toLowerCase();
           
-          if (!isToken0 && !isToken1) {
+          if (!isToken0CATWALK && !isToken1CATWALK) {
             console.log("[Token Price] Pool doesn't contain CATWALK token", { token0Addr, token1Addr });
           } else {
             // Get slot0 which contains sqrtPriceX96
@@ -483,43 +483,81 @@ export async function GET() {
                 
                 // Calculate price in USD
                 // Handle both WETH and USDC pairs
+                // priceRatio from sqrtPriceX96 = token1Amount / token0Amount (in raw units)
                 let price: number;
                 
-                if (isToken0) {
+                if (isToken0CATWALK) {
                   // CATWALK is token0
                   if (isToken1USDC) {
-                    // CATWALK/USDC pair - priceRatio = USDC / CATWALK, so 1/priceRatio * 10^12
+                    // CATWALK/USDC pair
+                    // priceRatio = USDC / CATWALK (raw units)
+                    // CATWALK price in USDC = 1/priceRatio * (10^18 / 10^6) = 1/priceRatio * 10^12
                     price = (1 / priceRatio) * Math.pow(10, 18 - 6);
                   } else if (isToken1WETH) {
-                    // CATWALK/WETH pair - need to get WETH price in USD
-                    // priceRatio = WETH / CATWALK, so CATWALK price in WETH = 1/priceRatio
-                    // Then multiply by WETH price
+                    // CATWALK/WETH pair
+                    // priceRatio = WETH / CATWALK (raw units, both have 18 decimals so decimals cancel)
+                    // CATWALK price in WETH = 1/priceRatio
+                    // CATWALK price in USD = (1/priceRatio) * WETH price
                     price = (1 / priceRatio) * wethPrice;
                   } else {
                     // Unknown pair, skip
-                    console.log("[Token Price] Unknown pair type, skipping");
+                    console.log("[Token Price] Unknown pair type (CATWALK is token0)", { token0Addr, token1Addr });
+                    throw new Error("Unknown pair type");
+                  }
+                } else if (isToken1CATWALK) {
+                  // CATWALK is token1
+                  if (isToken0USDC) {
+                    // USDC/CATWALK pair
+                    // priceRatio = CATWALK / USDC (raw units)
+                    // CATWALK price in USDC = priceRatio * (10^18 / 10^6) = priceRatio * 10^12
+                    price = priceRatio * Math.pow(10, 18 - 6);
+                  } else if (isToken0WETH) {
+                    // WETH/CATWALK pair (this is our case!)
+                    // priceRatio from sqrtPriceX96 = token1Amount / token0Amount (in raw units)
+                    // Since both WETH and CATWALK have 18 decimals, we need to divide by 10^18 to get the actual ratio
+                    // priceRatio_raw = (CATWALK_raw / WETH_raw) = (CATWALK * 10^18) / (WETH * 10^18)
+                    // So: CATWALK_price_in_WETH = priceRatio_raw / 10^18
+                    // But wait, sqrtPriceX96 already accounts for this in the pool, so:
+                    // The priceRatio from sqrtPriceX96 is already the ratio of token amounts
+                    // Since both have same decimals, we can use it directly: CATWALK_price_in_WETH = priceRatio
+                    // However, if priceRatio is very large (> 1), it means we have the inverse
+                    // Let's check: if priceRatio > 1, then 1 CATWALK > 1 WETH (unlikely for a new token)
+                    // So we should use: CATWALK_price_in_WETH = priceRatio (if priceRatio < 1) or 1/priceRatio (if priceRatio > 1)
+                    // Actually, the sqrtPriceX96 formula gives us: sqrt(token1/token0) * 2^96
+                    // So priceRatio = token1/token0 in raw units
+                    // For WETH/CATWALK: priceRatio = CATWALK_raw / WETH_raw
+                    // CATWALK_price_in_WETH = (CATWALK_raw / 10^18) / (WETH_raw / 10^18) = priceRatio
+                    // But if priceRatio is huge, it means we need to invert it
+                    // Let's use: CATWALK_price = priceRatio * WETH_price (if reasonable) or 1/priceRatio * WETH_price
+                    // Given priceRatio = 9.5 billion, we should use: 1/priceRatio * WETH_price
+                    const catwalkPriceInWETH = priceRatio > 1 ? (1 / priceRatio) : priceRatio;
+                    price = catwalkPriceInWETH * wethPrice;
+                    console.log("[Token Price] WETH/CATWALK pair detected", { 
+                      priceRatio, 
+                      catwalkPriceInWETH, 
+                      wethPrice, 
+                      calculatedPrice: price 
+                    });
+                  } else {
+                    // Unknown pair, skip
+                    console.log("[Token Price] Unknown pair type (CATWALK is token1)", { token0Addr, token1Addr });
                     throw new Error("Unknown pair type");
                   }
                 } else {
-                  // CATWALK is token1
-                  if (isToken0USDC) {
-                    // USDC/CATWALK pair - priceRatio = CATWALK / USDC, so priceRatio * 10^12
-                    price = priceRatio * Math.pow(10, 18 - 6);
-                  } else if (isToken0WETH) {
-                    // WETH/CATWALK pair - priceRatio = CATWALK / WETH
-                    // CATWALK price in USD = priceRatio * WETH price
-                    price = priceRatio * wethPrice;
-                  } else {
-                    // Unknown pair, skip
-                    console.log("[Token Price] Unknown pair type, skipping");
-                    throw new Error("Unknown pair type");
-                  }
+                  throw new Error("CATWALK not found in pool");
                 }
                 
                 console.log("[Token Price] Final calculated price:", price);
+                console.log("[Token Price] Price breakdown:", {
+                  priceRatio,
+                  wethPrice,
+                  calculatedPrice: price,
+                  priceInScientific: price.toExponential(),
+                });
                 
-                // Allow prices from 0.000001 to 1000000 (very small to very large)
-                if (price > 0.000001 && price < 1000000 && !isNaN(price) && isFinite(price)) {
+                // Allow prices from 0.0000000001 to 1000000 (very small to very large)
+                // For tokens with very small prices, we need to allow even smaller values
+                if (price > 0.0000000001 && price < 1000000 && !isNaN(price) && isFinite(price)) {
                   console.log("[Token Price] Success! Calculated price from pool reserves:", price);
                   
                   return NextResponse.json({

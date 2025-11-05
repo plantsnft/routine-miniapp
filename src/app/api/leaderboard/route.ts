@@ -202,6 +202,7 @@ export async function GET(req: NextRequest) {
         fid: checkin.fid,
         streak: checkin.streak,
         last_checkin: checkin.last_checkin,
+        total_checkins: checkin.total_checkins || 0,
         username,
         displayName,
         rank: 0, // Will be set after sorting

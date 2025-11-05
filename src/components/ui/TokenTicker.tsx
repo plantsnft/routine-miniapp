@@ -248,7 +248,7 @@ export function TokenTicker() {
           alignItems: "center",
           gap: "32px",
           whiteSpace: "nowrap",
-          animation: "scrollTicker 40s linear infinite",
+          animation: "scrollTicker 29.6s linear infinite", // 26% faster (40s * 0.74)
         }}
       >
         {/* Render multiple copies for seamless scroll */}

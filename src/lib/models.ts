@@ -26,6 +26,7 @@ export interface LeaderboardEntry {
   fid: number;
   streak: number;
   last_checkin: string | null;
+  total_checkins?: number; // All-time total check-in count
   username?: string;
   displayName?: string;
   rank: number;

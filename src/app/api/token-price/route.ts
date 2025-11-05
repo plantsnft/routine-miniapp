@@ -130,20 +130,32 @@ export async function GET() {
         
         // DexScreener pair endpoint can return either { pair: {...} } or { pairs: [...] }
         if (pairData.pair) {
-          pairs = [pairData.pair];
-          foundPair = true;
-          console.log("[Token Price] Found pair using known pair address:", pairData.pair.priceUsd);
+          // Check if pair has valid price data
+          if (pairData.pair.priceUsd && parseFloat(pairData.pair.priceUsd) > 0) {
+            pairs = [pairData.pair];
+            foundPair = true;
+            console.log("[Token Price] Found pair using known pair address with price:", pairData.pair.priceUsd);
+          } else {
+            console.log("[Token Price] Pair found but no valid price:", pairData.pair.priceUsd);
+          }
         } else if (pairData.pairs) {
           if (Array.isArray(pairData.pairs) && pairData.pairs.length > 0) {
-            pairs = pairData.pairs;
-            foundPair = true;
-            console.log("[Token Price] Found pairs array using known pair address");
+            // Filter for pairs with valid prices
+            const validPairs = pairData.pairs.filter((p: any) => p.priceUsd && parseFloat(p.priceUsd) > 0);
+            if (validPairs.length > 0) {
+              pairs = validPairs;
+              foundPair = true;
+              console.log("[Token Price] Found pairs array using known pair address:", validPairs.length);
+            } else {
+              console.log("[Token Price] Pairs found but none have valid prices");
+            }
           } else if (pairData.pairs === null) {
             console.log("[Token Price] Pair endpoint returned null pairs");
           }
         }
       } else {
-        console.log("[Token Price] Pair endpoint returned status:", pairResponse.status);
+        const errorText = await pairResponse.text();
+        console.log("[Token Price] Pair endpoint returned status:", pairResponse.status, errorText.substring(0, 200));
       }
     } catch (error) {
       console.log("[Token Price] Known pair address endpoint failed:", error);

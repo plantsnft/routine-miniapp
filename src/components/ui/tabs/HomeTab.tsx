@@ -27,11 +27,11 @@ export function HomeTab() {
   const CREATOR_COUNT = CATWALK_CREATOR_FIDS.length || 29; // Default to 29 if list is empty
   const CATWALK_CHANNEL_URL = "https://farcaster.xyz/~/channel/Catwalk";
 
-  // Cycle through keywords every 3 seconds (faster)
+  // Cycle through keywords every 2.22 seconds (26% faster: 3000ms * 0.74)
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentKeywordIndex((prev) => (prev + 1) % keywords.length);
-    }, 3000); // 3 seconds
+    }, 2220); // 26% faster than 3 seconds
     return () => clearInterval(interval);
   }, [keywords.length]);
 

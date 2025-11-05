@@ -23,6 +23,7 @@ export interface CheckinRecord {
   fid: number;
   last_checkin: string | null;
   streak: number;
+  total_checkins?: number; // All-time total check-in count
   inserted_at?: string;
   updated_at?: string;
 }
@@ -58,12 +59,14 @@ export async function getCheckinByFid(fid: number): Promise<CheckinRecord | null
  * @param fid - Farcaster user ID
  * @param lastCheckin - ISO timestamp of check-in
  * @param streak - Initial streak count
+ * @param totalCheckins - Total check-in count (default: 1)
  * @returns The created check-in record
  */
 export async function createCheckin(
   fid: number,
   lastCheckin: string,
-  streak: number
+  streak: number,
+  totalCheckins: number = 1
 ): Promise<CheckinRecord> {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/checkins`, {
     method: "POST",
@@ -76,6 +79,7 @@ export async function createCheckin(
         fid,
         last_checkin: lastCheckin,
         streak,
+        total_checkins: totalCheckins,
       },
     ]),
   });
@@ -99,7 +103,7 @@ export async function createCheckin(
  */
 export async function updateCheckin(
   fid: number,
-  updates: { last_checkin: string; streak: number }
+  updates: { last_checkin: string; streak: number; total_checkins?: number }
 ): Promise<CheckinRecord> {
   const res = await fetch(
     `${SUPABASE_URL}/rest/v1/checkins?fid=eq.${fid}`,

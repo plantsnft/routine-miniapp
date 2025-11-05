@@ -369,6 +369,21 @@ export function LeaderboardTab() {
                             💰 {formatTokenBalance(entry.tokenBalance)} $CATWALK
                           </span>
                         )}
+                        {entry.total_checkins !== undefined && entry.total_checkins > 0 && (
+                          <span
+                            style={{
+                              color: "#ffffff",
+                              fontSize: 12,
+                              background: "transparent",
+                              border: "1px solid #c1b400",
+                              padding: "4px 10px",
+                              borderRadius: 6,
+                              fontWeight: 600,
+                            }}
+                          >
+                            ✅ {entry.total_checkins} check-in{entry.total_checkins === 1 ? "" : "s"}
+                          </span>
+                        )}
                       </>
                     )}
                   </div>

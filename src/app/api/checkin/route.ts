@@ -49,10 +49,23 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const streak = typeof checkin.streak === "number" && !isNaN(checkin.streak)
+    const lastCheckin = checkin.last_checkin || null;
+    let streak = typeof checkin.streak === "number" && !isNaN(checkin.streak)
       ? checkin.streak
       : 0;
-    const lastCheckin = checkin.last_checkin || null;
+
+    // Validate and adjust streak if user hasn't checked in for more than 1 day
+    // This ensures the displayed streak is accurate even before they check in again
+    if (lastCheckin) {
+      const lastDate = new Date(lastCheckin);
+      const nowDate = new Date();
+      const daysDiff = getPacificDaysDiff(lastDate, nowDate);
+      
+      // If more than 1 day has passed, streak should be reset (but don't update DB until they check in)
+      if (daysDiff > 1) {
+        streak = 0; // Reset streak for display purposes
+      }
+    }
 
     // Check if user has already checked in today (based on 9 AM Pacific reset)
     let hasCheckedInToday = false;
@@ -100,7 +113,7 @@ export async function POST(req: NextRequest) {
 
     // If no record exists, create a new one
     if (!existing) {
-      const newCheckin = await createCheckin(fid, now, 1);
+      const newCheckin = await createCheckin(fid, now, 1, 1); // streak: 1, total_checkins: 1
       return NextResponse.json<CheckinResponse>(
         {
           ok: true,
@@ -153,10 +166,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Increment total check-ins count
+    const currentTotalCheckins = typeof existing.total_checkins === "number" && !isNaN(existing.total_checkins)
+      ? existing.total_checkins
+      : 0;
+    const newTotalCheckins = currentTotalCheckins + 1;
+
     // Update the check-in record
     const updated = await updateCheckin(fid, {
       last_checkin: now,
       streak: newStreak,
+      total_checkins: newTotalCheckins,
     });
 
     return NextResponse.json<CheckinResponse>(

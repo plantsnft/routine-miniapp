@@ -6,90 +6,78 @@ import type { LeaderboardEntry } from "~/lib/models";
 const TOKEN_ADDRESS = "0xa5eb1cAD0dFC1c4f8d4f84f995aeDA9a7A047B07"; // CATWALK on Base
 
 /**
- * Get token balance for a wallet address on Base chain.
- * Includes retry logic and rate limit handling.
+ * Get token balance for a wallet address on Base chain using direct RPC call.
+ * More reliable than BaseScan API and doesn't require API key.
  */
-async function getTokenBalance(address: string, retries: number = 2): Promise<string> {
-  const apiKey = process.env.BASESCAN_API_KEY || "";
-  const apiKeyParam = apiKey ? `&apikey=${apiKey}` : "";
-  
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      const url = `https://api.basescan.org/api?module=account&action=tokenbalance&contractaddress=${TOKEN_ADDRESS}&address=${address}&tag=latest${apiKeyParam}`;
-      
-      const response = await fetch(url, {
-        headers: {
-          "User-Agent": "Catwalk-MiniApp",
+async function getTokenBalance(address: string): Promise<number> {
+  try {
+    const rpcUrl = "https://mainnet.base.org";
+    
+    // ERC20 balanceOf(address) function selector: 0x70a08231
+    // Pad address to 32 bytes (64 hex chars)
+    const addressParam = address.slice(2).toLowerCase().padStart(64, '0');
+    const balanceCall = {
+      jsonrpc: "2.0",
+      method: "eth_call",
+      params: [
+        {
+          to: TOKEN_ADDRESS,
+          data: `0x70a08231${addressParam}`, // balanceOf(address)
         },
-        // Add timeout to prevent hanging
-        signal: AbortSignal.timeout(10000), // 10 second timeout
-      });
+        "latest",
+      ],
+      id: 1,
+    };
 
-      if (!response.ok) {
-        // Handle rate limiting (429) with exponential backoff
-        if (response.status === 429 && attempt < retries) {
-          const delay = Math.pow(2, attempt) * 1000; // Exponential backoff: 1s, 2s, 4s
-          await new Promise(resolve => setTimeout(resolve, delay));
-          continue;
-        }
-        
-        // For other errors, log but don't retry
-        if (attempt === retries) {
-          console.error(`[Leaderboard] Failed to fetch balance for ${address} after ${retries + 1} attempts:`, response.status);
-        }
-        return "0";
-      }
+    const response = await fetch(rpcUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "User-Agent": "Catwalk-MiniApp",
+      },
+      body: JSON.stringify(balanceCall),
+      signal: AbortSignal.timeout(10000), // 10 second timeout
+    });
 
-      const data = await response.json();
-      
-      if (data.status === "1" && data.result) {
-        // Token has 18 decimals, convert to readable format
-        const balance = BigInt(data.result);
-        const decimals = BigInt(10 ** 18);
-        const wholePart = balance / decimals;
-        const fractionalPart = balance % decimals;
-        
-        // Format fractional part, removing trailing zeros
-        const fractionalStr = fractionalPart.toString().padStart(18, '0');
-        const trimmedFractional = fractionalStr.replace(/0+$/, '');
-        
-        // Return as string
-        if (trimmedFractional === '') {
-          return wholePart.toString();
-        }
-        return `${wholePart}.${trimmedFractional}`;
-      }
-      
-      return "0";
-    } catch (error: any) {
-      // Handle timeout or network errors
-      if (error.name === 'AbortError' || error.name === 'TimeoutError') {
-        if (attempt === retries) {
-          console.error(`[Leaderboard] Timeout fetching balance for ${address} after ${retries + 1} attempts`);
-        } else {
-          // Retry on timeout
-          continue;
-        }
-      } else if (attempt === retries) {
-        console.error(`[Leaderboard] Error fetching balance for ${address} after ${retries + 1} attempts:`, error);
-      }
-      return "0";
+    if (!response.ok) {
+      console.error(`[Leaderboard] RPC call failed for ${address}:`, response.status);
+      return 0;
     }
+
+    const data = await response.json();
+    
+    if (data.result && data.result !== "0x" && !data.error) {
+      // Convert from hex to BigInt, then divide by 10^18 (18 decimals)
+      const balanceRaw = BigInt(data.result);
+      const decimals = BigInt(10 ** 18);
+      const wholePart = balanceRaw / decimals;
+      const fractionalPart = balanceRaw % decimals;
+      
+      // Convert to number with precision
+      const balance = Number(wholePart) + Number(fractionalPart) / Number(decimals);
+      
+      return balance;
+    }
+    
+    return 0;
+  } catch (error: any) {
+    if (error.name !== 'AbortError' && error.name !== 'TimeoutError') {
+      console.error(`[Leaderboard] Error fetching balance for ${address}:`, error);
+    }
+    return 0;
   }
-  
-  return "0";
 }
 
 /**
  * Batch fetch token balances with rate limiting.
- * Processes addresses in chunks to avoid overwhelming the API.
+ * Processes addresses in chunks to avoid overwhelming the RPC endpoint.
  */
 async function getTokenBalancesBatch(
   addresses: string[],
-  batchSize: number = 10,
-  delayBetweenBatches: number = 100
-): Promise<Map<string, string>> {
-  const balances = new Map<string, string>();
+  batchSize: number = 5,
+  delayBetweenBatches: number = 200
+): Promise<Map<string, number>> {
+  const balances = new Map<string, number>();
   
   // Process in batches to avoid rate limits
   for (let i = 0; i < addresses.length; i += batchSize) {
@@ -193,8 +181,8 @@ export async function GET(req: NextRequest) {
       if (userAddresses.length > 0) {
         // Sum all balances across multiple wallets for this user
         tokenBalance = userAddresses.reduce((sum, addr) => {
-          const balance = balancesMap.get(addr) || "0";
-          return sum + parseFloat(balance);
+          const balance = balancesMap.get(addr) || 0;
+          return sum + balance;
         }, 0);
       }
 
@@ -220,14 +208,26 @@ export async function GET(req: NextRequest) {
         return (b.tokenBalance || 0) - (a.tokenBalance || 0);
       });
     } else {
-      // Sort by token balance (descending), then by streak as tiebreaker
+      // Sort by token balance (descending) - most to least holdings
+      // Only users with token balance > 0 should be ranked, then by streak as tiebreaker
       entriesWithBalances.sort((a, b) => {
-        if (b.tokenBalance !== a.tokenBalance) {
-          return (b.tokenBalance || 0) - (a.tokenBalance || 0);
+        const balanceA = a.tokenBalance || 0;
+        const balanceB = b.tokenBalance || 0;
+        
+        // Primary sort: by token balance (descending)
+        if (balanceB !== balanceA) {
+          return balanceB - balanceA;
         }
+        
+        // Tiebreaker: by streak (descending)
         return (b.streak || 0) - (a.streak || 0);
       });
     }
+    
+    // Log summary for debugging
+    const totalHoldings = entriesWithBalances.reduce((sum, entry) => sum + (entry.tokenBalance || 0), 0);
+    const usersWithHoldings = entriesWithBalances.filter(e => (e.tokenBalance || 0) > 0).length;
+    console.log(`[Leaderboard] Total $CATWALK holdings: ${totalHoldings.toFixed(2)}, Users with holdings: ${usersWithHoldings}/${entriesWithBalances.length}`);
 
     // Assign ranks and limit to top entries
     const topEntries = entriesWithBalances.slice(0, limit).map((entry, index) => ({

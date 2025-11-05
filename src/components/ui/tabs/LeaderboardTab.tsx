@@ -22,6 +22,9 @@ export function LeaderboardTab() {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Calculate total holdings across all entries
+  const totalHoldings = entries.reduce((sum, entry) => sum + (entry.tokenBalance || 0), 0);
 
   useEffect(() => {
     const fetchLeaderboard = async () => {
@@ -253,8 +256,9 @@ export function LeaderboardTab() {
 
         {/* Leaderboard entries */}
         {!loading && !error && entries.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {entries.map((entry) => (
+          <>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {entries.map((entry) => (
               <div
                 key={`${entry.fid}-${sortBy}`}
                 style={{
@@ -389,8 +393,43 @@ export function LeaderboardTab() {
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
+              ))}
+            </div>
+            
+            {/* Total holdings display */}
+            <div
+              style={{
+                marginTop: 20,
+                padding: "16px",
+                background: "#000000",
+                border: "2px solid #c1b400",
+                borderRadius: 12,
+                textAlign: "center",
+              }}
+            >
+              <p
+                style={{
+                  margin: 0,
+                  marginBottom: 8,
+                  color: "#c1b400",
+                  fontSize: 14,
+                  fontWeight: 700,
+                }}
+              >
+                Total $CATWALK Holdings
+              </p>
+              <p
+                style={{
+                  margin: 0,
+                  color: "#ffffff",
+                  fontSize: 24,
+                  fontWeight: 700,
+                }}
+              >
+                {formatTokenBalance(totalHoldings)} $CATWALK
+              </p>
+            </div>
+          </>
         )}
 
         {/* Empty state */}

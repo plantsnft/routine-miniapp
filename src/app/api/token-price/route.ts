@@ -315,7 +315,99 @@ export async function GET() {
       }
     }
 
-    // Strategy 5: Try Uniswap V3 API directly
+    // Strategy 5: Try to get price from Uniswap V3 pool reserves using BaseScan
+    try {
+      const apiKeyParam = BASESCAN_API_KEY ? `&apikey=${BASESCAN_API_KEY}` : "";
+      
+      // First, get token0 and token1 addresses to determine order
+      const token0Selector = "0x0dfe1681"; // token0() function selector
+      const token1Selector = "0xd21220a7"; // token1() function selector
+      
+      const [token0Res, token1Res] = await Promise.all([
+        fetch(`https://api.basescan.org/api?module=proxy&action=eth_call&to=${PAIR_ADDRESS}&data=${token0Selector}&tag=latest${apiKeyParam}`, {
+          headers: { "User-Agent": "Catwalk-MiniApp" },
+        }),
+        fetch(`https://api.basescan.org/api?module=proxy&action=eth_call&to=${PAIR_ADDRESS}&data=${token1Selector}&tag=latest${apiKeyParam}`, {
+          headers: { "User-Agent": "Catwalk-MiniApp" },
+        }),
+      ]);
+
+      if (token0Res.ok && token1Res.ok) {
+        const token0Data = await token0Res.json();
+        const token1Data = await token1Res.json();
+        
+        if (token0Data.result && token1Data.result) {
+          // Extract token addresses (last 40 chars of 64-char hex string)
+          const token0Addr = "0x" + token0Data.result.slice(-40);
+          const token1Addr = "0x" + token1Data.result.slice(-40);
+          
+          const isToken0 = token0Addr.toLowerCase() === TOKEN_ADDRESS.toLowerCase();
+          const isToken1 = token1Addr.toLowerCase() === TOKEN_ADDRESS.toLowerCase();
+          
+          if (!isToken0 && !isToken1) {
+            console.log("[Token Price] Pool doesn't contain CATWALK token");
+          } else {
+            // Get slot0 which contains sqrtPriceX96
+            const slot0Selector = "0x3850c7bd"; // slot0() function selector
+            const slot0Res = await fetch(`https://api.basescan.org/api?module=proxy&action=eth_call&to=${PAIR_ADDRESS}&data=${slot0Selector}&tag=latest${apiKeyParam}`, {
+              headers: { "User-Agent": "Catwalk-MiniApp" },
+            });
+
+            if (slot0Res.ok) {
+              const slot0Data = await slot0Res.json();
+              if (slot0Data.result && slot0Data.result !== "0x") {
+                // Parse sqrtPriceX96 from slot0 (first 32 bytes = 64 hex chars)
+                const sqrtPriceX96Hex = slot0Data.result.slice(2, 66);
+                const sqrtPriceX96 = BigInt("0x" + sqrtPriceX96Hex);
+                
+                // Calculate price: (sqrtPriceX96 / 2^96)^2
+                const Q96 = BigInt(2) ** BigInt(96);
+                const priceRatio = Number(sqrtPriceX96 * sqrtPriceX96) / Number(Q96 * Q96);
+                
+                // Calculate price in USD
+                // priceRatio = token1Amount / token0Amount (in raw units)
+                // To get CATWALK price in USDC, we need to adjust for decimals
+                // CATWALK has 18 decimals, USDC has 6 decimals
+                let price: number;
+                if (isToken0) {
+                  // CATWALK is token0, USDC is token1
+                  // priceRatio = USDC / CATWALK, so we need 1/priceRatio to get CATWALK/USDC
+                  // Adjust for decimals: (1/priceRatio) * (10^18 / 10^6) = (1/priceRatio) * 10^12
+                  price = (1 / priceRatio) * Math.pow(10, 18 - 6);
+                } else {
+                  // USDC is token0, CATWALK is token1
+                  // priceRatio = CATWALK / USDC, so we need priceRatio to get CATWALK/USDC
+                  // Adjust for decimals: priceRatio * (10^18 / 10^6) = priceRatio * 10^12
+                  price = priceRatio * Math.pow(10, 18 - 6);
+                }
+                
+                if (price > 0 && price < 1000 && !isNaN(price) && isFinite(price)) {
+                  console.log("[Token Price] Calculated price from pool reserves:", price, { isToken0, priceRatio });
+                  
+                  return NextResponse.json({
+                    price,
+                    priceChange24h: null,
+                    volume24h: null,
+                    liquidity: null,
+                    marketCap: null,
+                    holders: tokenStats.holders,
+                    transactions: tokenStats.transactions,
+                    symbol: "CATWALK",
+                    name: "Catwalk",
+                    address: TOKEN_ADDRESS,
+                    source: "basescan-pool-reserves",
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (poolReservesError) {
+      console.log("[Token Price] Pool reserves calculation failed:", poolReservesError);
+    }
+
+    // Strategy 6: Try Uniswap V3 API directly (quote endpoint)
     try {
       // Uniswap V3 Router on Base: 0x2626664c2603336E57B271c5C0b26F421741e481
       // Use Uniswap's quote API
@@ -336,26 +428,29 @@ export async function GET() {
           const amountOut = parseFloat(quoteData.quote.amountOut) / 1e18; // Assuming 18 decimals for CATWALK
           const price = amountIn / amountOut;
           
-          return NextResponse.json({
-            price,
-            priceChange24h: null,
-            volume24h: null,
-            liquidity: null,
-            marketCap: null,
-            holders: tokenStats.holders,
-            transactions: tokenStats.transactions,
-            symbol: "CATWALK",
-            name: "Catwalk",
-            address: TOKEN_ADDRESS,
-            source: "uniswap",
-          });
+          if (price > 0) {
+            console.log("[Token Price] Uniswap quote API success:", price);
+            return NextResponse.json({
+              price,
+              priceChange24h: null,
+              volume24h: null,
+              liquidity: null,
+              marketCap: null,
+              holders: tokenStats.holders,
+              transactions: tokenStats.transactions,
+              symbol: "CATWALK",
+              name: "Catwalk",
+              address: TOKEN_ADDRESS,
+              source: "uniswap-quote",
+            });
+          }
         }
       }
     } catch (uniswapError) {
       console.log("[Token Price] Uniswap quote API failed:", uniswapError);
     }
 
-    // Strategy 6: Try BaseScan to get token price via recent swaps
+    // Strategy 7: Try BaseScan to get token price via recent swaps
     try {
       const apiKeyParam = BASESCAN_API_KEY ? `&apikey=${BASESCAN_API_KEY}` : "";
       // Get recent token transfers to USDC pair or from USDC pair
@@ -376,7 +471,7 @@ export async function GET() {
       console.log("[Token Price] BaseScan price calculation failed:", basescanError);
     }
 
-    // Strategy 7: Try CoinGecko as final fallback
+    // Strategy 8: Try CoinGecko as final fallback
     try {
       const coinGeckoResponse = await fetch(
         `https://api.coingecko.com/api/v3/simple/token_price/base?contract_addresses=${tokenAddressLower}&vs_currencies=usd&include_24hr_change=true`

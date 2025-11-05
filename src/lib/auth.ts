@@ -54,12 +54,22 @@ export async function signInWithFarcaster(): Promise<SiwnResponse> {
     const nonce = Math.random().toString(36).slice(2);
     
     // Request sign-in from host
-    const result = await sdk.actions.signIn({
-      nonce,
-      acceptAuthAddress: true,
-    });
+    let result;
+    try {
+      result = await sdk.actions.signIn({
+        nonce,
+        acceptAuthAddress: true,
+      });
+    } catch (signInError: unknown) {
+      const err = signInError as Error;
+      console.error("[Auth] SDK signIn call failed:", err);
+      return {
+        ok: false,
+        error: err?.message || "Sign-in request failed. Please try again.",
+      };
+    }
 
-    if (!result) {
+    if (!result || typeof result !== 'object') {
       return {
         ok: false,
         error: "Sign-in returned no result. Please try again.",
@@ -92,11 +102,12 @@ export async function signInWithFarcaster(): Promise<SiwnResponse> {
       ok: false,
       error: json?.error || "Signed in but server could not resolve FID.",
     };
-  } catch (error: any) {
-    console.error("[Auth] Sign-in error:", error);
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("[Auth] Sign-in error:", err);
     return {
       ok: false,
-      error: error?.message || "Sign-in failed. Please open this inside Warpcast and try again.",
+      error: err?.message || "Sign-in failed. Please open this inside Warpcast and try again.",
     };
   }
 }

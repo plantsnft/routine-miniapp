@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 const TOKEN_ADDRESS = "0xa5eb1cAD0dFC1c4f8d4f84f995aeDA9a7A047B07";
 const BASE_CHAIN_ID = "base";
 const BASESCAN_API_KEY = process.env.BASESCAN_API_KEY || ""; // Optional API key for BaseScan
+const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"; // USDC on Base
 
 // Helper to fetch holder count and transaction count from BaseScan
 async function fetchTokenStats() {
@@ -25,7 +26,6 @@ async function fetchTokenStats() {
       const tokenData = await tokenInfoResponse.json();
       if (tokenData.status === "1" && tokenData.result && tokenData.result.length > 0) {
         const info = tokenData.result[0];
-        // Parse holder count - BaseScan might return it as a string
         if (info.holders) {
           holders = parseInt(String(info.holders).replace(/,/g, ""), 10) || null;
         }
@@ -35,42 +35,9 @@ async function fetchTokenStats() {
     console.log("[Token Stats] Token info fetch failed:", error);
   }
 
-  // If we don't have holders from tokeninfo, try alternative method
-  if (holders === null) {
-    try {
-      // Try the holder list endpoint to get holder count
-      const holderListUrl = `https://api.basescan.org/api?module=token&action=tokenholderlist&contractaddress=${TOKEN_ADDRESS}&page=1&offset=100${apiKeyParam}`;
-      
-      const holderResponse = await fetch(holderListUrl, {
-        headers: {
-          "User-Agent": "Catwalk-MiniApp",
-        },
-      });
-
-      if (holderResponse.ok) {
-        const holderData = await holderResponse.json();
-        if (holderData.status === "1" && holderData.result) {
-          // Check if there's a total count in the response
-          if (holderData.result.length > 0) {
-            // If we get results, we know there are holders, but we need the total count
-            // BaseScan might return total in a different field
-            // For now, we'll need to use a different approach or accept that we can't get exact count
-          }
-        }
-      }
-    } catch (error) {
-      console.log("[Token Stats] Holder count alternative fetch failed:", error);
-    }
-  }
-
   try {
     // Get transaction count using token transfer events
-    // Transfer event signature: 0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef
-    // Use eth_getLogs to get all Transfer events (lifetime transactions)
     const transferEventTopic = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
-    
-    // Try using the proxy endpoint to get logs
-    // Note: This might be slow for tokens with many transfers, but it's the most accurate
     const txCountUrl = `https://api.basescan.org/api?module=proxy&action=eth_getLogs&fromBlock=0x0&toBlock=latest&address=${TOKEN_ADDRESS}&topic0=${transferEventTopic}${apiKeyParam}`;
     
     const txResponse = await fetch(txCountUrl, {
@@ -82,11 +49,7 @@ async function fetchTokenStats() {
     if (txResponse.ok) {
       const txData = await txResponse.json();
       if (txData.result && Array.isArray(txData.result)) {
-        // Count all transfer events (each transfer is a transaction)
         transactions = txData.result.length;
-      } else if (txData.error) {
-        // If there's an error, log it but continue
-        console.log("[Token Stats] Transaction count error:", txData.error);
       }
     }
   } catch (txError) {
@@ -99,6 +62,43 @@ async function fetchTokenStats() {
   };
 }
 
+// Helper to find Uniswap V3 pair address using BaseScan
+async function findUniswapPairAddress(): Promise<string | null> {
+  try {
+    const apiKeyParam = BASESCAN_API_KEY ? `&apikey=${BASESCAN_API_KEY}` : "";
+    // Uniswap V3 Factory on Base: 0x33128a8fC17869897dcE68Ed026d694621f6FDfD
+    // Look for PoolCreated events
+    const factoryAddress = "0x33128a8fC17869897dcE68Ed026d694621f6FDfD";
+    const poolCreatedTopic = "0x783cca1c0412dd0d695e784568c96da2e9c22ff989357a2e8b1d9b2b4e6b7118";
+    
+    // Search for PoolCreated events that include our token
+    const logsUrl = `https://api.basescan.org/api?module=logs&action=getLogs&fromBlock=0&toBlock=latest&address=${factoryAddress}&topic0=${poolCreatedTopic}&topic0_1_opr=and&topic1=0x000000000000000000000000${TOKEN_ADDRESS.slice(2).toLowerCase()}${apiKeyParam}`;
+    
+    const response = await fetch(logsUrl, {
+      headers: {
+        "User-Agent": "Catwalk-MiniApp",
+      },
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data.status === "1" && data.result && data.result.length > 0) {
+        // Get the most recent pool creation
+        const latestLog = data.result[data.result.length - 1];
+        // Pool address is in topic2
+        if (latestLog.topics && latestLog.topics[2]) {
+          const pairAddress = "0x" + latestLog.topics[2].slice(-40);
+          console.log("[Token Price] Found pair address:", pairAddress);
+          return pairAddress;
+        }
+      }
+    }
+  } catch (error) {
+    console.log("[Token Price] Error finding pair address:", error);
+  }
+  return null;
+}
+
 export async function GET() {
   try {
     // Fetch token stats (holders, transactions) in parallel
@@ -106,256 +106,219 @@ export async function GET() {
       fetchTokenStats(),
     ]);
 
-    // Try DexScreener API first (free, no API key needed)
-    // The URL format from DexScreener suggests the address might be a pair address
-    // Try both token and pair endpoints
+    const tokenAddressLower = TOKEN_ADDRESS.toLowerCase();
+    let pairs: any[] | null = null;
+    let foundPair = false;
+
+    // Strategy 1: Try DexScreener with token address (tokens endpoint)
     try {
-      const tokenAddressLower = TOKEN_ADDRESS.toLowerCase();
-      let pairs: any[] | null = null;
-      let data: any = null;
+      const dexScreenerUrl = `https://api.dexscreener.com/latest/dex/tokens/${tokenAddressLower}`;
+      console.log("[Token Price] Fetching from DexScreener (tokens):", dexScreenerUrl);
       
-      // Method 1: Try pair endpoint first (since the DexScreener URL uses this format)
-      let dexScreenerUrl = `https://api.dexscreener.com/latest/dex/pairs/base/${tokenAddressLower}`;
-      console.log("[Token Price] Fetching from DexScreener (pair endpoint):", dexScreenerUrl);
-      
-      let dexScreenerResponse = await fetch(dexScreenerUrl, {
+      const dexScreenerResponse = await fetch(dexScreenerUrl, {
         headers: {
           "User-Agent": "Catwalk-MiniApp",
         },
       });
 
       if (dexScreenerResponse.ok) {
-        const pairData = await dexScreenerResponse.json();
-        console.log("[Token Price] Pair endpoint response:", JSON.stringify(pairData).substring(0, 500));
+        const data = await dexScreenerResponse.json();
+        console.log("[Token Price] DexScreener tokens response:", JSON.stringify(data).substring(0, 300));
         
-        if (pairData.pair) {
-          // Single pair response
-          pairs = [pairData.pair];
-          data = { pairs };
-          console.log("[Token Price] Found pair via pair endpoint");
-        } else if (pairData.pairs && Array.isArray(pairData.pairs) && pairData.pairs.length > 0) {
-          pairs = pairData.pairs;
-          data = pairData;
-          console.log("[Token Price] Found pairs array via pair endpoint");
+        if (data.pairs && Array.isArray(data.pairs) && data.pairs.length > 0) {
+          pairs = data.pairs;
+          foundPair = true;
+          console.log("[Token Price] Found pairs via tokens endpoint:", data.pairs.length);
         }
       }
-      
-      // Method 2: If pair endpoint didn't work, try tokens endpoint
-      if (!pairs || pairs.length === 0) {
-        console.log("[Token Price] Pair endpoint didn't work, trying tokens endpoint");
-        dexScreenerUrl = `https://api.dexscreener.com/latest/dex/tokens/${tokenAddressLower}`;
-        console.log("[Token Price] Fetching from DexScreener (tokens):", dexScreenerUrl);
+    } catch (error) {
+      console.log("[Token Price] DexScreener tokens endpoint failed:", error);
+    }
+
+    // Strategy 2: If no pairs found, try to find the pair address and use pairs endpoint
+    if (!foundPair) {
+      try {
+        // The address in the DexScreener URL might be the pair address itself
+        // Try it directly as a pair address
+        const pairAddressUrl = `https://api.dexscreener.com/latest/dex/pairs/base/${tokenAddressLower}`;
+        console.log("[Token Price] Trying address as pair:", pairAddressUrl);
         
-        dexScreenerResponse = await fetch(dexScreenerUrl, {
+        const pairResponse = await fetch(pairAddressUrl, {
           headers: {
             "User-Agent": "Catwalk-MiniApp",
           },
         });
 
-        console.log("[Token Price] DexScreener response status:", dexScreenerResponse.status);
-
-        if (!dexScreenerResponse.ok) {
-          const errorText = await dexScreenerResponse.text();
-          console.error("[Token Price] DexScreener API error:", {
-            status: dexScreenerResponse.status,
-            statusText: dexScreenerResponse.statusText,
-            body: errorText,
-          });
-          throw new Error(`DexScreener API returned ${dexScreenerResponse.status}: ${dexScreenerResponse.statusText}`);
-        }
-
-        data = await dexScreenerResponse.json();
-        
-        console.log("[Token Price] DexScreener tokens endpoint raw response:", JSON.stringify(data).substring(0, 500));
-        
-        // Check if data exists
-        if (!data) {
-          console.error("[Token Price] DexScreener returned null/undefined data");
-          throw new Error("DexScreener returned no data");
-        }
-
-        // Process the data - pairs can be null, empty array, or have items
-        pairs = data.pairs;
-      }
-      
-      const pairsCount = Array.isArray(pairs) ? pairs.length : (pairs === null ? 0 : 0);
-      
-      console.log("[Token Price] DexScreener pairs data:", {
-        pairsType: pairs === null ? "null" : Array.isArray(pairs) ? "array" : typeof pairs,
-        pairsCount,
-        pairs: Array.isArray(pairs) ? pairs.slice(0, 3).map((p: any) => ({
-          chainId: p.chainId,
-          dexId: p.dexId,
-          priceUsd: p.priceUsd,
-          pairAddress: p.pairAddress,
-        })) : [],
-      });
-      
-      // Check if pairs array exists and has items (handle null case)
-      if (!pairs || !Array.isArray(pairs) || pairs.length === 0) {
-        console.warn("[Token Price] DexScreener returned null/empty pairs - will try fallback APIs");
-        // Don't throw error, continue to fallback APIs
-      } else if (Array.isArray(pairs) && pairs.length > 0) {
-        // Find the pair on Base chain - prioritize Base pairs
-        const basePairs = pairs.filter(
-          (pair: any) => 
-            pair.chainId === "base" || 
-            pair.chainId === BASE_CHAIN_ID
-        );
-        
-        // If we have Base pairs, use the one with highest liquidity, otherwise use first pair
-        const basePair = basePairs.length > 0
-          ? basePairs.reduce((best: any, current: any) => {
-              const bestLiq = parseFloat(best.liquidity?.usd || "0");
-              const currentLiq = parseFloat(current.liquidity?.usd || "0");
-              return currentLiq > bestLiq ? current : best;
-            })
-          : pairs[0]; // Fallback to first pair if no Base pair found
-        
-        console.log("[Token Price] Selected pair:", {
-          chainId: basePair.chainId,
-          dexId: basePair.dexId,
-          priceUsd: basePair.priceUsd,
-          liquidity: basePair.liquidity?.usd,
-          volume24h: basePair.volume?.h24,
-        });
-
-        if (basePair && basePair.priceUsd) {
-          // Calculate market cap: price * total supply
-          // For market cap calculation, we need total supply
-          // Try to get it from the pair data or calculate from liquidity
-          let marketCap: number | null = null;
+        if (pairResponse.ok) {
+          const pairData = await pairResponse.json();
+          console.log("[Token Price] Pair endpoint response:", JSON.stringify(pairData).substring(0, 300));
           
-          // Try to get market cap from pair data
-          // DexScreener provides fdv (fully diluted valuation) which is market cap
-          if (basePair.fdv) {
-            marketCap = parseFloat(basePair.fdv);
-          } else if (basePair.marketCap) {
-            marketCap = parseFloat(basePair.marketCap);
-          } else if (basePair.priceUsd && basePair.liquidity?.usd) {
-            // Fallback: rough estimate from liquidity
-            // This is not accurate but better than nothing
-            marketCap = parseFloat(basePair.liquidity.usd) * 2;
+          if (pairData.pair) {
+            pairs = [pairData.pair];
+            foundPair = true;
+            console.log("[Token Price] Found pair via pair endpoint");
+          } else if (pairData.pairs && Array.isArray(pairData.pairs) && pairData.pairs.length > 0) {
+            pairs = pairData.pairs;
+            foundPair = true;
+            console.log("[Token Price] Found pairs array via pair endpoint");
           }
-
-          // Extract price change - DexScreener uses priceChange24h or priceChange.h24
-          const priceChange24h = basePair.priceChange24h 
-            ? parseFloat(basePair.priceChange24h)
-            : basePair.priceChange?.h24 
-              ? parseFloat(basePair.priceChange.h24)
-              : 0;
-
-          const response = {
-            price: parseFloat(basePair.priceUsd || "0"),
-            priceChange24h,
-            volume24h: parseFloat(basePair.volume?.h24 || basePair.volume24h || "0"),
-            liquidity: parseFloat(basePair.liquidity?.usd || "0"),
-            marketCap,
-            holders: tokenStats.holders,
-            transactions: tokenStats.transactions,
-            symbol: basePair.baseToken?.symbol || "CATWALK",
-            name: basePair.baseToken?.name || "Catwalk",
-            address: TOKEN_ADDRESS,
-            source: "dexscreener",
-          };
-          
-          console.log("[Token Price] DexScreener success:", response);
-          return NextResponse.json(response);
         }
+      } catch (error) {
+        console.log("[Token Price] Pair endpoint failed:", error);
       }
-    } catch (dexError: unknown) {
-      const error = dexError as Error;
-      console.error("[Token Price] DexScreener failed:", {
-        message: error?.message,
-        stack: error?.stack,
-        error: error,
-      });
-      // Continue to fallback APIs
     }
 
-    // Fallback: Try Uniswap V3 Subgraph API (for Base chain)
-    try {
-      // Uniswap V3 subgraph query for token price on Base
-      const uniswapQuery = `
-        {
-          token(id: "${TOKEN_ADDRESS.toLowerCase()}") {
-            id
-            symbol
-            name
-            decimals
-            derivedUSD
-            totalLiquidity
-            txCount
-            poolCount
-          }
-          pools(
-            where: { token0: "${TOKEN_ADDRESS.toLowerCase()}", or: { token1: "${TOKEN_ADDRESS.toLowerCase()}" } }
-            orderBy: totalValueLockedUSD
-            orderDirection: desc
-            first: 1
-          ) {
-            id
-            token0 {
-              symbol
+    // Strategy 3: Try to find actual pair address and use it
+    if (!foundPair) {
+      try {
+        const actualPairAddress = await findUniswapPairAddress();
+        if (actualPairAddress) {
+          const pairUrl = `https://api.dexscreener.com/latest/dex/pairs/base/${actualPairAddress.toLowerCase()}`;
+          console.log("[Token Price] Trying found pair address:", pairUrl);
+          
+          const pairResponse = await fetch(pairUrl, {
+            headers: {
+              "User-Agent": "Catwalk-MiniApp",
+            },
+          });
+
+          if (pairResponse.ok) {
+            const pairData = await pairResponse.json();
+            if (pairData.pair) {
+              pairs = [pairData.pair];
+              foundPair = true;
+              console.log("[Token Price] Found pair using discovered pair address");
             }
-            token1 {
-              symbol
-            }
-            totalValueLockedUSD
-            volumeUSD
-            token0Price
-            token1Price
           }
         }
-      `;
+      } catch (error) {
+        console.log("[Token Price] Finding pair address failed:", error);
+      }
+    }
+
+    // Process pairs if found
+    if (foundPair && pairs && Array.isArray(pairs) && pairs.length > 0) {
+      // Find the pair on Base chain with highest liquidity
+      const basePairs = pairs.filter(
+        (pair: any) => pair.chainId === "base" || pair.chainId === BASE_CHAIN_ID
+      );
       
-      const uniswapUrl = `https://api.studio.thegraph.com/query/48211/uniswap-v3-base/version/latest`;
-      const uniswapResponse = await fetch(uniswapUrl, {
-        method: "POST",
+      const selectedPair = basePairs.length > 0
+        ? basePairs.reduce((best: any, current: any) => {
+            const bestLiq = parseFloat(best.liquidity?.usd || "0");
+            const currentLiq = parseFloat(current.liquidity?.usd || "0");
+            return currentLiq > bestLiq ? current : best;
+          })
+        : pairs[0];
+
+      if (selectedPair && selectedPair.priceUsd) {
+        const price = parseFloat(selectedPair.priceUsd || "0");
+        const priceChange24h = selectedPair.priceChange24h 
+          ? parseFloat(selectedPair.priceChange24h)
+          : selectedPair.priceChange?.h24 
+            ? parseFloat(selectedPair.priceChange.h24)
+            : 0;
+
+        let marketCap: number | null = null;
+        if (selectedPair.fdv) {
+          marketCap = parseFloat(selectedPair.fdv);
+        } else if (selectedPair.marketCap) {
+          marketCap = parseFloat(selectedPair.marketCap);
+        }
+
+        const response = {
+          price,
+          priceChange24h,
+          volume24h: parseFloat(selectedPair.volume?.h24 || selectedPair.volume24h || "0"),
+          liquidity: parseFloat(selectedPair.liquidity?.usd || "0"),
+          marketCap,
+          holders: tokenStats.holders,
+          transactions: tokenStats.transactions,
+          symbol: selectedPair.baseToken?.symbol || "CATWALK",
+          name: selectedPair.baseToken?.name || "Catwalk",
+          address: TOKEN_ADDRESS,
+          source: "dexscreener",
+        };
+        
+        console.log("[Token Price] DexScreener success:", response);
+        return NextResponse.json(response);
+      }
+    }
+
+    // Strategy 4: Try Uniswap V3 API directly
+    try {
+      // Uniswap V3 Router on Base: 0x2626664c2603336E57B271c5C0b26F421741e481
+      // Use Uniswap's quote API
+      const uniswapQuoteUrl = `https://api.uniswap.org/v1/quote?tokenInAddress=${USDC_ADDRESS}&tokenInChainId=8453&tokenOutAddress=${TOKEN_ADDRESS}&tokenOutChainId=8453&amount=1000000&type=exactIn`;
+      
+      const quoteResponse = await fetch(uniswapQuoteUrl, {
         headers: {
-          "Content-Type": "application/json",
+          "User-Agent": "Catwalk-MiniApp",
         },
-        body: JSON.stringify({ query: uniswapQuery }),
       });
 
-      if (uniswapResponse.ok) {
-        const uniswapData = await uniswapResponse.json();
-        if (uniswapData?.data?.token?.derivedUSD) {
-          const price = parseFloat(uniswapData.data.token.derivedUSD);
-          const pool = uniswapData.data.pools?.[0];
+      if (quoteResponse.ok) {
+        const quoteData = await quoteResponse.json();
+        // Calculate price from quote (amount in USDC / amount out in tokens)
+        // This gives us price per token
+        if (quoteData.quote && quoteData.quote.amount && quoteData.quote.amountOut) {
+          const amountIn = parseFloat(quoteData.quote.amount) / 1e6; // USDC has 6 decimals
+          const amountOut = parseFloat(quoteData.quote.amountOut) / 1e18; // Assuming 18 decimals for CATWALK
+          const price = amountIn / amountOut;
           
           return NextResponse.json({
             price,
-            priceChange24h: null, // Uniswap subgraph doesn't provide 24h change easily
-            volume24h: pool ? parseFloat(pool.volumeUSD || "0") : null,
-            liquidity: pool ? parseFloat(pool.totalValueLockedUSD || "0") : null,
+            priceChange24h: null,
+            volume24h: null,
+            liquidity: null,
             marketCap: null,
             holders: tokenStats.holders,
             transactions: tokenStats.transactions,
-            symbol: uniswapData.data.token.symbol || "CATWALK",
-            name: uniswapData.data.token.name || "Catwalk",
+            symbol: "CATWALK",
+            name: "Catwalk",
             address: TOKEN_ADDRESS,
             source: "uniswap",
           });
         }
       }
     } catch (uniswapError) {
-      console.log("[Token Price] Uniswap subgraph failed:", uniswapError);
+      console.log("[Token Price] Uniswap quote API failed:", uniswapError);
     }
 
-    // Fallback: Try CoinGecko API (if token is listed)
+    // Strategy 5: Try BaseScan to get token price via recent swaps
+    try {
+      const apiKeyParam = BASESCAN_API_KEY ? `&apikey=${BASESCAN_API_KEY}` : "";
+      // Get recent token transfers to USDC pair or from USDC pair
+      // This is a fallback - we'll estimate price from recent swaps
+      const recentTxsUrl = `https://api.basescan.org/api?module=account&action=tokentx&contractaddress=${TOKEN_ADDRESS}&page=1&offset=10&sort=desc${apiKeyParam}`;
+      
+      const txsResponse = await fetch(recentTxsUrl, {
+        headers: {
+          "User-Agent": "Catwalk-MiniApp",
+        },
+      });
+
+      if (txsResponse.ok) {
+        // If we have transaction data, we could calculate price from swaps
+        // But this is complex, so we'll skip for now
+      }
+    } catch (basescanError) {
+      console.log("[Token Price] BaseScan price calculation failed:", basescanError);
+    }
+
+    // Strategy 6: Try CoinGecko as final fallback
     try {
       const coinGeckoResponse = await fetch(
-        `https://api.coingecko.com/api/v3/simple/token_price/base?contract_addresses=${TOKEN_ADDRESS}&vs_currencies=usd&include_24hr_change=true`
+        `https://api.coingecko.com/api/v3/simple/token_price/base?contract_addresses=${tokenAddressLower}&vs_currencies=usd&include_24hr_change=true`
       );
 
       if (coinGeckoResponse.ok) {
         const data = await coinGeckoResponse.json();
-        const tokenData = data[TOKEN_ADDRESS.toLowerCase()];
+        const tokenData = data[tokenAddressLower];
 
-        if (tokenData) {
+        if (tokenData && tokenData.usd) {
           return NextResponse.json({
-            price: tokenData.usd || 0,
+            price: tokenData.usd,
             priceChange24h: tokenData.usd_24h_change || 0,
             volume24h: null,
             liquidity: null,
@@ -373,9 +336,8 @@ export async function GET() {
       console.log("[Token Price] CoinGecko failed:", cgError);
     }
 
-    // If all APIs fail, return placeholder data (but don't set error)
-    // This allows the banner to still show token info even without price
-    console.log("[Token Price] All APIs failed, returning placeholder data");
+    // If all strategies fail, return data without price but with other stats
+    console.log("[Token Price] All strategies failed, returning data without price");
     return NextResponse.json({
       price: null,
       priceChange24h: null,
@@ -388,7 +350,6 @@ export async function GET() {
       name: "Catwalk",
       address: TOKEN_ADDRESS,
       source: null,
-      // Don't set error - let the UI handle missing price gracefully
     });
   } catch (error: unknown) {
     const err = error as Error;
@@ -406,4 +367,3 @@ export async function GET() {
     );
   }
 }
-

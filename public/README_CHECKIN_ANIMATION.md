@@ -2,9 +2,18 @@
 
 ## File Location
 Place your check-in animation GIF file at:
+
+**Windows File Explorer Path:**
+```
+C:\miniapps\routine\public\checkin-animation.gif
+```
+
+**Relative Path (from project root):**
 ```
 public/checkin-animation.gif
 ```
+
+**Note:** This is the same folder where your `logo.png` file is located. Just drop your GIF file there with the exact name `checkin-animation.gif`.
 
 ## Requirements
 - **Format:** GIF (animated)

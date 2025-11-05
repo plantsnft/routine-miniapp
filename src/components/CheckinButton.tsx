@@ -38,7 +38,7 @@ export function CheckinButton({ checkedIn, saving, onClick }: CheckinButtonProps
         }
       }}
     >
-      {saving ? "Saving..." : checkedIn ? "✅ Checked in for today" : "Daily /Catwalk Checkin"}
+      {saving ? "Saving..." : checkedIn ? "Cat is Resting" : "Walk Your Cat"}
     </button>
   );
 }

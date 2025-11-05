@@ -151,6 +151,68 @@ export default function DailyCheckin() {
             </button>
           )}
 
+        {/* Question prompt with arrow - only show when user hasn't checked in */}
+        {fid && !checkin.status.checkedIn && !checkin.saving && (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: "16px",
+              background: "#000000",
+              border: "2px solid #c1b400",
+              borderRadius: 12,
+              textAlign: "center",
+              position: "relative",
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                marginBottom: 12,
+                color: "#c1b400",
+                fontSize: 18,
+                fontWeight: 700,
+              }}
+            >
+              Did you walk your cat today?
+            </p>
+            {/* Arrow pointing down to the button */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                animation: "bounce 1s infinite",
+              }}
+            >
+              <svg
+                width="32"
+                height="32"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#c1b400"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{
+                  transform: "rotate(90deg)",
+                }}
+              >
+                <path d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+            </div>
+            <style>{`
+              @keyframes bounce {
+                0%, 100% {
+                  transform: translateX(0);
+                }
+                50% {
+                  transform: translateX(8px);
+                }
+              }
+            `}</style>
+          </div>
+        )}
+
         {/* Main check-in button */}
         <CheckinButton
           checkedIn={checkin.status.checkedIn}

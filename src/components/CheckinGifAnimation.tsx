@@ -26,6 +26,7 @@ export function CheckinGifAnimation({
 }: CheckinGifAnimationProps) {
   const [shouldRender, setShouldRender] = useState(false);
   const [gifLoaded, setGifLoaded] = useState(false);
+  const [gifError, setGifError] = useState(false);
   const [showGif, setShowGif] = useState(false);
 
   useEffect(() => {
@@ -33,6 +34,7 @@ export function CheckinGifAnimation({
       setShouldRender(false);
       setShowGif(false);
       setGifLoaded(false);
+      setGifError(false);
       return;
     }
 
@@ -80,8 +82,10 @@ export function CheckinGifAnimation({
 
   const handleGifError = () => {
     console.error("[CheckinGifAnimation] Failed to load GIF:", gifUrl);
-    // Still show something even if GIF fails to load
+    // Mark as loaded (so loading indicator disappears) but show error state
     setGifLoaded(true);
+    setGifError(true);
+    // Note: Timer still runs for full 5 seconds even if GIF fails
   };
 
   if (!shouldRender) return null;
@@ -129,26 +133,47 @@ export function CheckinGifAnimation({
               color: "#c1b400",
               fontSize: 24,
               fontWeight: 700,
+              textAlign: "center",
             }}
           >
             Loading...
           </div>
         )}
 
+        {/* Error state - show if GIF fails to load */}
+        {gifError && (
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              color: "#c1b400",
+              fontSize: 24,
+              fontWeight: 700,
+              textAlign: "center",
+            }}
+          >
+            Check-in successful! 🎉
+          </div>
+        )}
+
         {/* GIF image - full screen */}
-        <img
-          src={gifUrl}
-          alt="Check-in animation"
-          onLoad={handleGifLoad}
-          onError={handleGifError}
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "contain", // Maintain aspect ratio, fit within screen
-            objectPosition: "center",
-            display: gifLoaded ? "block" : "none",
-          }}
-        />
+        {!gifError && (
+          <img
+            src={gifUrl}
+            alt="Check-in animation"
+            onLoad={handleGifLoad}
+            onError={handleGifError}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "contain", // Maintain aspect ratio, fit within screen
+              objectPosition: "center",
+              display: gifLoaded ? "block" : "none",
+            }}
+          />
+        )}
 
         {/* Optional: Add a subtle overlay or effects */}
         <div

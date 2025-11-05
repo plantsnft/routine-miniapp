@@ -109,6 +109,20 @@ export function TokenTicker() {
     return `$${value.toFixed(2)}`;
   };
 
+  // Format price nicely - handle very small numbers without scientific notation
+  const formatPrice = (price: number): string => {
+    if (price >= 0.01) {
+      return price.toFixed(6);
+    } else if (price >= 0.0001) {
+      return price.toFixed(8);
+    } else if (price >= 0.000001) {
+      return price.toFixed(10);
+    } else {
+      // For very small prices, show up to 12 decimal places
+      return price.toFixed(12).replace(/\.?0+$/, '');
+    }
+  };
+
 
   // Format token amount for display
   const formatTokenAmount = (amount: string): string => {
@@ -129,8 +143,8 @@ export function TokenTicker() {
         MCap: {tokenData.marketCap > 0 ? formatCurrency(tokenData.marketCap) : "N/A"}
       </span>
     ) : null,
-    // 24h change second (performance indicator)
-    tokenData && tokenData.priceChange24h !== null && tokenData.priceChange24h !== 0 ? (
+    // 24h change second (performance indicator) - always show if available
+    tokenData && tokenData.priceChange24h !== null ? (
       <span
         key="change"
         style={{
@@ -138,18 +152,18 @@ export function TokenTicker() {
           fontWeight: 600,
         }}
       >
-        24h: {isPositive ? "+" : ""}
+        24HR: {isPositive ? "+" : ""}
         {priceChange.toFixed(2)}%
       </span>
     ) : null,
-    // Price (less important, but still useful)
+    // Price (less important, but still useful) - format nicely without scientific notation
     loading && !tokenData ? (
       <span key="loading" style={{ color: "#ffffff", opacity: 0.7 }}>
         Loading...
       </span>
     ) : tokenData && tokenData.price !== null && tokenData.price > 0 ? (
       <span key="price" style={{ color: "#ffffff", opacity: 0.8 }}>
-        ${tokenData.price.toExponential(3)}
+        ${formatPrice(tokenData.price)}
       </span>
     ) : null,
     // Volume 24h

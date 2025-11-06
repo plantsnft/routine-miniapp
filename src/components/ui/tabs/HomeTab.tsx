@@ -84,54 +84,17 @@ export function HomeTab() {
   }, [showCreatorsModal]);
 
   return (
-    <div className="px-6 py-4" style={{ background: "transparent", minHeight: "100vh", position: "relative" }}>
-      {/* Cat pattern borders - alternating black and gold vertical stripes representing cats */}
-      <div
-        style={{
-          position: "fixed",
-          left: 0,
-          top: 0,
-          bottom: 0,
-          width: "30px",
-          background: "repeating-linear-gradient(to bottom, #c1b400 0px, #c1b400 25px, #000000 25px, #000000 50px)",
-          opacity: 0.15,
-          zIndex: 0,
-          pointerEvents: "none",
-        }}
-      />
-      <div
-        style={{
-          position: "fixed",
-          right: 0,
-          top: 0,
-          bottom: 0,
-          width: "30px",
-          background: "repeating-linear-gradient(to bottom, #000000 0px, #000000 25px, #c1b400 25px, #c1b400 50px)",
-          opacity: 0.15,
-          zIndex: 0,
-          pointerEvents: "none",
-        }}
-      />
-      
+    <div 
+      className="px-6 py-4" 
+      style={{ 
+        backgroundImage: "url(/wallpaper.png)",
+        backgroundRepeat: "repeat",
+        backgroundSize: "auto",
+        minHeight: "100vh", 
+        position: "relative" 
+      }}
+    >
       <div className="max-w-md mx-auto" style={{ position: "relative", zIndex: 1 }}>
-        {/* Logo - Catwalk logo image - bigger */}
-        <div style={{ textAlign: "center", marginBottom: 8, display: "flex", flexDirection: "column", alignItems: "center" }}>
-          <img 
-            src="/logo.png" 
-            alt="Catwalk Logo" 
-            style={{ 
-              maxWidth: "30%",
-              width: "30%",
-              height: "auto",
-              objectFit: "contain",
-            }}
-            onError={(e) => {
-              // Fallback to placeholder if image doesn't load
-              const target = e.target as HTMLImageElement;
-              target.style.display = "none";
-            }}
-          />
-        </div>
 
         {/* Featured Photo - Add your photo here */}
         <div style={{ textAlign: "center", marginBottom: 16 }}>

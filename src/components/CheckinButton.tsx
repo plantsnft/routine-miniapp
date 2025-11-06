@@ -100,7 +100,7 @@ export function CheckinButton({
                 Next walk starts {timeUntilNext}
               </span>
             )}
-            {totalCheckins !== null && totalCheckins > 0 && (
+            {totalCheckins !== null && totalCheckins !== undefined && totalCheckins > 0 && (
               <span style={{ 
                 color: "#000000",
                 marginLeft: timeUntilNext ? 8 : 0,

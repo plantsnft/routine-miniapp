@@ -217,7 +217,7 @@ export function VideoPlayer({
   useEffect(() => {
     if (videoRef.current && isHLS) {
       const canPlayHLS = videoRef.current.canPlayType('application/vnd.apple.mpegurl');
-      setUseNativeHLS(!!canPlayHLS && canPlayHLS !== '');
+      setUseNativeHLS(!!canPlayHLS);
     } else if (!isHLS) {
       setUseNativeHLS(true); // Regular video files use native playback
     }

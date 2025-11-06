@@ -200,7 +200,7 @@ export async function GET(req: NextRequest) {
           {
             username: u.username,
             displayName: u.display_name,
-            pfp_url: u.pfp_url || u.pfp?.url || undefined,
+            pfp_url: u.pfp_url || undefined,
             allAddresses: allAddresses,
           },
         ];

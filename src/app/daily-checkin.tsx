@@ -144,16 +144,7 @@ export default function DailyCheckin() {
           </a>
         </p>
 
-        {/* Display current streak and check-in info if user is signed in */}
-        {fid && checkin.status.streak !== null && checkin.status.streak > 0 && (
-          <StreakDisplay
-            streak={checkin.status.streak}
-            totalCheckins={checkin.status.totalCheckins}
-            lastCheckIn={checkin.status.lastCheckIn}
-            checkedIn={checkin.status.checkedIn}
-            timeUntilNext={checkin.status.timeUntilNext}
-          />
-        )}
+        {/* StreakDisplay removed - now integrated into CheckinButton */}
 
         {/* Show sign-in button only as fallback if auto-sign in failed and we're not in Warpcast */}
         {!fid &&
@@ -289,6 +280,9 @@ export default function DailyCheckin() {
             checkedIn={checkin.status.checkedIn}
             saving={checkin.saving}
             onClick={handleCheckIn}
+            streak={checkin.status.streak}
+            totalCheckins={checkin.status.totalCheckins}
+            timeUntilNext={checkin.status.timeUntilNext}
           />
         </div>
 

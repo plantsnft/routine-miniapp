@@ -275,23 +275,62 @@ export async function GET() {
 
     // Format the casts for the feed
     const formattedCasts = casts.map((cast: any) => {
-        // Extract images/embeds from the cast
+        // Extract images/embeds from the cast - comprehensive extraction
         const images: string[] = [];
-        if (cast.embeds) {
+        
+        // Method 1: Check embeds array
+        if (cast.embeds && Array.isArray(cast.embeds)) {
           cast.embeds.forEach((embed: any) => {
-            if (embed.url && embed.url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+            // Direct URL that's an image
+            if (embed.url && embed.url.match(/\.(jpg|jpeg|png|gif|webp|avif|svg)$/i)) {
               images.push(embed.url);
-            } else if (embed.images && Array.isArray(embed.images)) {
+            }
+            // Images array in embed
+            if (embed.images && Array.isArray(embed.images)) {
               embed.images.forEach((img: any) => {
                 if (typeof img === 'string') {
                   images.push(img);
-                } else if (img.url) {
-                  images.push(img.url);
+                } else if (img && typeof img === 'object') {
+                  if (img.url) images.push(img.url);
+                  if (img.image_url) images.push(img.image_url);
+                  if (img.src) images.push(img.src);
                 }
               });
             }
+            // Single image property
+            if (embed.image_url) images.push(embed.image_url);
+            if (embed.image) images.push(embed.image);
           });
         }
+        
+        // Method 2: Check attachments (common in Neynar API)
+        if (cast.attachments && Array.isArray(cast.attachments)) {
+          cast.attachments.forEach((attachment: any) => {
+            if (attachment.url && attachment.url.match(/\.(jpg|jpeg|png|gif|webp|avif|svg)$/i)) {
+              images.push(attachment.url);
+            }
+            if (attachment.image_url) images.push(attachment.image_url);
+            if (attachment.media_url) images.push(attachment.media_url);
+          });
+        }
+        
+        // Method 3: Check media array (if present)
+        if (cast.media && Array.isArray(cast.media)) {
+          cast.media.forEach((media: any) => {
+            if (media.url) images.push(media.url);
+            if (media.image_url) images.push(media.image_url);
+            if (media.thumbnail_url) images.push(media.thumbnail_url);
+          });
+        }
+        
+        // Method 4: Direct image properties on cast
+        if (cast.image_url) images.push(cast.image_url);
+        if (cast.image) images.push(cast.image);
+        
+        // Remove duplicates and filter valid image URLs
+        const uniqueImages = Array.from(new Set(images.filter((url: string) => url && url.startsWith('http'))));
+        
+        console.log(`[Channel Feed] Cast ${cast.hash} has ${uniqueImages.length} images extracted`);
 
         return {
           hash: cast.hash,
@@ -303,7 +342,7 @@ export async function GET() {
             pfp: cast.author?.pfp?.url || cast.author?.pfp_url || null,
           },
           timestamp: cast.timestamp || new Date().toISOString(),
-          images,
+          images: uniqueImages,
           likes: cast.reactions?.likes?.length || cast.reactions?.likes_count || 0,
           recasts: cast.reactions?.recasts?.length || cast.reactions?.recasts_count || 0,
           replies: cast.replies?.count || 0,

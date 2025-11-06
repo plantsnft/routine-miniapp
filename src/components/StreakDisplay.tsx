@@ -73,7 +73,7 @@ export function StreakDisplay({
             fontSize: 12,
           }}
         >
-          Cat has walk {streak} day{streak === 1 ? "" : "s"} in a row
+          {streak} day{streak === 1 ? "" : "s"} catwalking straight 🔥
         </p>
         {checkedIn && timeUntilNext && (
           <span style={{ color: "#000000", fontSize: 10, fontWeight: 400, marginLeft: 8 }}>
@@ -81,10 +81,10 @@ export function StreakDisplay({
           </span>
         )}
       </div>
-      {/* Second line: All-time walks */}
+      {/* Second line: Lifetime catwalks */}
       {totalCheckins !== null && totalCheckins > 0 && (
         <p style={{ margin: 0, color: "#000000", fontSize: 10, fontWeight: 400 }}>
-          {totalCheckins} All-Time Walk{totalCheckins === 1 ? "" : "s"}
+          Lifetime Catwalks: {totalCheckins}
         </p>
       )}
     </div>

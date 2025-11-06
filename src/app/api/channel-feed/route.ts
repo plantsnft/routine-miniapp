@@ -274,7 +274,22 @@ export async function GET() {
     }
 
     // Format the casts for the feed
-    const formattedCasts = casts.map((cast: any) => {
+    const formattedCasts = casts.map((cast: any, index: number) => {
+        // Debug: Log cast structure for first cast to understand data format
+        if (index === 0) {
+          console.log("[Channel Feed] Sample cast structure:", JSON.stringify(cast, null, 2));
+          console.log("[Channel Feed] Cast keys:", Object.keys(cast));
+          if (cast.embeds) {
+            console.log("[Channel Feed] Embeds:", JSON.stringify(cast.embeds, null, 2));
+          }
+          if (cast.attachments) {
+            console.log("[Channel Feed] Attachments:", JSON.stringify(cast.attachments, null, 2));
+          }
+          if (cast.media) {
+            console.log("[Channel Feed] Media:", JSON.stringify(cast.media, null, 2));
+          }
+        }
+        
         // Extract images/embeds from the cast - comprehensive extraction
         const images: string[] = [];
         
@@ -300,6 +315,38 @@ export async function GET() {
             // Single image property
             if (embed.image_url) images.push(embed.image_url);
             if (embed.image) images.push(embed.image);
+            
+            // OpenGraph metadata (common in Neynar)
+            if (embed.open_graph) {
+              const og = embed.open_graph;
+              if (og.image) {
+                if (typeof og.image === 'string') {
+                  images.push(og.image);
+                } else if (og.image.url) {
+                  images.push(og.image.url);
+                }
+              }
+              if (og.images && Array.isArray(og.images)) {
+                og.images.forEach((img: any) => {
+                  if (typeof img === 'string') images.push(img);
+                  else if (img.url) images.push(img.url);
+                });
+              }
+            }
+            // Metadata object
+            if (embed.metadata) {
+              const meta = embed.metadata;
+              if (meta.image) {
+                if (typeof meta.image === 'string') images.push(meta.image);
+                else if (meta.image.url) images.push(meta.image.url);
+              }
+              if (meta.images && Array.isArray(meta.images)) {
+                meta.images.forEach((img: any) => {
+                  if (typeof img === 'string') images.push(img);
+                  else if (img.url) images.push(img.url);
+                });
+              }
+            }
           });
         }
         

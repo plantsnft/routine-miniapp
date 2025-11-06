@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 /**
- * Sleeping cat component with animated zzz's.
+ * Sleeping cat component.
  * Shows when user has checked in for the day.
  */
 export function SleepingCat() {
@@ -25,24 +25,34 @@ export function SleepingCat() {
     };
   }, []);
 
+  // Don't render anything until GIF is loaded or error occurs
+  if (!gifLoaded && !gifError) {
+    return null;
+  }
+
+  // Only show emoji fallback if GIF actually failed to load
   if (gifError) {
-    // Fallback: show emoji cat if GIF fails to load
     return (
       <div
         style={{
-          display: "flex",
+          display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
           flexShrink: 0,
-          width: 54,
-          height: 54,
+          lineHeight: 1,
         }}
       >
         <div
           style={{
-            fontSize: 42,
+            width: 54,
+            height: 54,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
             animation: "float 2s ease-in-out infinite",
+            fontSize: 42,
             color: "#999999",
+            backgroundColor: "transparent",
           }}
         >
           🐱
@@ -51,6 +61,7 @@ export function SleepingCat() {
     );
   }
 
+  // Show GIF once loaded
   return (
     <div
       style={{
@@ -61,51 +72,30 @@ export function SleepingCat() {
         lineHeight: 1,
       }}
     >
-      {/* Sleeping cat GIF - inline with button text, transparent background */}
       <div
         style={{
-          position: "relative",
-          animation: "float 2s ease-in-out infinite",
           width: 54,
           height: 54,
           display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
-          verticalAlign: "middle",
+          animation: "float 2s ease-in-out infinite",
           backgroundColor: "transparent",
         }}
       >
-        {!gifLoaded && (
-          <div
-            style={{
-              width: 54,
-              height: 54,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#999999",
-              fontSize: 42,
-              backgroundColor: "transparent",
-            }}
-          >
-            🐱
-          </div>
-        )}
-        {gifLoaded && (
-          <img
-            src="/sleeping-cat.gif"
-            alt="Sleeping cat"
-            style={{
-              width: 54,
-              height: 54,
-              objectFit: "contain",
-              display: "block",
-              verticalAlign: "middle",
-              backgroundColor: "transparent",
-              mixBlendMode: "normal",
-            }}
-          />
-        )}
+        <img
+          src="/sleeping-cat.gif"
+          alt="Sleeping cat"
+          style={{
+            width: 54,
+            height: 54,
+            objectFit: "contain",
+            display: "block",
+            verticalAlign: "middle",
+            backgroundColor: "transparent",
+            mixBlendMode: "normal",
+          }}
+        />
       </div>
     </div>
   );

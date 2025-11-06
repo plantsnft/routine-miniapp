@@ -211,21 +211,36 @@ export function FeedTab() {
         <h2
           style={{
             color: "#c1b400",
+            fontSize: 28,
+            fontWeight: 900,
+            margin: 0,
+            marginBottom: 8,
+          }}
+        >
+          Live Feed
+        </h2>
+        <h3
+          style={{
+            color: "#c1b400",
             fontSize: 20,
             fontWeight: 700,
             margin: 0,
+            marginBottom: 8,
           }}
         >
-          Catwalk Channel{" "}
-          <span
-            style={{
-              fontSize: 28,
-              fontWeight: 900,
-            }}
-          >
-            Live Feed
-          </span>
-        </h2>
+          Catwalk Channel
+        </h3>
+        <p
+          style={{
+            color: "#ffffff",
+            fontSize: 12,
+            fontWeight: 400,
+            margin: 0,
+            fontStyle: "italic",
+          }}
+        >
+          World&apos;s First Entertainment Brand Coin
+        </p>
       </div>
 
       {/* Feed Posts - Show first 5 */}

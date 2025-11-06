@@ -122,15 +122,19 @@ export default function App(
         <WelcomePopup />
       </ErrorBoundary>
 
-      {/* Token Ticker at the very top */}
-      <ErrorBoundary>
-        <TokenTicker />
-      </ErrorBoundary>
+      {/* Token Ticker at the very top - Hide on Feed tab */}
+      {currentTab !== Tab.Feed && (
+        <ErrorBoundary>
+          <TokenTicker />
+        </ErrorBoundary>
+      )}
       
-      {/* Header section */}
-      <ErrorBoundary>
-        <Header neynarUser={neynarUser} />
-      </ErrorBoundary>
+      {/* Header section - Hide on Feed tab */}
+      {currentTab !== Tab.Feed && (
+        <ErrorBoundary>
+          <Header neynarUser={neynarUser} />
+        </ErrorBoundary>
+      )}
 
       {/* Main content and footer should be centered */}
       <div className="container py-2" style={{ paddingBottom: "100px" }}>

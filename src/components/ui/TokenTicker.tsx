@@ -224,7 +224,9 @@ export function TokenTicker() {
       onClick={handleTickerClick}
       style={{
         width: "100%",
-        background: "#000000",
+        backgroundImage: "url(/wallpaper.png)",
+        backgroundRepeat: "repeat",
+        backgroundSize: "10%",
         borderBottom: "1px solid #c1b400",
         padding: "6px 0",
         overflow: "hidden",
@@ -233,13 +235,13 @@ export function TokenTicker() {
         fontWeight: 500,
         lineHeight: "1.2",
         cursor: "pointer",
-        transition: "background 0.2s",
+        transition: "opacity 0.2s",
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.background = "#1a1a1a";
+        e.currentTarget.style.opacity = "0.9";
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.background = "#000000";
+        e.currentTarget.style.opacity = "1";
       }}
     >
       <div

@@ -104,6 +104,9 @@ export default function App(
   return (
     <div
       style={{
+        backgroundImage: "url(/wallpaper.png)",
+        backgroundRepeat: "repeat",
+        backgroundSize: "10%",
         paddingTop: context?.client.safeAreaInsets?.top ?? 0,
         paddingBottom: context?.client.safeAreaInsets?.bottom ?? 0,
         paddingLeft: context?.client.safeAreaInsets?.left ?? 0,

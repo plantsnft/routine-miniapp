@@ -79,7 +79,7 @@ export function LeaderboardTab() {
       style={{ 
         backgroundImage: "url(/wallpaper.png)",
         backgroundRepeat: "repeat",
-        backgroundSize: "5%",
+        backgroundSize: "10%",
         minHeight: "100vh", 
         position: "relative" 
       }}

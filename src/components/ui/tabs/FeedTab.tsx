@@ -59,7 +59,7 @@ export function FeedTab() {
     };
 
     fetchFeed();
-  }, []);
+  }, [context?.user?.fid]);
 
   const formatTime = (timestamp: string) => {
     const date = new Date(timestamp);

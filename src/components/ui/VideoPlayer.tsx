@@ -33,7 +33,7 @@ export function VideoPlayer({
 
     // Check if HLS and browser doesn't support native HLS
     const isHLS = videoUrl.includes('.m3u8');
-    let hls: any = null;
+    const hls: any = null; // Reserved for future hls.js integration
 
     // Try to load hls.js for browsers that don't support native HLS
     if (isHLS && typeof window !== 'undefined') {

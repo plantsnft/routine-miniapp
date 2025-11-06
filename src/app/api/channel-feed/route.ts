@@ -492,13 +492,13 @@ export async function GET(request: Request) {
       });
 
       // Check if viewer follows the channel (if viewerFid is provided)
-      let isFollowingChannel = false;
+      const isFollowingChannel = false; // TODO: Implement proper channel following check
       if (viewerFid) {
         try {
-          const client = getNeynarClient();
+          const _client = getNeynarClient();
           // Try to check user's channel following status
           // Note: This might require a different API call - for now, we'll check if user has any interaction with channel
-          // A more accurate check would be: client.fetchUserChannels({ fid: parseInt(viewerFid) })
+          // A more accurate check would be: _client.fetchUserChannels({ fid: parseInt(viewerFid) })
           // But that might not be available. For now, we'll default to false and refine later.
           // TODO: Implement proper channel following check
         } catch (_error) {

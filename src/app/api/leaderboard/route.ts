@@ -300,12 +300,26 @@ export async function GET(req: NextRequest) {
 
     // Sort based on sortBy parameter
     if (sortBy === "streak") {
-      // Sort by streak (descending), then by token balance as tiebreaker
+      // Sort by current streak (descending)
       entriesWithBalances.sort((a, b) => {
-        if (b.streak !== a.streak) {
-          return (b.streak || 0) - (a.streak || 0);
+        const streakA = a.streak || 0;
+        const streakB = b.streak || 0;
+        if (streakB !== streakA) {
+          return streakB - streakA;
         }
-        return (b.tokenBalance || 0) - (a.tokenBalance || 0);
+        // Tiebreaker: by total check-ins (descending)
+        return (b.total_checkins || 0) - (a.total_checkins || 0);
+      });
+    } else if (sortBy === "total_checkins") {
+      // Sort by total check-ins all time (descending)
+      entriesWithBalances.sort((a, b) => {
+        const totalA = a.total_checkins || 0;
+        const totalB = b.total_checkins || 0;
+        if (totalB !== totalA) {
+          return totalB - totalA;
+        }
+        // Tiebreaker: by current streak (descending)
+        return (b.streak || 0) - (a.streak || 0);
       });
     } else {
       // Sort by token balance (descending) - most to least holdings

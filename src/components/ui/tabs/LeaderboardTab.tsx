@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import type { LeaderboardEntry } from "~/lib/models";
 
-type SortBy = "holdings" | "streak";
+type SortBy = "holdings" | "streak" | "total_checkins";
+type WalkSortMode = "current_streak" | "all_time";
 
 /**
  * LeaderboardTab component displays two leaderboards:
@@ -19,6 +20,7 @@ type SortBy = "holdings" | "streak";
  */
 export function LeaderboardTab() {
   const [sortBy, setSortBy] = useState<SortBy>("holdings");
+  const [walkSortMode, setWalkSortMode] = useState<WalkSortMode>("current_streak");
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +33,11 @@ export function LeaderboardTab() {
       try {
         setLoading(true);
         setError(null);
-        const res = await fetch(`/api/leaderboard?sortBy=${sortBy}&limit=50`);
+        // For walk sorting, use the appropriate sortBy value
+        const actualSortBy = sortBy === "streak" && walkSortMode === "all_time" 
+          ? "total_checkins" 
+          : sortBy;
+        const res = await fetch(`/api/leaderboard?sortBy=${actualSortBy}&limit=50`);
         const data = await res.json();
 
         if (data?.ok && data?.entries) {
@@ -48,7 +54,7 @@ export function LeaderboardTab() {
     };
 
     fetchLeaderboard();
-  }, [sortBy]);
+  }, [sortBy, walkSortMode]);
 
   const formatTokenBalance = (balance: number | undefined): string => {
     if (balance === undefined || balance === 0) return "0";
@@ -187,9 +193,59 @@ export function LeaderboardTab() {
               transition: "all 0.2s",
             }}
           >
-            🚶 Most Walks
+            🐱 Most Walks
           </button>
         </div>
+
+        {/* Walk sorting mode toggle - only show when Most Walks is selected */}
+        {sortBy === "streak" && (
+          <div
+            style={{
+              marginBottom: 20,
+              display: "flex",
+              gap: 8,
+              background: "#000000",
+              border: "2px solid #c1b400",
+              borderRadius: 12,
+              padding: 4,
+            }}
+          >
+            <button
+              onClick={() => setWalkSortMode("current_streak")}
+              style={{
+                flex: 1,
+                padding: "8px 12px",
+                background: walkSortMode === "current_streak" ? "#c1b400" : "transparent",
+                color: walkSortMode === "current_streak" ? "#000000" : "#c1b400",
+                border: "none",
+                borderRadius: 8,
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+                transition: "all 0.2s",
+              }}
+            >
+              Current Streak
+            </button>
+            <button
+              onClick={() => setWalkSortMode("all_time")}
+              style={{
+                flex: 1,
+                padding: "8px 12px",
+                background: walkSortMode === "all_time" ? "#c1b400" : "transparent",
+                color: walkSortMode === "all_time" ? "#000000" : "#c1b400",
+                border: "none",
+                borderRadius: 8,
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+                transition: "all 0.2s",
+              }}
+            >
+              All Time
+            </button>
+          </div>
+        )}
 
         {/* Loading state */}
         {loading && (
@@ -221,7 +277,10 @@ export function LeaderboardTab() {
                 const fetchLeaderboard = async () => {
                   try {
                     setLoading(true);
-                    const res = await fetch(`/api/leaderboard?sortBy=${sortBy}&limit=50`);
+                    const actualSortBy = sortBy === "streak" && walkSortMode === "all_time" 
+                      ? "total_checkins" 
+                      : sortBy;
+                    const res = await fetch(`/api/leaderboard?sortBy=${actualSortBy}&limit=50`);
                     const data = await res.json();
                     if (data?.ok && data?.entries) {
                       setEntries(data.entries);
@@ -332,48 +391,35 @@ export function LeaderboardTab() {
                       </>
                     ) : (
                       <>
-                        <span
-                          style={{
-                            color: "#000000",
-                            fontSize: 13,
-                            background: "#c1b400",
-                            padding: "4px 10px",
-                            borderRadius: 6,
-                            fontWeight: 700,
-                          }}
-                        >
-                          🔥 {entry.streak} day{entry.streak === 1 ? "" : "s"}
-                        </span>
-                        {entry.tokenBalance !== undefined && entry.tokenBalance > 0 && (
+                        {/* Show the appropriate metric based on walk sort mode */}
+                        {walkSortMode === "current_streak" ? (
                           <span
                             style={{
-                              color: "#ffffff",
-                              fontSize: 12,
-                              background: "transparent",
-                              border: "1px solid #c1b400",
+                              color: "#000000",
+                              fontSize: 13,
+                              background: "#c1b400",
                               padding: "4px 10px",
                               borderRadius: 6,
-                              fontWeight: 600,
+                              fontWeight: 700,
                             }}
                           >
-                            💰 {formatTokenBalance(entry.tokenBalance)} $CATWALK
+                            🔥 {entry.streak} day{entry.streak === 1 ? "" : "s"}
                           </span>
-                        )}
-                        {entry.total_checkins !== undefined && entry.total_checkins > 0 && (
+                        ) : (
                           <span
                             style={{
-                              color: "#ffffff",
-                              fontSize: 12,
-                              background: "transparent",
-                              border: "1px solid #c1b400",
+                              color: "#000000",
+                              fontSize: 13,
+                              background: "#c1b400",
                               padding: "4px 10px",
                               borderRadius: 6,
-                              fontWeight: 600,
+                              fontWeight: 700,
                             }}
                           >
-                            ✅ {entry.total_checkins} check-in{entry.total_checkins === 1 ? "" : "s"}
+                            🐱 {entry.total_checkins || 0} walk{entry.total_checkins === 1 ? "" : "s"}
                           </span>
                         )}
+                        {/* Don't show token holdings in Most Walks tab */}
                       </>
                     )}
                   </div>

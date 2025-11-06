@@ -7,7 +7,6 @@ import { CheckinGifAnimation } from "~/components/CheckinGifAnimation";
 import { CheckinButton } from "~/components/CheckinButton";
 import { StreakDisplay } from "~/components/StreakDisplay";
 import { SleepingCat } from "~/components/SleepingCat";
-import { AddMiniAppPrompt } from "~/components/AddMiniAppPrompt";
 import { isInWarpcast } from "~/lib/auth";
 import { useMiniApp } from "@neynar/react";
 
@@ -31,8 +30,27 @@ export default function DailyCheckin() {
     }
   });
 
-  // Check if mini-app is added
-  const { added } = useMiniApp();
+  // Check if mini-app is added and prompt on first load if not added
+  const { added, actions } = useMiniApp();
+
+  // Prompt to add mini-app on first load (one-time only)
+  useEffect(() => {
+    // Only prompt once per session, and only if not already added
+    const hasPrompted = sessionStorage.getItem('catwalk-miniapp-prompted');
+    if (!added && !hasPrompted && actions) {
+      // Small delay to ensure smooth page load
+      const timer = setTimeout(() => {
+        try {
+          actions.addMiniApp();
+          sessionStorage.setItem('catwalk-miniapp-prompted', 'true');
+        } catch (error) {
+          console.error('[DailyCheckin] Error prompting to add mini-app:', error);
+        }
+      }, 1000); // 1 second delay after page load
+      
+      return () => clearTimeout(timer);
+    }
+  }, [added, actions]);
 
   // Initial fetch when fid is available (only once, prevent infinite loops)
   useEffect(() => {
@@ -274,11 +292,6 @@ export default function DailyCheckin() {
             onClick={handleCheckIn}
           />
         </div>
-
-        {/* Mini-app prompt - show when checked in and mini-app is not added */}
-        {checkin.status.checkedIn && !added && (
-          <AddMiniAppPrompt />
-        )}
 
         {/* Success message */}
         {showSuccessMessage && (

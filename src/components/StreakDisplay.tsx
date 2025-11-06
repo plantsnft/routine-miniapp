@@ -63,30 +63,31 @@ export function StreakDisplay({
         border: "1px solid #000000",
       }}
     >
-      {/* First line: Streak and next check-in time on one line */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-        <p
-          style={{
-            margin: 0,
-            color: "#000000",
-            fontWeight: 600,
-            fontSize: 12,
-          }}
-        >
-          {streak} day{streak === 1 ? "" : "s"} catwalking straight 🔥
-        </p>
+      {/* First line: Streak */}
+      <p
+        style={{
+          margin: 0,
+          marginBottom: 4,
+          color: "#000000",
+          fontWeight: 600,
+          fontSize: 12,
+        }}
+      >
+        {streak} Day{streak === 1 ? "" : "s"} Catwalking Straight 🔥
+      </p>
+      {/* Second line: Next walk starts and Lifetime catwalks on same line */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         {checkedIn && timeUntilNext && (
-          <span style={{ color: "#000000", fontSize: 10, fontWeight: 400, marginLeft: 8 }}>
-            {timeUntilNext}
+          <span style={{ color: "#000000", fontSize: 10, fontWeight: 400 }}>
+            Next walk starts {timeUntilNext}
+          </span>
+        )}
+        {totalCheckins !== null && totalCheckins > 0 && (
+          <span style={{ color: "#000000", fontSize: 10, fontWeight: 400, marginLeft: checkedIn && timeUntilNext ? 8 : 0 }}>
+            Lifetime Catwalks: {totalCheckins}
           </span>
         )}
       </div>
-      {/* Second line: Lifetime catwalks */}
-      {totalCheckins !== null && totalCheckins > 0 && (
-        <p style={{ margin: 0, color: "#000000", fontSize: 10, fontWeight: 400 }}>
-          Lifetime Catwalks: {totalCheckins}
-        </p>
-      )}
     </div>
   );
 }

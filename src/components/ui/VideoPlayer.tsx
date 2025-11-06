@@ -42,97 +42,68 @@ export function VideoPlayer({
       
       if (!canPlayHLS) {
         // Browser doesn't support native HLS - load hls.js from CDN
-        console.log("[VideoPlayer] Native HLS not supported, loading hls.js...");
-        
-        // Dynamically load hls.js from CDN
-        const loadHlsJs = async () => {
+        const setupHlsJs = (Hls: any) => {
+          if (!Hls.isSupported()) {
+            console.error("[VideoPlayer] HLS.js not supported");
+            setHasError(true);
+            return;
+          }
+
           try {
-            // Check if hls.js is already loaded
-            if ((window as any).Hls) {
-              const Hls = (window as any).Hls;
-              if (Hls.isSupported()) {
-                hlsInstanceRef.current = new Hls({
-                  enableWorker: true,
-                  lowLatencyMode: false,
+            hlsInstanceRef.current = new Hls({
+              enableWorker: true,
+              lowLatencyMode: false,
+            });
+            
+            hlsInstanceRef.current.loadSource(videoUrl);
+            hlsInstanceRef.current.attachMedia(video);
+            
+            hlsInstanceRef.current.on(Hls.Events.MANIFEST_PARSED, () => {
+              if (autoplay) {
+                video.play().catch((error) => {
+                  console.error("[VideoPlayer] Autoplay failed:", error);
                 });
-                
-                hlsInstanceRef.current.loadSource(videoUrl);
-                hlsInstanceRef.current.attachMedia(video);
-                
-                hlsInstanceRef.current.on(Hls.Events.MANIFEST_PARSED, () => {
-                  console.log("[VideoPlayer] HLS manifest parsed, ready to play");
-                  if (autoplay) {
-                    video.play().catch((error) => {
-                      console.error("[VideoPlayer] Autoplay failed:", error);
-                    });
-                  }
-                });
-                
-                hlsInstanceRef.current.on(Hls.Events.ERROR, (event: any, data: any) => {
-                  if (data.fatal) {
-                    console.error("[VideoPlayer] HLS fatal error:", data);
-                    setHasError(true);
-                  }
-                });
-              } else {
-                console.error("[VideoPlayer] HLS.js not supported");
+              }
+            });
+            
+            hlsInstanceRef.current.on(Hls.Events.ERROR, (_event: any, data: any) => {
+              if (data.fatal) {
+                console.error("[VideoPlayer] HLS fatal error:", data);
                 setHasError(true);
               }
-            } else {
-              // Load hls.js from CDN
-              const script = document.createElement('script');
-              script.src = 'https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js';
-              script.async = true;
-              
-              script.onload = () => {
-                const Hls = (window as any).Hls;
-                if (Hls && Hls.isSupported()) {
-                  hlsInstanceRef.current = new Hls({
-                    enableWorker: true,
-                    lowLatencyMode: false,
-                  });
-                  
-                  hlsInstanceRef.current.loadSource(videoUrl);
-                  hlsInstanceRef.current.attachMedia(video);
-                  
-                  hlsInstanceRef.current.on(Hls.Events.MANIFEST_PARSED, () => {
-                    console.log("[VideoPlayer] HLS manifest parsed, ready to play");
-                    if (autoplay) {
-                      video.play().catch((error) => {
-                        console.error("[VideoPlayer] Autoplay failed:", error);
-                      });
-                    }
-                  });
-                  
-                  hlsInstanceRef.current.on(Hls.Events.ERROR, (event: any, data: any) => {
-                    if (data.fatal) {
-                      console.error("[VideoPlayer] HLS fatal error:", data);
-                      setHasError(true);
-                    }
-                  });
-                } else {
-                  console.error("[VideoPlayer] HLS.js not supported after loading");
-                  setHasError(true);
-                }
-              };
-              
-              script.onerror = () => {
-                console.error("[VideoPlayer] Failed to load hls.js from CDN");
-                setHasError(true);
-              };
-              
-              document.head.appendChild(script);
-            }
+            });
           } catch (error) {
             console.error("[VideoPlayer] Error setting up hls.js:", error);
             setHasError(true);
           }
         };
-        
-        loadHlsJs();
-      } else {
-        // Native HLS is supported (Safari, newer Chrome/Edge)
-        console.log("[VideoPlayer] Native HLS supported");
+
+        // Check if hls.js is already loaded
+        if ((window as any).Hls) {
+          setupHlsJs((window as any).Hls);
+        } else {
+          // Load hls.js from CDN
+          const script = document.createElement('script');
+          script.src = 'https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js';
+          script.async = true;
+          
+          script.onload = () => {
+            const Hls = (window as any).Hls;
+            if (Hls) {
+              setupHlsJs(Hls);
+            } else {
+              console.error("[VideoPlayer] HLS.js not available after loading");
+              setHasError(true);
+            }
+          };
+          
+          script.onerror = () => {
+            console.error("[VideoPlayer] Failed to load hls.js from CDN");
+            setHasError(true);
+          };
+          
+          document.head.appendChild(script);
+        }
       }
     }
 

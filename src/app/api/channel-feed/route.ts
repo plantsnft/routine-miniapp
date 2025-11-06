@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getNeynarClient } from "~/lib/neynar";
 
 const CATWALK_CHANNEL_ID = "catwalk";
+const CATWALK_CHANNEL_PARENT_URL = `https://warpcast.com/~/channel/${CATWALK_CHANNEL_ID}`;
 
 export async function GET() {
   try {
@@ -19,38 +20,88 @@ export async function GET() {
     // Try multiple endpoint formats to find the correct one
     let casts: any[] = [];
     let lastError: any = null;
+    let debugInfo: string[] = [];
 
-    // Strategy 1: Try using parent_url parameter (channels are often accessed via parent_url)
+    // Strategy 1: Try using fetchFeed with parent_url (most common for channels)
     try {
-      const response = await fetch(
-        `https://api.neynar.com/v2/farcaster/feed?feed_type=channel&parent_url=https://warpcast.com/~/channel/${CATWALK_CHANNEL_ID}&limit=5`,
-        {
-          headers: {
-            "x-api-key": apiKey,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        casts = data.casts || data.result?.casts || [];
-        if (casts.length > 0) {
-          console.log(`[Channel Feed] Successfully fetched ${casts.length} casts using parent_url strategy`);
+      const client = getNeynarClient();
+      console.log("[Channel Feed] Strategy 1: Trying fetchFeed with parent_url");
+      
+      // Check if fetchFeed method exists on the client
+      if (typeof (client as any).fetchFeed === 'function') {
+        try {
+          const feedResponse = await (client as any).fetchFeed({
+            feedType: 'channel',
+            parentUrl: CATWALK_CHANNEL_PARENT_URL,
+            limit: 5,
+          });
+          
+          casts = feedResponse?.casts || feedResponse?.result?.casts || [];
+          if (casts.length > 0) {
+            console.log(`[Channel Feed] ✅ Strategy 1 (SDK fetchFeed) succeeded: ${casts.length} casts`);
+            debugInfo.push(`Strategy 1 (SDK fetchFeed): Success - ${casts.length} casts`);
+          } else {
+            debugInfo.push(`Strategy 1 (SDK fetchFeed): No casts returned`);
+          }
+        } catch (sdkError: any) {
+          debugInfo.push(`Strategy 1 (SDK fetchFeed): Error - ${sdkError?.message}`);
+          console.log(`[Channel Feed] Strategy 1 (SDK fetchFeed) error:`, sdkError?.message);
+          lastError = sdkError;
         }
       } else {
-        const errorText = await response.text().catch(() => response.statusText);
-        console.log(`[Channel Feed] Strategy 1 (parent_url) failed: ${response.status} ${errorText}`);
-        lastError = new Error(`Strategy 1 failed: ${response.status} ${errorText}`);
+        debugInfo.push(`Strategy 1 (SDK fetchFeed): Method not available`);
       }
     } catch (error: any) {
-      console.log(`[Channel Feed] Strategy 1 (parent_url) error:`, error?.message);
+      debugInfo.push(`Strategy 1 (SDK fetchFeed): Setup error - ${error?.message}`);
+      console.log(`[Channel Feed] Strategy 1 setup error:`, error?.message);
       lastError = error;
     }
 
-    // Strategy 2: Try channel_id parameter with v2 endpoint
+    // Strategy 2: Try direct API call with parent_url
     if (casts.length === 0) {
       try {
+        console.log("[Channel Feed] Strategy 2: Trying direct API with parent_url");
+        const response = await fetch(
+          `https://api.neynar.com/v2/farcaster/feed?feed_type=channel&parent_url=${encodeURIComponent(CATWALK_CHANNEL_PARENT_URL)}&limit=5`,
+          {
+            headers: {
+              "x-api-key": apiKey,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        const responseText = await response.text();
+        debugInfo.push(`Strategy 2 (parent_url API): Status ${response.status}`);
+        
+        if (response.ok) {
+          try {
+            const data = JSON.parse(responseText);
+            casts = data.casts || data.result?.casts || [];
+            if (casts.length > 0) {
+              console.log(`[Channel Feed] ✅ Strategy 2 (parent_url API) succeeded: ${casts.length} casts`);
+              debugInfo.push(`Strategy 2: Success - ${casts.length} casts`);
+            } else {
+              debugInfo.push(`Strategy 2: Response OK but no casts (response keys: ${Object.keys(data).join(', ')})`);
+            }
+          } catch (parseError) {
+            debugInfo.push(`Strategy 2: JSON parse error - ${responseText.substring(0, 200)}`);
+          }
+        } else {
+          debugInfo.push(`Strategy 2: Failed - ${responseText.substring(0, 200)}`);
+          lastError = new Error(`Strategy 2 failed: ${response.status} ${responseText.substring(0, 100)}`);
+        }
+      } catch (error: any) {
+        debugInfo.push(`Strategy 2: Exception - ${error?.message}`);
+        console.log(`[Channel Feed] Strategy 2 error:`, error?.message);
+        lastError = error;
+      }
+    }
+
+    // Strategy 3: Try channel_id parameter with v2 endpoint
+    if (casts.length === 0) {
+      try {
+        console.log("[Channel Feed] Strategy 3: Trying channel_id API");
         const response = await fetch(
           `https://api.neynar.com/v2/farcaster/channel/casts?channel_id=${CATWALK_CHANNEL_ID}&limit=5`,
           {
@@ -61,29 +112,38 @@ export async function GET() {
           }
         );
 
+        const responseText = await response.text();
+        debugInfo.push(`Strategy 3 (channel_id API): Status ${response.status}`);
+        
         if (response.ok) {
-          const data = await response.json();
-          casts = data.casts || data.result?.casts || [];
-          if (casts.length > 0) {
-            console.log(`[Channel Feed] Successfully fetched ${casts.length} casts using channel_id strategy`);
+          try {
+            const data = JSON.parse(responseText);
+            casts = data.casts || data.result?.casts || [];
+            if (casts.length > 0) {
+              console.log(`[Channel Feed] ✅ Strategy 3 (channel_id API) succeeded: ${casts.length} casts`);
+              debugInfo.push(`Strategy 3: Success - ${casts.length} casts`);
+            } else {
+              debugInfo.push(`Strategy 3: Response OK but no casts (response keys: ${Object.keys(data).join(', ')})`);
+            }
+          } catch (parseError) {
+            debugInfo.push(`Strategy 3: JSON parse error - ${responseText.substring(0, 200)}`);
           }
         } else {
-          const errorText = await response.text().catch(() => response.statusText);
-          console.log(`[Channel Feed] Strategy 2 (channel_id) failed: ${response.status} ${errorText}`);
-          lastError = new Error(`Strategy 2 failed: ${response.status} ${errorText}`);
+          debugInfo.push(`Strategy 3: Failed - ${responseText.substring(0, 200)}`);
+          lastError = new Error(`Strategy 3 failed: ${response.status} ${responseText.substring(0, 100)}`);
         }
       } catch (error: any) {
-        console.log(`[Channel Feed] Strategy 2 (channel_id) error:`, error?.message);
+        debugInfo.push(`Strategy 3: Exception - ${error?.message}`);
+        console.log(`[Channel Feed] Strategy 3 error:`, error?.message);
         lastError = error;
       }
     }
 
-    // Strategy 3: Try using the Neynar SDK client's feed method
+    // Strategy 4: Try feed endpoint with channel_id
     if (casts.length === 0) {
       try {
-        const client = getNeynarClient();
-        // Try using fetchFeed method if available
-        const feedResponse = await fetch(
+        console.log("[Channel Feed] Strategy 4: Trying feed endpoint with channel_id");
+        const response = await fetch(
           `https://api.neynar.com/v2/farcaster/feed?feed_type=channel&channel_id=${CATWALK_CHANNEL_ID}&limit=5`,
           {
             headers: {
@@ -93,30 +153,46 @@ export async function GET() {
           }
         );
 
-        if (feedResponse.ok) {
-          const data = await feedResponse.json();
-          casts = data.casts || data.result?.casts || [];
-          if (casts.length > 0) {
-            console.log(`[Channel Feed] Successfully fetched ${casts.length} casts using feed endpoint`);
+        const responseText = await response.text();
+        debugInfo.push(`Strategy 4 (feed+channel_id API): Status ${response.status}`);
+        
+        if (response.ok) {
+          try {
+            const data = JSON.parse(responseText);
+            casts = data.casts || data.result?.casts || [];
+            if (casts.length > 0) {
+              console.log(`[Channel Feed] ✅ Strategy 4 (feed+channel_id API) succeeded: ${casts.length} casts`);
+              debugInfo.push(`Strategy 4: Success - ${casts.length} casts`);
+            } else {
+              debugInfo.push(`Strategy 4: Response OK but no casts (response keys: ${Object.keys(data).join(', ')})`);
+            }
+          } catch (parseError) {
+            debugInfo.push(`Strategy 4: JSON parse error - ${responseText.substring(0, 200)}`);
           }
         } else {
-          const errorText = await feedResponse.text().catch(() => feedResponse.statusText);
-          console.log(`[Channel Feed] Strategy 3 (feed endpoint) failed: ${feedResponse.status} ${errorText}`);
-          lastError = new Error(`Strategy 3 failed: ${feedResponse.status} ${errorText}`);
+          debugInfo.push(`Strategy 4: Failed - ${responseText.substring(0, 200)}`);
+          lastError = new Error(`Strategy 4 failed: ${response.status} ${responseText.substring(0, 100)}`);
         }
       } catch (error: any) {
-        console.log(`[Channel Feed] Strategy 3 (feed endpoint) error:`, error?.message);
+        debugInfo.push(`Strategy 4: Exception - ${error?.message}`);
+        console.log(`[Channel Feed] Strategy 4 error:`, error?.message);
         lastError = error;
       }
     }
 
     if (casts.length === 0) {
-      console.error("[Channel Feed] All strategies failed. Last error:", lastError);
+      console.error("[Channel Feed] All strategies failed. Debug info:", debugInfo);
+      console.error("[Channel Feed] Last error:", lastError);
       return NextResponse.json(
         { 
           error: "Unable to fetch channel feed. Please check the channel ID and API key.",
           casts: [],
-          debug: lastError?.message || "No casts found via any strategy"
+          debug: {
+            message: lastError?.message || "No casts found via any strategy",
+            strategies: debugInfo,
+            channelId: CATWALK_CHANNEL_ID,
+            parentUrl: CATWALK_CHANNEL_PARENT_URL,
+          }
         },
         { status: 500 }
       );

@@ -22,7 +22,7 @@ interface Cast {
 export function FeedTab() {
   const [casts, setCasts] = useState<Cast[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | { message: string; debug?: any } | null>(null);
 
   useEffect(() => {
     const fetchFeed = async () => {
@@ -32,9 +32,12 @@ export function FeedTab() {
         const data = await res.json();
         
         if (data.error) {
-          setError(data.error);
+          // Include debug info if available
+          setError(data.debug ? { message: data.error, debug: data.debug } : data.error);
+          console.error("[FeedTab] API error:", data);
         } else {
           setCasts(data.casts || []);
+          setError(null);
         }
       } catch (err) {
         console.error("Error fetching feed:", err);
@@ -116,9 +119,20 @@ export function FeedTab() {
           <p style={{ color: "#c1b400", fontSize: 16, marginBottom: 12 }}>
             Unable to load feed
           </p>
-          <p style={{ color: "#ffffff", fontSize: 14, opacity: 0.7 }}>
-            {error}
+          <p style={{ color: "#ffffff", fontSize: 14, opacity: 0.7, marginBottom: 8 }}>
+            {typeof error === 'object' ? error.message : error}
           </p>
+          {/* Show debug info if available */}
+          {typeof error === 'object' && (error as any).debug && (
+            <details style={{ color: "#ffffff", fontSize: 12, opacity: 0.6, marginTop: 12 }}>
+              <summary style={{ cursor: "pointer", color: "#c1b400", marginBottom: 8 }}>
+                Debug Info (click to expand)
+              </summary>
+              <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 10 }}>
+                {JSON.stringify((error as any).debug, null, 2)}
+              </pre>
+            </details>
+          )}
         </div>
       </div>
     );

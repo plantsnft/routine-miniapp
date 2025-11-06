@@ -13,6 +13,8 @@ interface Cast {
   };
   timestamp: string;
   images: string[];
+  hasVideo?: boolean;
+  videoUrl?: string | null;
   likes: number;
   recasts: number;
   replies: number;
@@ -289,8 +291,8 @@ export function FeedTab() {
             </div>
           </div>
 
-          {/* Post Images */}
-          {cast.images.length > 0 && (
+          {/* Post Images or Video */}
+          {cast.images.length > 0 ? (
             <div
               style={{
                 width: "100%",
@@ -312,7 +314,51 @@ export function FeedTab() {
                 }}
               />
             </div>
-          )}
+          ) : cast.hasVideo ? (
+            <div
+              style={{
+                width: "100%",
+                aspectRatio: "1",
+                background: "#1a1a1a",
+                position: "relative",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderBottom: "1px solid rgba(193, 180, 0, 0.2)",
+              }}
+            >
+              <div style={{ textAlign: "center" }}>
+                <div
+                  style={{
+                    fontSize: 48,
+                    marginBottom: 12,
+                  }}
+                >
+                  🎥
+                </div>
+                <p
+                  style={{
+                    color: "#c1b400",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    margin: 0,
+                  }}
+                >
+                  Video Post
+                </p>
+                <p
+                  style={{
+                    color: "#ffffff",
+                    fontSize: 12,
+                    opacity: 0.7,
+                    margin: "4px 0 0 0",
+                  }}
+                >
+                  Tap to view on Warpcast
+                </p>
+              </div>
+            </div>
+          ) : null}
 
           {/* Post Content */}
           <div style={{ padding: "16px" }}>

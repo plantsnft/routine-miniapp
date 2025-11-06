@@ -402,25 +402,8 @@ export async function GET() {
               });
             }
             
-            // If it's a video embed, try to generate thumbnail URL from video URL
-            // Farcaster videos sometimes have thumbnails at predictable paths
-            if (embed.url && embed.url.includes('stream.farcaster.xyz') && embed.url.includes('.m3u8')) {
-              // Try to construct thumbnail URL from video URL
-              const videoIdMatch = embed.url.match(/video\/([^/]+)/);
-              if (videoIdMatch) {
-                const videoId = videoIdMatch[1];
-                // Try common thumbnail URL patterns
-                const thumbnailUrls = [
-                  `https://stream.farcaster.xyz/v1/thumbnail/${videoId}`,
-                  `https://stream.farcaster.xyz/v1/video/${videoId}/thumbnail.jpg`,
-                  `https://stream.farcaster.xyz/v1/video/${videoId}/poster.jpg`,
-                ];
-                // Note: We'll add these but they might not exist - frontend will handle 404s
-                thumbnailUrls.forEach(url => {
-                  if (!images.includes(url)) images.push(url);
-                });
-              }
-            }
+            // Don't add constructed thumbnail URLs for videos - they don't exist and cause 404s
+            // Videos will be handled by the frontend with a video icon/placeholder
             
             // If embed has metadata but no type, check if URL looks like an image
             if (!embedType && embed.url) {
@@ -479,7 +462,12 @@ export async function GET() {
         // Remove duplicates and filter valid image URLs
         const uniqueImages = Array.from(new Set(images.filter((url: string) => url && url.startsWith('http'))));
         
-        console.log(`[Channel Feed] Cast ${cast.hash} has ${uniqueImages.length} images extracted`);
+        // Check if this cast has video embeds
+        const hasVideo = cast.embeds && cast.embeds.some((embed: any) => 
+          embed.url && embed.url.includes('.m3u8')
+        );
+        
+        console.log(`[Channel Feed] Cast ${cast.hash} has ${uniqueImages.length} images extracted, hasVideo=${hasVideo}`);
 
         return {
           hash: cast.hash,
@@ -492,6 +480,8 @@ export async function GET() {
           },
           timestamp: cast.timestamp || new Date().toISOString(),
           images: uniqueImages,
+          hasVideo,
+          videoUrl: hasVideo ? cast.embeds.find((e: any) => e.url && e.url.includes('.m3u8'))?.url : null,
           likes: cast.reactions?.likes?.length || cast.reactions?.likes_count || 0,
           recasts: cast.reactions?.recasts?.length || cast.reactions?.recasts_count || 0,
           replies: cast.replies?.count || 0,

@@ -87,9 +87,7 @@ export function HomeTab() {
     <div 
       className="px-6 py-4" 
       style={{ 
-        backgroundImage: "url(/wallpaper.png)",
-        backgroundRepeat: "repeat",
-        backgroundSize: "10%",
+        background: "transparent",
         minHeight: "100vh", 
         position: "relative" 
       }}

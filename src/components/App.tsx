@@ -115,18 +115,10 @@ export default function App(
         <TokenTicker />
       </ErrorBoundary>
       
-      {/* Header section with wallpaper background */}
-      <div
-        style={{
-          backgroundImage: "url(/wallpaper.png)",
-          backgroundRepeat: "repeat",
-          backgroundSize: "10%",
-        }}
-      >
-        <ErrorBoundary>
-          <Header neynarUser={neynarUser} />
-        </ErrorBoundary>
-      </div>
+      {/* Header section */}
+      <ErrorBoundary>
+        <Header neynarUser={neynarUser} />
+      </ErrorBoundary>
 
       {/* Main content and footer should be centered */}
       <div className="container py-2" style={{ paddingBottom: "100px" }}>

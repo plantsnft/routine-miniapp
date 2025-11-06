@@ -66,9 +66,7 @@ export function FeedTab() {
     return (
       <div
         style={{
-          backgroundImage: "url(/wallpaper.png)",
-          backgroundRepeat: "repeat",
-          backgroundSize: "10%",
+          background: "transparent",
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
@@ -98,9 +96,7 @@ export function FeedTab() {
     return (
       <div
         style={{
-          backgroundImage: "url(/wallpaper.png)",
-          backgroundRepeat: "repeat",
-          backgroundSize: "10%",
+          background: "transparent",
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
@@ -132,9 +128,7 @@ export function FeedTab() {
     return (
       <div
         style={{
-          backgroundImage: "url(/wallpaper.png)",
-          backgroundRepeat: "repeat",
-          backgroundSize: "10%",
+          background: "transparent",
           display: "flex",
           justifyContent: "center",
           alignItems: "center",

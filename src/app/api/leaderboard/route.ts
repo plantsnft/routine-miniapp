@@ -231,8 +231,15 @@ export async function GET(req: NextRequest) {
     });
 
     // Batch fetch all token balances at once
+    // Note: Ethereum addresses are case-insensitive, but we normalize to lowercase for consistency
     const allAddresses = Array.from(addressToFids.keys());
     const balancesMap = await getTokenBalancesBatch(allAddresses);
+    
+    // Normalize the balances map keys to lowercase for lookup
+    const normalizedBalancesMap = new Map<string, number>();
+    balancesMap.forEach((balance, addr) => {
+      normalizedBalancesMap.set(addr.toLowerCase(), balance);
+    });
 
     // Build leaderboard entries with token balances
     // For holdings mode: Include ALL users with verified addresses (even if no check-in)
@@ -252,7 +259,7 @@ export async function GET(req: NextRequest) {
         // This includes: verified wallets, custodial wallets, integrated wallets, bot wallets, etc.
         tokenBalance = userAddresses.reduce((sum, addr) => {
           const normalizedAddr = addr.toLowerCase();
-          const balance = balancesMap.get(normalizedAddr) || 0;
+          const balance = normalizedBalancesMap.get(normalizedAddr) || 0;
           return sum + balance;
         }, 0);
       }

@@ -274,59 +274,143 @@ export async function GET(req: NextRequest) {
       let totalHolders = 0;
       
       // 1. Get all token holders from BaseScan API (paginated)
+      // First, try to get holder count from token info
+      try {
+        const apiKeyParam = BASESCAN_API_KEY ? `&apikey=${BASESCAN_API_KEY}` : "";
+        
+        // Try token info endpoint first to get total holder count
+        const tokenInfoUrl = `https://api.basescan.org/api?module=token&action=tokeninfo&contractaddress=${TOKEN_ADDRESS}${apiKeyParam}`;
+        const tokenInfoResponse = await fetch(tokenInfoUrl, {
+          headers: { "User-Agent": "Catwalk-MiniApp" },
+        });
+        
+        if (tokenInfoResponse.ok) {
+          const tokenInfo = await tokenInfoResponse.json();
+          if (tokenInfo.status === "1" && tokenInfo.result && tokenInfo.result.length > 0) {
+            const holderCount = parseInt(tokenInfo.result[0].holders || "0", 10);
+            if (holderCount > 0) {
+              totalHolders = holderCount;
+              console.log(`[Leaderboard] Token info shows ${totalHolders} total holders`);
+            }
+          }
+        }
+      } catch (_infoError) {
+        console.log("[Leaderboard] Could not fetch token info, will try holder list");
+      }
+      
+      // Now fetch the actual holder list
       try {
         const apiKeyParam = BASESCAN_API_KEY ? `&apikey=${BASESCAN_API_KEY}` : "";
         let page = 1;
         const pageSize = 1000; // Max per page
         let hasMore = true;
         
+        console.log(`[Leaderboard] Fetching holders from BaseScan for token ${TOKEN_ADDRESS}...`);
+        
         while (hasMore && page <= 10) { // Limit to 10 pages (10,000 holders max) to avoid timeout
           const holderListUrl = `https://api.basescan.org/api?module=token&action=tokenholderlist&contractaddress=${TOKEN_ADDRESS}&page=${page}&offset=${pageSize}${apiKeyParam}`;
           
+          console.log(`[Leaderboard] Fetching page ${page} from BaseScan: ${holderListUrl.substring(0, 100)}...`);
           const holderResponse = await fetch(holderListUrl, {
             headers: { "User-Agent": "Catwalk-MiniApp" },
           });
           
           if (holderResponse.ok) {
             const holderData = await holderResponse.json();
-            if (holderData.status === "1" && holderData.result && Array.isArray(holderData.result)) {
-              holderData.result.forEach((holder: any) => {
-                const address = holder.TokenHolderAddress?.toLowerCase();
-                const balance = parseFloat(holder.TokenHolderQuantity || "0");
-                if (address && balance > 0) {
-                  addressToBalance.set(address, balance);
+            console.log(`[Leaderboard] BaseScan response for page ${page}: status=${holderData.status}, result type=${typeof holderData.result}, keys=${holderData.result ? Object.keys(holderData.result).join(',') : 'none'}`);
+            
+            if (holderData.status === "1" && holderData.result) {
+              // Check if result is an array or object
+              const holders = Array.isArray(holderData.result) ? holderData.result : [];
+              
+              if (holders.length > 0) {
+                holders.forEach((holder: any) => {
+                  // Try different possible field names
+                  const address = (holder.TokenHolderAddress || holder.address || holder.Address || holder.TokenHolder || "").toLowerCase();
+                  const balanceStr = holder.TokenHolderQuantity || holder.quantity || holder.balance || holder.Balance || holder.Value || "0";
+                  const balance = parseFloat(String(balanceStr).replace(/,/g, "")) || 0;
+                  
+                  if (address && address.startsWith("0x") && balance > 0) {
+                    addressToBalance.set(address, balance);
+                  }
+                });
+                
+                // Get total holders count from response
+                if (!totalHolders) {
+                  totalHolders = parseInt(holderData.result[0]?.TotalHolders || holderData.TotalHolders || String(addressToBalance.size), 10) || addressToBalance.size;
                 }
-              });
-              
-              totalHolders = parseInt(holderData.result[0]?.TotalHolders || "0", 10) || addressToBalance.size;
-              hasMore = holderData.result.length === pageSize;
-              console.log(`[Leaderboard] Fetched page ${page}: ${holderData.result.length} holders (Total so far: ${addressToBalance.size})`);
-              page++;
-              
-              // Small delay between pages
-              if (hasMore) {
-                await new Promise(resolve => setTimeout(resolve, 500));
+                hasMore = holders.length === pageSize;
+                console.log(`[Leaderboard] Fetched page ${page}: ${holders.length} holders (Total so far: ${addressToBalance.size}, Total holders: ${totalHolders})`);
+                page++;
+                
+                // Small delay between pages
+                if (hasMore) {
+                  await new Promise(resolve => setTimeout(resolve, 500));
+                }
+              } else {
+                console.log(`[Leaderboard] No more holders on page ${page}`);
+                hasMore = false;
               }
             } else {
+              console.error(`[Leaderboard] BaseScan API returned error status: ${holderData.status}, message: ${holderData.message || JSON.stringify(holderData).substring(0, 200)}`);
               hasMore = false;
             }
           } else {
-            console.error(`[Leaderboard] BaseScan API error: ${holderResponse.status}`);
+            const errorText = await holderResponse.text();
+            console.error(`[Leaderboard] BaseScan API error: ${holderResponse.status} - ${errorText.substring(0, 200)}`);
             hasMore = false;
           }
         }
         
-        console.log(`[Leaderboard] Total token holders found: ${totalHolders || addressToBalance.size}`);
-      } catch (holderError) {
-        console.error("[Leaderboard] Error fetching token holders from BaseScan:", holderError);
+        console.log(`[Leaderboard] Total token holders found: ${totalHolders || addressToBalance.size} (from ${addressToBalance.size} addresses)`);
+      } catch (holderError: any) {
+        console.error("[Leaderboard] Error fetching token holders from BaseScan:", holderError?.message || holderError);
       }
       
-      // 2. For each holder address, try to find their Farcaster FID using Neynar
-      console.log(`[Leaderboard] Looking up Farcaster FIDs for ${addressToBalance.size} token holders...`);
-      const addresses = Array.from(addressToBalance.keys());
-      const batchSize = 10;
-      
-      for (let i = 0; i < Math.min(addresses.length, 500); i += batchSize) { // Limit to 500 addresses to avoid timeout
+      // 2. If we got holders from BaseScan, look up their FIDs
+      // Otherwise, fall back to using Neynar API for known users
+      if (addressToBalance.size === 0) {
+        console.log("[Leaderboard] No holders from BaseScan, falling back to Neynar API for known users...");
+        
+        // Fallback: Get users from check-ins and channel, then fetch their balances from Neynar
+        const allCheckins = await getTopUsersByStreak(1000);
+        const allFidsSet = new Set<number>();
+        
+        allCheckins.forEach((c) => {
+          allFidsSet.add(c.fid);
+          checkinMap.set(c.fid, {
+            streak: c.streak || 0,
+            last_checkin: c.last_checkin || null,
+            total_checkins: c.total_checkins || 0,
+          });
+        });
+        
+        // Get users from channel feed
+        try {
+          const channelResponse = await fetch(`${new URL(req.url).origin}/api/channel-feed?limit=500`);
+          if (channelResponse.ok) {
+            const channelData = await channelResponse.json();
+            if (channelData.casts && Array.isArray(channelData.casts)) {
+              channelData.casts.forEach((cast: any) => {
+                if (cast.author?.fid) {
+                  allFidsSet.add(cast.author.fid);
+                }
+              });
+            }
+          }
+        } catch (_channelError) {
+          // Continue
+        }
+        
+        fids = Array.from(allFidsSet);
+        console.log(`[Leaderboard] Fallback: Using ${fids.length} known users (check-ins + channel)`);
+      } else {
+        // We have holders from BaseScan, look up their FIDs
+        console.log(`[Leaderboard] Looking up Farcaster FIDs for ${addressToBalance.size} token holders...`);
+        const addresses = Array.from(addressToBalance.keys());
+        const batchSize = 10;
+        
+        for (let i = 0; i < Math.min(addresses.length, 500); i += batchSize) { // Limit to 500 addresses to avoid timeout
         const batch = addresses.slice(i, i + batchSize);
         
         const fidPromises = batch.map(async (address) => {
@@ -366,22 +450,23 @@ export async function GET(req: NextRequest) {
           }
         });
         
-        // Delay between batches
-        if (i + batchSize < addresses.length) {
-          await new Promise(resolve => setTimeout(resolve, 200));
+          // Delay between batches
+          if (i + batchSize < addresses.length) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
         }
+        
+        // 3. Build FID list with balances from blockchain
+        addressToFid.forEach((fid, address) => {
+          const balance = addressToBalance.get(address) || 0;
+          const currentBalance = blockchainBalances.get(fid) || 0;
+          blockchainBalances.set(fid, currentBalance + balance); // Sum if user has multiple addresses
+        });
+        
+        fids = Array.from(blockchainBalances.keys());
+        totalTokenHolders = totalHolders || addressToBalance.size;
+        console.log(`[Leaderboard] Found ${fids.length} Farcaster users among ${addressToBalance.size} token holders (Total holders: ${totalTokenHolders})`);
       }
-      
-      // 3. Build FID list with balances from blockchain
-      addressToFid.forEach((fid, address) => {
-        const balance = addressToBalance.get(address) || 0;
-        const currentBalance = blockchainBalances.get(fid) || 0;
-        blockchainBalances.set(fid, currentBalance + balance); // Sum if user has multiple addresses
-      });
-      
-      fids = Array.from(blockchainBalances.keys());
-      totalTokenHolders = totalHolders || addressToBalance.size;
-      console.log(`[Leaderboard] Found ${fids.length} Farcaster users among ${addressToBalance.size} token holders (Total holders: ${totalTokenHolders})`);
       
       // 4. Also get check-in data for users we found
       const allCheckins = await getTopUsersByStreak(1000);

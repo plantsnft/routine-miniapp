@@ -77,6 +77,15 @@
   }
 }
 
+@keyframes ticker {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
 :root {
   --background: #000000;
   --foreground: #ffffff;

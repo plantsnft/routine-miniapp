@@ -8,6 +8,8 @@ import { Footer } from "~/components/ui/Footer";
 import { HomeTab, LeaderboardTab, FeedTab, ActionsTab, ContextTab, WalletTab } from "~/components/ui/tabs";
 import { useNeynarUser } from "../hooks/useNeynarUser";
 import { ErrorBoundary } from "~/components/ErrorBoundary";
+import { CreatorGreeting } from "~/components/CreatorGreeting";
+import { WelcomePopup } from "~/components/WelcomePopup";
 
 // --- Types ---
 export enum Tab {
@@ -110,6 +112,16 @@ export default function App(
         paddingRight: context?.client.safeAreaInsets?.right ?? 0,
       }}
     >
+      {/* Creator Greeting Popup */}
+      <ErrorBoundary>
+        <CreatorGreeting />
+      </ErrorBoundary>
+
+      {/* Welcome Popup for Non-Creators */}
+      <ErrorBoundary>
+        <WelcomePopup />
+      </ErrorBoundary>
+
       {/* Token Ticker at the very top */}
       <ErrorBoundary>
         <TokenTicker />

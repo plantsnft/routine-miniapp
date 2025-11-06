@@ -23,6 +23,7 @@ export function VideoPlayer({
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const hlsInstanceRef = useRef<any>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasError, setHasError] = useState(false);
 
@@ -33,18 +34,105 @@ export function VideoPlayer({
 
     // Check if HLS and browser doesn't support native HLS
     const isHLS = videoUrl.includes('.m3u8');
-    const hls: any = null; // Reserved for future hls.js integration
 
-    // Try to load hls.js for browsers that don't support native HLS
+    // Load hls.js for browsers that don't support native HLS (Chrome, Firefox, etc.)
     if (isHLS && typeof window !== 'undefined') {
       // Check if native HLS is supported
       const canPlayHLS = video.canPlayType('application/vnd.apple.mpegurl');
       
-      if (!canPlayHLS) {
-        // Browser doesn't support native HLS - try to use hls.js if available
-        // Note: hls.js needs to be installed: npm install hls.js
-        // For now, we'll try native support which works in Safari and newer Chrome/Edge
-        console.log("[VideoPlayer] Native HLS may not be supported, using native video element");
+      if (!canPlayHLS || canPlayHLS === '') {
+        // Browser doesn't support native HLS - load hls.js from CDN
+        console.log("[VideoPlayer] Native HLS not supported, loading hls.js...");
+        
+        // Dynamically load hls.js from CDN
+        const loadHlsJs = async () => {
+          try {
+            // Check if hls.js is already loaded
+            if ((window as any).Hls) {
+              const Hls = (window as any).Hls;
+              if (Hls.isSupported()) {
+                hlsInstanceRef.current = new Hls({
+                  enableWorker: true,
+                  lowLatencyMode: false,
+                });
+                
+                hlsInstanceRef.current.loadSource(videoUrl);
+                hlsInstanceRef.current.attachMedia(video);
+                
+                hlsInstanceRef.current.on(Hls.Events.MANIFEST_PARSED, () => {
+                  console.log("[VideoPlayer] HLS manifest parsed, ready to play");
+                  if (autoplay) {
+                    video.play().catch((error) => {
+                      console.error("[VideoPlayer] Autoplay failed:", error);
+                    });
+                  }
+                });
+                
+                hlsInstanceRef.current.on(Hls.Events.ERROR, (event: any, data: any) => {
+                  if (data.fatal) {
+                    console.error("[VideoPlayer] HLS fatal error:", data);
+                    setHasError(true);
+                  }
+                });
+              } else {
+                console.error("[VideoPlayer] HLS.js not supported");
+                setHasError(true);
+              }
+            } else {
+              // Load hls.js from CDN
+              const script = document.createElement('script');
+              script.src = 'https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js';
+              script.async = true;
+              
+              script.onload = () => {
+                const Hls = (window as any).Hls;
+                if (Hls && Hls.isSupported()) {
+                  hlsInstanceRef.current = new Hls({
+                    enableWorker: true,
+                    lowLatencyMode: false,
+                  });
+                  
+                  hlsInstanceRef.current.loadSource(videoUrl);
+                  hlsInstanceRef.current.attachMedia(video);
+                  
+                  hlsInstanceRef.current.on(Hls.Events.MANIFEST_PARSED, () => {
+                    console.log("[VideoPlayer] HLS manifest parsed, ready to play");
+                    if (autoplay) {
+                      video.play().catch((error) => {
+                        console.error("[VideoPlayer] Autoplay failed:", error);
+                      });
+                    }
+                  });
+                  
+                  hlsInstanceRef.current.on(Hls.Events.ERROR, (event: any, data: any) => {
+                    if (data.fatal) {
+                      console.error("[VideoPlayer] HLS fatal error:", data);
+                      setHasError(true);
+                    }
+                  });
+                } else {
+                  console.error("[VideoPlayer] HLS.js not supported after loading");
+                  setHasError(true);
+                }
+              };
+              
+              script.onerror = () => {
+                console.error("[VideoPlayer] Failed to load hls.js from CDN");
+                setHasError(true);
+              };
+              
+              document.head.appendChild(script);
+            }
+          } catch (error) {
+            console.error("[VideoPlayer] Error setting up hls.js:", error);
+            setHasError(true);
+          }
+        };
+        
+        loadHlsJs();
+      } else {
+        // Native HLS is supported (Safari, newer Chrome/Edge)
+        console.log("[VideoPlayer] Native HLS supported");
       }
     }
 
@@ -77,8 +165,9 @@ export function VideoPlayer({
     // Cleanup
     return () => {
       observer.disconnect();
-      if (hls) {
-        hls.destroy();
+      if (hlsInstanceRef.current) {
+        hlsInstanceRef.current.destroy();
+        hlsInstanceRef.current = null;
       }
     };
   }, [autoplay, videoUrl]);
@@ -152,6 +241,19 @@ export function VideoPlayer({
 
   // Check if video URL is HLS (.m3u8)
   const isHLS = videoUrl.includes('.m3u8');
+  
+  // Check if native HLS is supported (for Safari, newer Chrome/Edge)
+  // If not, hls.js will be used instead
+  const [useNativeHLS, setUseNativeHLS] = useState<boolean | null>(null);
+  
+  useEffect(() => {
+    if (videoRef.current && isHLS) {
+      const canPlayHLS = videoRef.current.canPlayType('application/vnd.apple.mpegurl');
+      setUseNativeHLS(!!canPlayHLS && canPlayHLS !== '');
+    } else if (!isHLS) {
+      setUseNativeHLS(true); // Regular video files use native playback
+    }
+  }, [isHLS]);
 
   return (
     <div
@@ -183,14 +285,15 @@ export function VideoPlayer({
           display: "block",
         }}
         controls={false} // Disable native controls for cleaner look
+        src={useNativeHLS && !isHLS ? videoUrl : undefined} // Only set src for regular videos (not HLS)
       >
-        {isHLS ? (
-          // HLS stream - use application/vnd.apple.mpegurl MIME type
+        {useNativeHLS && isHLS ? (
+          // Native HLS stream - use application/vnd.apple.mpegurl MIME type
           <source src={videoUrl} type="application/vnd.apple.mpegurl" />
-        ) : (
-          // Regular video - let browser detect MIME type
+        ) : useNativeHLS && !isHLS ? (
+          // Regular video - let browser detect MIME type (or use src attribute above)
           <source src={videoUrl} />
-        )}
+        ) : null}
         Your browser does not support the video tag.
       </video>
       

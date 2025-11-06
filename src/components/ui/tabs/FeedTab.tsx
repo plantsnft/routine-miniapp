@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useMiniApp } from "@neynar/react";
 import { FollowChannelButton } from "~/components/ui/FollowChannelButton";
 import { VideoPlayer } from "~/components/ui/VideoPlayer";
+import { CATWALK_CREATOR_FIDS } from "~/lib/constants";
 
 interface Cast {
   hash: string;
@@ -30,6 +31,8 @@ export function FeedTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | { message: string; debug?: any } | null>(null);
   const [isFollowingChannel, setIsFollowingChannel] = useState<boolean>(false);
+  const [showCreatorsModal, setShowCreatorsModal] = useState(false);
+  const [creators, setCreators] = useState<Array<{ fid: number; username?: string; displayName?: string }>>([]);
 
   useEffect(() => {
     const fetchFeed = async () => {
@@ -222,8 +225,8 @@ export function FeedTab() {
         </h2>
       </div>
 
-      {/* Feed Posts */}
-      {casts.map((cast) => (
+      {/* Feed Posts - Show first 5 */}
+      {casts.slice(0, 5).map((cast) => (
         <div
           key={cast.hash}
           style={{
@@ -403,6 +406,219 @@ export function FeedTab() {
           </div>
         </div>
       ))}
+
+      {/* Action Buttons - After first 5 posts */}
+      {casts.length > 0 && (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+            marginBottom: 24,
+          }}
+        >
+          {/* More Cats Button */}
+          <button
+            onClick={() => {
+              // Load more feed items (in-app, stay in feed)
+              // For now, just fetch the feed again - in future could paginate
+              const fetchMore = async () => {
+                try {
+                  const viewerFid = context?.user?.fid;
+                  const url = viewerFid ? `/api/channel-feed?viewerFid=${viewerFid}` : "/api/channel-feed";
+                  const res = await fetch(url);
+                  const data = await res.json();
+                  if (data.casts) {
+                    // Could implement pagination here, for now just refresh
+                    setCasts(data.casts || []);
+                  }
+                } catch (err) {
+                  console.error("Error fetching more feed:", err);
+                }
+              };
+              fetchMore();
+            }}
+            style={{
+              width: "100%",
+              padding: "14px 20px",
+              background: "#c1b400",
+              color: "#000000",
+              border: "2px solid #000000",
+              borderRadius: 12,
+              fontSize: 16,
+              fontWeight: 700,
+              cursor: "pointer",
+              textAlign: "center",
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "#d4c700";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "#c1b400";
+            }}
+          >
+            More Cats
+          </button>
+
+          {/* View Official Catwalk Creators Button */}
+          <button
+            onClick={() => {
+              setShowCreatorsModal(true);
+              // Fetch creators when modal opens
+              if (CATWALK_CREATOR_FIDS.length > 0) {
+                const fetchCreators = async () => {
+                  try {
+                    const fidsString = CATWALK_CREATOR_FIDS.join(",");
+                    const res = await fetch(`/api/users?fids=${fidsString}`);
+                    const data = await res.json();
+                    if (data.users) {
+                      setCreators(
+                        data.users.map((u: any) => ({
+                          fid: u.fid,
+                          username: u.username,
+                          displayName: u.display_name,
+                        }))
+                      );
+                    } else {
+                      // Fallback: just show FIDs if user fetch fails
+                      setCreators(CATWALK_CREATOR_FIDS.map((fid) => ({ fid })));
+                    }
+                  } catch (error) {
+                    console.error("Error fetching creators:", error);
+                    // Fallback: just show FIDs
+                    setCreators(CATWALK_CREATOR_FIDS.map((fid) => ({ fid })));
+                  }
+                };
+                fetchCreators();
+              } else {
+                // Placeholder: show 29 placeholder creators
+                setCreators(
+                  Array.from({ length: 29 }, (_, i) => ({
+                    fid: 0,
+                    username: undefined,
+                    displayName: `Creator ${i + 1}`,
+                  }))
+                );
+              }
+            }}
+            style={{
+              width: "100%",
+              padding: "14px 20px",
+              background: "#000000",
+              color: "#c1b400",
+              border: "2px solid #c1b400",
+              borderRadius: 12,
+              fontSize: 16,
+              fontWeight: 700,
+              cursor: "pointer",
+              textAlign: "center",
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "#1a1a1a";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "#000000";
+            }}
+          >
+            View the Official Catwalk Creators
+          </button>
+        </div>
+      )}
+
+      {/* Creators Modal */}
+      {showCreatorsModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0, 0, 0, 0.8)",
+            zIndex: 10000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+          }}
+          onClick={() => setShowCreatorsModal(false)}
+        >
+          <div
+            style={{
+              background: "#000000",
+              border: "3px solid #c1b400",
+              borderRadius: 16,
+              padding: "24px",
+              width: "100%",
+              maxWidth: "500px",
+              maxHeight: "80vh",
+              overflowY: "auto",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h3 style={{ margin: 0, color: "#c1b400", fontSize: 20, fontWeight: 700 }}>
+                Official Catwalk Creators
+              </h3>
+              <button
+                onClick={() => setShowCreatorsModal(false)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#c1b400",
+                  fontSize: 24,
+                  cursor: "pointer",
+                  fontWeight: 700,
+                  padding: 0,
+                  width: "30px",
+                  height: "30px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                ×
+              </button>
+            </div>
+            
+            {creators.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {creators.map((creator, index) => (
+                  <div
+                    key={creator.fid || index}
+                    style={{
+                      padding: "12px",
+                      background: "#c1b400",
+                      borderRadius: 8,
+                      border: "1px solid #000000",
+                    }}
+                  >
+                    <p style={{ margin: 0, color: "#000000", fontSize: 14, fontWeight: 600 }}>
+                      {creator.displayName || creator.username || `FID: ${creator.fid}`}
+                    </p>
+                    {creator.username && (
+                      <p style={{ margin: 0, marginTop: 4, color: "#000000", fontSize: 12, opacity: 0.7 }}>
+                        @{creator.username} • FID: {creator.fid}
+                      </p>
+                    )}
+                    {!creator.username && creator.fid === 0 && (
+                      <p style={{ margin: 0, marginTop: 4, color: "#000000", fontSize: 12, opacity: 0.7 }}>
+                        Placeholder - Creator list coming soon
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p style={{ color: "#ffffff", fontSize: 14, textAlign: "center" }}>
+                Creator list will be updated soon. Check back later!
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Floating Follow Button - only show if user is logged in */}
       {context?.user && (

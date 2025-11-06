@@ -84,24 +84,6 @@ export function LeaderboardTab() {
     >
 
       <div className="max-w-md mx-auto" style={{ position: "relative", zIndex: 1 }}>
-        {/* Logo - Catwalk logo image */}
-        <div style={{ textAlign: "center", marginBottom: 16 }}>
-          <img
-            src="/logo.png"
-            alt="Catwalk Logo"
-            style={{
-              maxWidth: "200px",
-              width: "100%",
-              height: "auto",
-              objectFit: "contain",
-            }}
-            onError={(e) => {
-              const target = e.target as HTMLImageElement;
-              target.style.display = "none";
-            }}
-          />
-        </div>
-
         {/* Title */}
         <div
           style={{

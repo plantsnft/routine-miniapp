@@ -66,11 +66,25 @@ async function getTokenBalanceFromNeynar(fid: number): Promise<number> {
       console.log(`[Leaderboard] ✅ Total CATWALK balance for FID ${fid}: ${totalBalance.toLocaleString()}`);
       return totalBalance;
     } else {
-      // Log all tokens for debugging
-      console.log(`[Leaderboard] ❌ CATWALK not found for FID ${fid}. Total addresses: ${addressBalances.length}, Total tokens: ${allTokens.length}`);
+      // Log all tokens for debugging - check if CATWALK is in the list
+      const catwalkInList = allTokens.some(t => t.address?.toLowerCase() === TOKEN_ADDRESS.toLowerCase());
+      console.log(`[Leaderboard] ❌ CATWALK not found for FID ${fid}. Total addresses: ${addressBalances.length}, Total tokens: ${allTokens.length}, CATWALK in list: ${catwalkInList}`);
+      
       if (allTokens.length > 0) {
-        console.log(`[Leaderboard] All tokens for FID ${fid}:`, allTokens.slice(0, 10).map(t => `${t.symbol}@${t.address?.substring(0, 10)}...`).join(', '));
+        // Show first 15 tokens
+        const tokenList = allTokens.slice(0, 15).map(t => {
+          const addr = t.address ? `${t.address.substring(0, 10)}...` : 'undefined';
+          const isCatwalk = t.address?.toLowerCase() === TOKEN_ADDRESS.toLowerCase();
+          return `${t.symbol}@${addr}${isCatwalk ? ' ⭐' : ''}`;
+        }).join(', ');
+        console.log(`[Leaderboard] All tokens for FID ${fid}:`, tokenList);
+        
+        // If we have more tokens, show count
+        if (allTokens.length > 15) {
+          console.log(`[Leaderboard] ... and ${allTokens.length - 15} more tokens for FID ${fid}`);
+        }
       }
+      
       // Also check if TOKEN_ADDRESS matches
       console.log(`[Leaderboard] Looking for token address: ${TOKEN_ADDRESS.toLowerCase()}`);
     }

@@ -4,13 +4,50 @@ import { getNeynarClient } from "~/lib/neynar";
 import type { LeaderboardEntry } from "~/lib/models";
 
 const TOKEN_ADDRESS = "0xa5eb1cAD0dFC1c4f8d4f84f995aeDA9a7A047B07"; // CATWALK on Base
+const BASESCAN_API_KEY = process.env.BASESCAN_API_KEY || "";
 
 /**
- * Get token balance for a wallet address on Base chain using direct RPC call.
- * More reliable than BaseScan API and doesn't require API key.
+ * Get token balance for a wallet address on Base chain.
+ * Uses BaseScan API (with API key if available) for better rate limits.
+ * Falls back to direct RPC if BaseScan fails.
  * Includes retry logic with exponential backoff for rate limiting.
  */
 async function getTokenBalance(address: string, retries: number = 3): Promise<number> {
+  // Try BaseScan API first (has better rate limits with API key)
+  if (BASESCAN_API_KEY) {
+    try {
+      const apiKeyParam = `&apikey=${BASESCAN_API_KEY}`;
+      const basescanUrl = `https://api.basescan.org/api?module=account&action=tokenbalance&contractaddress=${TOKEN_ADDRESS}&address=${address}&tag=latest${apiKeyParam}`;
+      
+      const response = await fetch(basescanUrl, {
+        headers: {
+          "User-Agent": "Catwalk-MiniApp",
+        },
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status === "1" && data.result) {
+          // BaseScan returns balance in wei (as string)
+          const balanceWei = BigInt(data.result);
+          const decimals = BigInt(10 ** 18);
+          const wholePart = balanceWei / decimals;
+          const fractionalPart = balanceWei % decimals;
+          const balance = Number(wholePart) + Number(fractionalPart) / Number(decimals);
+          return balance;
+        }
+      } else if (response.status === 429) {
+        // Rate limited, will retry with RPC fallback
+        console.log(`[Leaderboard] BaseScan rate limited for ${address}, will retry with RPC`);
+      }
+    } catch (error) {
+      // Fall through to RPC fallback
+      console.log(`[Leaderboard] BaseScan API failed for ${address}, using RPC fallback`);
+    }
+  }
+
+  // Fallback to direct RPC call
   const rpcUrl = "https://mainnet.base.org";
   
   // ERC20 balanceOf(address) function selector: 0x70a08231
@@ -110,34 +147,36 @@ async function getTokenBalance(address: string, retries: number = 3): Promise<nu
 
 /**
  * Batch fetch token balances with rate limiting.
- * Processes addresses sequentially to avoid overwhelming the RPC endpoint.
- * Uses smaller batches and longer delays to respect rate limits.
+ * Uses BaseScan API if available (better rate limits), otherwise falls back to RPC.
+ * Processes addresses with appropriate delays based on the endpoint used.
  */
 async function getTokenBalancesBatch(
   addresses: string[],
-  batchSize: number = 2, // Reduced from 5 to 2 to avoid rate limits
-  delayBetweenBatches: number = 1000 // Increased from 200ms to 1000ms (1 second)
+  batchSize: number = BASESCAN_API_KEY ? 5 : 2, // Larger batches if using BaseScan API
+  delayBetweenBatches: number = BASESCAN_API_KEY ? 200 : 1000 // Faster if using BaseScan API
 ): Promise<Map<string, number>> {
   const balances = new Map<string, number>();
   
-  console.log(`[Leaderboard] Fetching balances for ${addresses.length} addresses in batches of ${batchSize} with ${delayBetweenBatches}ms delay`);
+  const method = BASESCAN_API_KEY ? "BaseScan API" : "RPC";
+  console.log(`[Leaderboard] Fetching balances for ${addresses.length} addresses using ${method} in batches of ${batchSize} with ${delayBetweenBatches}ms delay`);
   
-  // Process in smaller batches to avoid rate limits
+  // Process in batches
   for (let i = 0; i < addresses.length; i += batchSize) {
     const batch = addresses.slice(i, i + batchSize);
     
-    // Fetch balances sequentially within batch to avoid overwhelming the endpoint
+    // Fetch balances sequentially within batch
     for (const addr of batch) {
       const balance = await getTokenBalance(addr);
       balances.set(addr, balance);
       
-      // Small delay between individual requests within batch
+      // Delay between individual requests (shorter if using BaseScan API)
       if (batch.indexOf(addr) < batch.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 300)); // 300ms between requests
+        const delay = BASESCAN_API_KEY ? 100 : 300;
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
     
-    // Longer delay between batches to respect rate limits
+    // Delay between batches
     if (i + batchSize < addresses.length) {
       await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
     }

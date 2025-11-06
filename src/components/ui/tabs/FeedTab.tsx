@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useMiniApp } from "@neynar/react";
-import { FollowChannelButton } from "~/components/ui/FollowChannelButton";
 import { VideoPlayer } from "~/components/ui/VideoPlayer";
 import { CATWALK_CREATOR_FIDS } from "~/lib/constants";
 
@@ -612,10 +611,6 @@ export function FeedTab() {
         </div>
       )}
 
-      {/* Floating Follow Button - only show if user is logged in */}
-      {context?.user && (
-        <FollowChannelButton isFollowing={isFollowingChannel} />
-      )}
     </div>
   );
 }

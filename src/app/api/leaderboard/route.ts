@@ -66,22 +66,48 @@ async function getTokenBalanceFromNeynar(fid: number): Promise<number> {
       console.log(`[Leaderboard] ✅ Total CATWALK balance for FID ${fid}: ${totalBalance.toLocaleString()}`);
       return totalBalance;
     } else {
-      // Log all tokens for debugging - check if CATWALK is in the list
-      const catwalkInList = allTokens.some(t => t.address?.toLowerCase() === TOKEN_ADDRESS.toLowerCase());
-      console.log(`[Leaderboard] ❌ CATWALK not found for FID ${fid}. Total addresses: ${addressBalances.length}, Total tokens: ${allTokens.length}, CATWALK in list: ${catwalkInList}`);
+      // Check ALL tokens for CATWALK (not just first 15) - the issue might be we're missing it
+      const catwalkMatches = allTokens.filter(t => {
+        const addr = t.address?.toLowerCase();
+        const target = TOKEN_ADDRESS.toLowerCase();
+        return addr === target;
+      });
+      
+      if (catwalkMatches.length > 0) {
+        // Found CATWALK in the list but our parsing didn't catch it - this is a bug!
+        console.error(`[Leaderboard] 🐛 BUG: CATWALK found in token list for FID ${fid} but not parsed! Matches:`, catwalkMatches);
+        // Try to parse it now
+        for (const match of catwalkMatches) {
+          const balance = match.balance;
+          const balanceNum = typeof balance === 'number' ? balance : parseFloat(String(balance)) || 0;
+          if (balanceNum > 0) {
+            totalBalance += balanceNum;
+            foundCatwalk = true;
+            console.log(`[Leaderboard] ✅ Fixed: Found CATWALK for FID ${fid}: ${balanceNum.toLocaleString()} CATWALK`);
+          }
+        }
+        if (foundCatwalk) {
+          console.log(`[Leaderboard] ✅ Total CATWALK balance for FID ${fid}: ${totalBalance.toLocaleString()}`);
+          return totalBalance;
+        }
+      }
+      
+      console.log(`[Leaderboard] ❌ CATWALK not found for FID ${fid}. Total addresses: ${addressBalances.length}, Total tokens: ${allTokens.length}`);
       
       if (allTokens.length > 0) {
-        // Show first 15 tokens
-        const tokenList = allTokens.slice(0, 15).map(t => {
-          const addr = t.address ? `${t.address.substring(0, 10)}...` : 'undefined';
-          const isCatwalk = t.address?.toLowerCase() === TOKEN_ADDRESS.toLowerCase();
-          return `${t.symbol}@${addr}${isCatwalk ? ' ⭐' : ''}`;
+        // Log first few and last few tokens to see the range
+        const sampleSize = Math.min(10, allTokens.length);
+        const tokenList = allTokens.slice(0, sampleSize).map(t => {
+          const addr = t.address ? `${t.address.substring(0, 12)}...` : 'undefined';
+          return `${t.symbol}@${addr}`;
         }).join(', ');
-        console.log(`[Leaderboard] All tokens for FID ${fid}:`, tokenList);
+        console.log(`[Leaderboard] Sample tokens (first ${sampleSize}) for FID ${fid}:`, tokenList);
         
-        // If we have more tokens, show count
-        if (allTokens.length > 15) {
-          console.log(`[Leaderboard] ... and ${allTokens.length - 15} more tokens for FID ${fid}`);
+        // Check remaining tokens for CATWALK
+        if (allTokens.length > sampleSize) {
+          const remaining = allTokens.slice(sampleSize);
+          const catwalkInRemaining = remaining.some(t => t.address?.toLowerCase() === TOKEN_ADDRESS.toLowerCase());
+          console.log(`[Leaderboard] Remaining ${remaining.length} tokens checked for CATWALK: ${catwalkInRemaining ? 'FOUND' : 'not found'}`);
         }
       }
       

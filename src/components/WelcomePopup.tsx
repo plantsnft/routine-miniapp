@@ -179,7 +179,7 @@ export function WelcomePopup({ onClose }: WelcomePopupProps) {
             <p
               style={{
                 color: "#ffffff",
-                fontSize: 7.5, // Half size: 15px / 2 = 7.5px
+                fontSize: 15, // Twice as big: 7.5px * 2 = 15px
                 lineHeight: 1.7,
                 margin: 0,
                 textAlign: "left",
@@ -191,7 +191,7 @@ export function WelcomePopup({ onClose }: WelcomePopupProps) {
             <p
               style={{
                 color: "#ffffff",
-                fontSize: 7.5, // Half size: 15px / 2 = 7.5px
+                fontSize: 15, // Twice as big: 7.5px * 2 = 15px
                 lineHeight: 1.7,
                 margin: 0,
                 textAlign: "left",
@@ -203,7 +203,7 @@ export function WelcomePopup({ onClose }: WelcomePopupProps) {
             <p
               style={{
                 color: "#ffffff",
-                fontSize: 7.5, // Half size: 15px / 2 = 7.5px
+                fontSize: 15, // Twice as big: 7.5px * 2 = 15px
                 lineHeight: 1.7,
                 margin: 0,
                 textAlign: "left",
@@ -218,12 +218,12 @@ export function WelcomePopup({ onClose }: WelcomePopupProps) {
             onClick={handleWelcomeClick}
             style={{
               width: "100%",
-              padding: "16px 24px",
+              padding: "10px 20px", // Reduced from 16px 24px
               background: "#c1b400",
               color: "#000000",
               border: "2px solid #000000",
               borderRadius: 12,
-              fontSize: 24,
+              fontSize: 18, // Reduced from 24px
               fontWeight: 900,
               cursor: "pointer",
               transition: "all 0.2s",

@@ -185,7 +185,7 @@ export function WelcomePopup({ onClose }: WelcomePopupProps) {
                 textAlign: "left",
               }}
             >
-              • Catwalk Entertainment Co is a collective of creators bringing their outdoor cat adventures to the blockchain
+              • Catwalk Entertainment Co: creators putting cat adventures on-chain.
             </p>
 
             <p
@@ -197,7 +197,7 @@ export function WelcomePopup({ onClose }: WelcomePopupProps) {
                 textAlign: "left",
               }}
             >
-              • Each moment — from park strolls to city walks — becomes part of an on-chain story celebrating cats and their humans.
+              • Every moment—parks to city—becomes an on-chain story of cats + humans.
             </p>
 
             <p
@@ -209,7 +209,7 @@ export function WelcomePopup({ onClose }: WelcomePopupProps) {
                 textAlign: "left",
               }}
             >
-              • The $CATWALK token powers the ecosystem — rewarding creators, fueling partnerships, and building the future of feline-forward entertainment on Farcaster.
+              • $CATWALK powers it—rewards creators, fuels partners, builds cat-first entertainment on Farcaster.
             </p>
           </div>
 

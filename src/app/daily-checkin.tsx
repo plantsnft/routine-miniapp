@@ -268,31 +268,11 @@ export default function DailyCheckin() {
               </div>
             </div>
           )}
-          {/* Check-in button with sleeping cat - centered when checked in */}
-          {checkin.status.checkedIn ? (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 16,
-              }}
-            >
-              <SleepingCat />
-              <CheckinButton
-                checkedIn={checkin.status.checkedIn}
-                saving={checkin.saving}
-                onClick={handleCheckIn}
-              />
-            </div>
-          ) : (
-            <CheckinButton
-              checkedIn={checkin.status.checkedIn}
-              saving={checkin.saving}
-              onClick={handleCheckIn}
-            />
-          )}
+          <CheckinButton
+            checkedIn={checkin.status.checkedIn}
+            saving={checkin.saving}
+            onClick={handleCheckIn}
+          />
         </div>
 
         {/* Mini-app prompt - show when checked in and mini-app is not added */}

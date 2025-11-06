@@ -4,6 +4,8 @@
 
 "use client";
 
+import { SleepingCat } from "./SleepingCat";
+
 interface CheckinButtonProps {
   checkedIn: boolean;
   saving: boolean;
@@ -26,6 +28,10 @@ export function CheckinButton({ checkedIn, saving, onClick }: CheckinButtonProps
         width: "100%",
         fontSize: 16,
         transition: "all 0.2s",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
       }}
       onMouseEnter={(e) => {
         if (!checkedIn && !saving) {
@@ -38,7 +44,8 @@ export function CheckinButton({ checkedIn, saving, onClick }: CheckinButtonProps
         }
       }}
     >
-      {saving ? "Saving..." : checkedIn ? "Cat is Resting" : "Walk Your Cat"}
+      {checkedIn && <SleepingCat />}
+      <span>{saving ? "Saving..." : checkedIn ? "Cat is Resting" : "Walk Your Cat"}</span>
     </button>
   );
 }

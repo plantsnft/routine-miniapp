@@ -124,7 +124,7 @@ export async function GET(req: NextRequest) {
 
     const client = getNeynarClient();
     let fids: number[] = [];
-    let checkinMap = new Map<number, { streak: number; last_checkin: string | null; total_checkins: number }>();
+    const checkinMap = new Map<number, { streak: number; last_checkin: string | null; total_checkins: number }>();
 
     if (sortBy === "holdings") {
       // For holdings mode: Get ALL users who have checked in (up to 500 for broader coverage)

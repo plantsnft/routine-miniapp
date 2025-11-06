@@ -185,7 +185,7 @@ export async function POST(req: NextRequest) {
               { status: 200, headers: { "Content-Type": "application/json" } }
             );
           }
-        } catch (retryError) {
+        } catch (_retryError) {
           // Fall through to error handling
         }
         throw createError;
@@ -264,7 +264,7 @@ export async function POST(req: NextRequest) {
             { status: 200, headers: { "Content-Type": "application/json" } }
           );
         }
-      } catch (retryError) {
+      } catch (_retryError) {
         // Fall through to error handling
       }
       throw updateError;

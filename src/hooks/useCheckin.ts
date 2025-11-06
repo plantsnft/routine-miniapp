@@ -63,7 +63,7 @@ export function useCheckin(): UseCheckinResult {
             const text = await res.text();
             if (text) errorMessage = text.substring(0, 200);
           }
-        } catch (e) {
+        } catch (_e) {
           // If we can't parse the error, use the status message
         }
         throw new Error(errorMessage);

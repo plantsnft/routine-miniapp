@@ -42,7 +42,6 @@ export function CheckinGifAnimation({
 
     // Start rendering when visible
     setShouldRender(true);
-    const startTime = Date.now();
 
     // Small delay to ensure smooth transition
     const showTimer = setTimeout(() => {

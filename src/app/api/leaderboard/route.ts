@@ -13,13 +13,19 @@ const BASESCAN_API_KEY = process.env.BASESCAN_API_KEY || "";
 async function getTokenBalanceFromNeynar(fid: number): Promise<number> {
   try {
     const client = getNeynarClient();
+    
+    // Log that we're attempting to fetch
+    if (fid <= 5) {
+      console.log(`[Leaderboard] Attempting to fetch balance from Neynar for FID ${fid}...`);
+    }
+    
     const response = await client.fetchUserBalance({
       fid: fid,
       networks: ['base'],
     });
 
     // Log response structure for first few users to debug
-    if (fid <= 3) {
+    if (fid <= 5) {
       console.log(`[Leaderboard] Neynar response for FID ${fid}:`, JSON.stringify(response, null, 2));
     }
 
@@ -95,8 +101,9 @@ async function getTokenBalanceFromNeynar(fid: number): Promise<number> {
  * Uses BaseScan API (with API key if available) for better rate limits.
  * Falls back to direct RPC if BaseScan fails.
  * Includes retry logic with exponential backoff for rate limiting.
+ * NOTE: Currently unused - kept as fallback if Neynar API fails
  */
-async function getTokenBalance(address: string, retries: number = 3): Promise<number> {
+async function _getTokenBalance(address: string, retries: number = 3): Promise<number> {
   // Try BaseScan API first (has better rate limits with API key)
   if (BASESCAN_API_KEY) {
     try {
@@ -286,8 +293,8 @@ export async function GET(req: NextRequest) {
             console.log(`[Leaderboard] Added ${channelData.casts.length} channel participants`);
           }
         }
-      } catch (channelError) {
-        console.error("[Leaderboard] Error fetching channel participants:", channelError);
+      } catch (_channelError) {
+        console.error("[Leaderboard] Error fetching channel participants:", _channelError);
         // Continue even if channel fetch fails
       }
       
@@ -458,13 +465,25 @@ export async function GET(req: NextRequest) {
       
       // Fetch balances in batches to avoid overwhelming the API
       const batchSize = 10; // Process 10 users at a time
+      let successCount = 0;
+      let errorCount = 0;
+      
       for (let i = 0; i < fids.length; i += batchSize) {
         const batch = fids.slice(i, i + batchSize);
         
         // Fetch balances in parallel for the batch
         const balancePromises = batch.map(async (fid) => {
-          const balance = await getTokenBalanceFromNeynar(fid);
-          return { fid, balance };
+          try {
+            const balance = await getTokenBalanceFromNeynar(fid);
+            if (balance > 0) {
+              successCount++;
+            }
+            return { fid, balance, error: null };
+          } catch (err) {
+            errorCount++;
+            console.error(`[Leaderboard] Error fetching balance for FID ${fid}:`, err);
+            return { fid, balance: 0, error: err };
+          }
         });
         
         const batchResults = await Promise.all(balancePromises);
@@ -478,7 +497,7 @@ export async function GET(req: NextRequest) {
         }
       }
       
-      console.log(`[Leaderboard] Fetched balances for ${fidToBalance.size} users from Neynar`);
+      console.log(`[Leaderboard] Fetched balances for ${fidToBalance.size} users from Neynar (${successCount} with balances > 0, ${errorCount} errors)`);
     } else {
       // For streak/total_checkins mode, we don't need balances
       console.log(`[Leaderboard] Skipping balance fetch for ${sortBy} mode (not needed)`);

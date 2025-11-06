@@ -92,10 +92,10 @@
 body {
   color: var(--foreground);
   background: var(--background);
-  backgroundImage: url(/wallpaper.png);
-  backgroundRepeat: repeat;
-  backgroundSize: 10%;
-  backgroundPosition: 0 0;
+  background-image: url(/wallpaper.png);
+  background-repeat: repeat;
+  background-size: 10%;
+  background-position: 0 0;
   font-family: 'Inter', Helvetica, Arial, sans-serif;
 }
 

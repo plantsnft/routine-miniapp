@@ -293,13 +293,23 @@ export async function GET() {
         // Extract images/embeds from the cast - comprehensive extraction
         const images: string[] = [];
         
-        // Method 1: Check embeds array
+        // Method 1: Check embeds array (most common for images in Neynar)
         if (cast.embeds && Array.isArray(cast.embeds)) {
           cast.embeds.forEach((embed: any) => {
-            // Direct URL that's an image
-            if (embed.url && embed.url.match(/\.(jpg|jpeg|png|gif|webp|avif|svg)$/i)) {
-              images.push(embed.url);
+            // Check embed type - images might be in different formats
+            const embedType = embed.type || embed.kind || '';
+            
+            // Direct URL that's an image (with or without extension, check imagedelivery.net)
+            if (embed.url) {
+              if (embed.url.match(/\.(jpg|jpeg|png|gif|webp|avif|svg)$/i) || 
+                  embed.url.includes('imagedelivery.net') ||
+                  embed.url.includes('image/') ||
+                  embed.url.includes('photos') ||
+                  embedType === 'image') {
+                images.push(embed.url);
+              }
             }
+            
             // Images array in embed
             if (embed.images && Array.isArray(embed.images)) {
               embed.images.forEach((img: any) => {
@@ -309,12 +319,16 @@ export async function GET() {
                   if (img.url) images.push(img.url);
                   if (img.image_url) images.push(img.image_url);
                   if (img.src) images.push(img.src);
+                  if (img.original_url) images.push(img.original_url);
                 }
               });
             }
+            
             // Single image property
             if (embed.image_url) images.push(embed.image_url);
             if (embed.image) images.push(embed.image);
+            if (embed.original_url) images.push(embed.original_url);
+            if (embed.thumbnail_url) images.push(embed.thumbnail_url);
             
             // OpenGraph metadata (common in Neynar)
             if (embed.open_graph) {
@@ -322,29 +336,44 @@ export async function GET() {
               if (og.image) {
                 if (typeof og.image === 'string') {
                   images.push(og.image);
-                } else if (og.image.url) {
-                  images.push(og.image.url);
+                } else if (og.image && typeof og.image === 'object') {
+                  if (og.image.url) images.push(og.image.url);
+                  if (og.image.secure_url) images.push(og.image.secure_url);
                 }
               }
               if (og.images && Array.isArray(og.images)) {
                 og.images.forEach((img: any) => {
                   if (typeof img === 'string') images.push(img);
-                  else if (img.url) images.push(img.url);
+                  else if (img && typeof img === 'object') {
+                    if (img.url) images.push(img.url);
+                    if (img.secure_url) images.push(img.secure_url);
+                  }
                 });
               }
             }
+            
             // Metadata object
             if (embed.metadata) {
               const meta = embed.metadata;
               if (meta.image) {
                 if (typeof meta.image === 'string') images.push(meta.image);
-                else if (meta.image.url) images.push(meta.image.url);
+                else if (meta.image && typeof meta.image === 'object' && meta.image.url) {
+                  images.push(meta.image.url);
+                }
               }
               if (meta.images && Array.isArray(meta.images)) {
                 meta.images.forEach((img: any) => {
                   if (typeof img === 'string') images.push(img);
-                  else if (img.url) images.push(img.url);
+                  else if (img && typeof img === 'object' && img.url) images.push(img.url);
                 });
+              }
+            }
+            
+            // Check for direct image objects (sometimes embeds are just image objects)
+            if (embedType === 'image' || embedType === 'photo') {
+              // If it's an image embed, the URL is likely the image
+              if (embed.url && !images.includes(embed.url)) {
+                images.push(embed.url);
               }
             }
           });

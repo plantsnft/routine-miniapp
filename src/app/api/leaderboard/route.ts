@@ -331,12 +331,26 @@ export async function GET(req: NextRequest) {
         
         const fidPromises = batch.map(async (address) => {
           try {
-            // Use Neynar to find FID by address
-            const userResponse = await client.fetchUserByAddress(address);
-            if (userResponse && userResponse.length > 0) {
-              const fid = userResponse[0]?.fid;
-              if (fid) {
-                return { address, fid };
+            // Use Neynar API directly to find FID by address
+            const apiKey = process.env.NEYNAR_API_KEY;
+            if (!apiKey) {
+              return null;
+            }
+            
+            // Neynar API endpoint to lookup user by address
+            const lookupUrl = `https://api.neynar.com/v2/farcaster/user/by_address?address=${address}`;
+            const lookupResponse = await fetch(lookupUrl, {
+              headers: {
+                'api_key': apiKey,
+              },
+            });
+            
+            if (lookupResponse.ok) {
+              const lookupData = await lookupResponse.json();
+              // Response structure may vary, check for user or users array
+              const user = lookupData.user || lookupData.users?.[0] || lookupData.result?.user;
+              if (user?.fid) {
+                return { address, fid: user.fid };
               }
             }
           } catch (_err) {

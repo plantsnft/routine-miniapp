@@ -19,7 +19,7 @@ type WalkSortMode = "current_streak" | "all_time";
  * ```
  */
 export function LeaderboardTab() {
-  const [sortBy, setSortBy] = useState<SortBy>("holdings");
+  const [sortBy, setSortBy] = useState<SortBy>("streak");
   const [walkSortMode, setWalkSortMode] = useState<WalkSortMode>("current_streak");
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -121,23 +121,6 @@ export function LeaderboardTab() {
           }}
         >
           <button
-            onClick={() => setSortBy("holdings")}
-            style={{
-              flex: 1,
-              padding: "12px 16px",
-              background: sortBy === "holdings" ? "#c1b400" : "transparent",
-              color: sortBy === "holdings" ? "#000000" : "#c1b400",
-              border: "none",
-              borderRadius: 8,
-              fontSize: 14,
-              fontWeight: 700,
-              cursor: "pointer",
-              transition: "all 0.2s",
-            }}
-          >
-            💰 Top Holders
-          </button>
-          <button
             onClick={() => setSortBy("streak")}
             style={{
               flex: 1,
@@ -153,6 +136,23 @@ export function LeaderboardTab() {
             }}
           >
             🐱 Most Walks
+          </button>
+          <button
+            onClick={() => setSortBy("holdings")}
+            style={{
+              flex: 1,
+              padding: "12px 16px",
+              background: sortBy === "holdings" ? "#c1b400" : "transparent",
+              color: sortBy === "holdings" ? "#000000" : "#c1b400",
+              border: "none",
+              borderRadius: 8,
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: "pointer",
+              transition: "all 0.2s",
+            }}
+          >
+            💰 Top Holders
           </button>
         </div>
 
@@ -280,31 +280,31 @@ export function LeaderboardTab() {
               <div
                 key={`${entry.fid}-${sortBy}`}
                 style={{
-                  padding: "16px",
+                  padding: "8px 12px",
                   background: "#000000",
                   border: "2px solid #c1b400",
                   borderRadius: 12,
                   display: "flex",
                   alignItems: "center",
-                  gap: 12,
+                  gap: 8,
                 }}
               >
                 {/* Rank with trending up emoji */}
                 <div
                   style={{
-                    minWidth: "50px",
+                    minWidth: "40px",
                     textAlign: "center",
                     color: "#c1b400",
-                    fontSize: entry.rank <= 3 ? 24 : 18,
+                    fontSize: entry.rank <= 3 ? 18 : 14,
                     fontWeight: 700,
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
-                    gap: 4,
+                    gap: 2,
                   }}
                 >
-                  <span>📈</span>
-                  <span style={{ fontSize: entry.rank <= 3 ? 24 : 18 }}>
+                  <span style={{ fontSize: entry.rank <= 3 ? 16 : 12 }}>📈</span>
+                  <span style={{ fontSize: entry.rank <= 3 ? 18 : 14 }}>
                     {getRankEmoji(entry.rank)}
                   </span>
                 </div>
@@ -314,13 +314,14 @@ export function LeaderboardTab() {
                   <p
                     style={{
                       margin: 0,
-                      marginBottom: 4,
+                      marginBottom: 2,
                       color: "#ffffff",
-                      fontSize: 16,
+                      fontSize: 12,
                       fontWeight: 600,
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
+                      lineHeight: 1.2,
                     }}
                   >
                     {entry.displayName || entry.username || `FID: ${entry.fid}`}
@@ -330,14 +331,15 @@ export function LeaderboardTab() {
                       style={{
                         margin: 0,
                         color: "#c1b400",
-                        fontSize: 13,
+                        fontSize: 10,
                         opacity: 0.8,
+                        lineHeight: 1.2,
                       }}
                     >
                       @{entry.username}
                     </p>
                   )}
-                  <div style={{ display: "flex", gap: 12, marginTop: 6, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
                     {/* Show primary metric prominently */}
                     {sortBy === "holdings" ? (
                       <>

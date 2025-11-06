@@ -31,7 +31,7 @@ export function FeedTab() {
   const [casts, setCasts] = useState<Cast[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | { message: string; debug?: any } | null>(null);
-  const [isFollowingChannel, setIsFollowingChannel] = useState<boolean>(false);
+  const [_isFollowingChannel, setIsFollowingChannel] = useState<boolean>(false);
   const [showCreatorsModal, setShowCreatorsModal] = useState(false);
   const [creators, setCreators] = useState<Array<{ fid: number; username?: string; displayName?: string; castCount?: number }>>([]);
   const [loadingCastCounts, setLoadingCastCounts] = useState(false);

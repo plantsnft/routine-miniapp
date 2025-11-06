@@ -41,7 +41,8 @@ export async function GET(request: Request) {
         if (response.ok) {
           const data = await response.json();
           // Check different possible response structures
-          const fidStr = data?.transfers?.[0]?.to || data?.to || data?.fid;
+          // API returns { transfer: { to: 123 } } or { transfers: [{ to: 123 }] }
+          const fidStr = data?.transfer?.to || data?.transfers?.[0]?.to || data?.to || data?.fid;
           if (fidStr) {
             fid = parseInt(fidStr, 10);
             if (!isNaN(fid)) {
@@ -50,7 +51,7 @@ export async function GET(request: Request) {
             }
           }
         }
-      } catch (error: any) {
+      } catch (_error: any) {
         // Continue to Neynar fallback
       }
 
@@ -58,13 +59,13 @@ export async function GET(request: Request) {
       if (!fid && apiKey) {
         try {
           const client = getNeynarClient();
-          const userResponse = await client.lookupUserByUsername(username);
+          const userResponse = await client.lookupUserByUsername({ username });
           if (userResponse?.result?.user?.fid) {
             fid = userResponse.result.user.fid;
             fids.push(fid);
             continue; // Success
           }
-        } catch (error: any) {
+        } catch (_error: any) {
           // Continue to error
         }
       }

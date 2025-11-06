@@ -28,7 +28,6 @@ export async function GET(request: Request) {
   }
 
   try {
-    const client = getNeynarClient();
     const castCounts: Record<number, number> = {};
     
     // Initialize all FIDs with 0 counts

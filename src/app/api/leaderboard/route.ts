@@ -132,7 +132,7 @@ async function _getTokenBalance(address: string, retries: number = 3): Promise<n
         // Rate limited, will retry with RPC fallback
         console.log(`[Leaderboard] BaseScan rate limited for ${address}, will retry with RPC`);
       }
-    } catch (error) {
+    } catch (_error) {
       // Fall through to RPC fallback
       console.log(`[Leaderboard] BaseScan API failed for ${address}, using RPC fallback`);
     }
@@ -262,7 +262,7 @@ export async function GET(req: NextRequest) {
     const client = getNeynarClient();
     let fids: number[] = [];
     const checkinMap = new Map<number, { streak: number; last_checkin: string | null; total_checkins: number }>();
-    let blockchainBalances = new Map<number, number>(); // Balances from BaseScan
+    const blockchainBalances = new Map<number, number>(); // Balances from BaseScan
     let totalTokenHolders = 0; // Total holders from blockchain
 
     if (sortBy === "holdings") {

@@ -25,8 +25,10 @@ interface Cast {
   url: string;
 }
 
+const CATWALK_CHANNEL_URL = "https://farcaster.xyz/~/channel/Catwalk";
+
 export function FeedTab() {
-  const { context } = useMiniApp();
+  const { context, actions } = useMiniApp();
   const [casts, setCasts] = useState<Cast[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | { message: string; debug?: any } | null>(null);
@@ -198,25 +200,26 @@ export function FeedTab() {
       {/* Feed Header */}
       <div
         style={{
-          padding: "20px 0",
-          borderBottom: "2px solid #c1b400",
+          padding: "16px",
           marginBottom: 16,
-          background: "transparent",
+          background: "#000000",
+          border: "2px solid #c1b400",
+          borderRadius: 12,
+          textAlign: "center",
         }}
       >
         <h2
           style={{
             color: "#c1b400",
-            fontSize: 24,
+            fontSize: 20,
             fontWeight: 700,
             margin: 0,
-            textAlign: "center",
           }}
         >
           Catwalk Channel{" "}
           <span
             style={{
-              fontSize: 32,
+              fontSize: 28,
               fontWeight: 900,
             }}
           >
@@ -419,24 +422,13 @@ export function FeedTab() {
         >
           {/* More Cats Button */}
           <button
-            onClick={() => {
-              // Load more feed items (in-app, stay in feed)
-              // For now, just fetch the feed again - in future could paginate
-              const fetchMore = async () => {
-                try {
-                  const viewerFid = context?.user?.fid;
-                  const url = viewerFid ? `/api/channel-feed?viewerFid=${viewerFid}` : "/api/channel-feed";
-                  const res = await fetch(url);
-                  const data = await res.json();
-                  if (data.casts) {
-                    // Could implement pagination here, for now just refresh
-                    setCasts(data.casts || []);
-                  }
-                } catch (err) {
-                  console.error("Error fetching more feed:", err);
-                }
-              };
-              fetchMore();
+            onClick={async () => {
+              // Open the /catwalk channel within the app
+              try {
+                await actions.openUrl(CATWALK_CHANNEL_URL);
+              } catch (err) {
+                console.error("Error opening channel:", err);
+              }
             }}
             style={{
               width: "100%",

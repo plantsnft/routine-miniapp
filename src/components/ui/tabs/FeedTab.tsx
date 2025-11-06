@@ -522,9 +522,10 @@ export function FeedTab() {
                 };
                 fetchCreators();
               } else {
-                // Placeholder: show 29 placeholder creators
+                // Placeholder: show placeholder creators if no FIDs are available
+                const placeholderCount = CATWALK_CREATOR_FIDS.length > 0 ? CATWALK_CREATOR_FIDS.length : 31;
                 setCreators(
-                  Array.from({ length: 29 }, (_, i) => ({
+                  Array.from({ length: placeholderCount }, (_, i) => ({
                     fid: 0,
                     username: undefined,
                     displayName: `Creator ${i + 1}`,

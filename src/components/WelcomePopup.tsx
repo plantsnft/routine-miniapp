@@ -116,7 +116,7 @@ export function WelcomePopup({ onClose }: WelcomePopupProps) {
             top: 0,
             left: 0,
             right: 0,
-            height: "30px",
+            height: "90px", // 3x bigger: 30px * 3 = 90px
             overflow: "hidden",
             borderBottom: "1px solid rgba(193, 180, 0, 0.3)",
             display: "flex",
@@ -130,7 +130,7 @@ export function WelcomePopup({ onClose }: WelcomePopupProps) {
               whiteSpace: "nowrap",
               animation: "ticker 20s linear infinite",
               fontFamily: "cursive, 'Brush Script MT', 'Lucida Handwriting', serif",
-              fontSize: "11px",
+              fontSize: "33px", // 3x bigger: 11px * 3 = 33px
               color: "#c1b400",
               opacity: 0.8,
               paddingLeft: "100%",
@@ -167,7 +167,7 @@ export function WelcomePopup({ onClose }: WelcomePopupProps) {
         </button>
 
         {/* Content */}
-        <div style={{ marginTop: "40px", padding: "0 8px" }}>
+        <div style={{ marginTop: "100px", padding: "0 8px" }}> {/* Increased to accommodate bigger ticker */}
           <div
             style={{
               display: "flex",
@@ -179,7 +179,7 @@ export function WelcomePopup({ onClose }: WelcomePopupProps) {
             <p
               style={{
                 color: "#ffffff",
-                fontSize: 15,
+                fontSize: 7.5, // Half size: 15px / 2 = 7.5px
                 lineHeight: 1.7,
                 margin: 0,
                 textAlign: "left",
@@ -191,7 +191,7 @@ export function WelcomePopup({ onClose }: WelcomePopupProps) {
             <p
               style={{
                 color: "#ffffff",
-                fontSize: 15,
+                fontSize: 7.5, // Half size: 15px / 2 = 7.5px
                 lineHeight: 1.7,
                 margin: 0,
                 textAlign: "left",
@@ -203,7 +203,7 @@ export function WelcomePopup({ onClose }: WelcomePopupProps) {
             <p
               style={{
                 color: "#ffffff",
-                fontSize: 15,
+                fontSize: 7.5, // Half size: 15px / 2 = 7.5px
                 lineHeight: 1.7,
                 margin: 0,
                 textAlign: "left",

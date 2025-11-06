@@ -29,9 +29,11 @@ export function CheckinButton({ checkedIn, saving, onClick }: CheckinButtonProps
         fontSize: 16,
         transition: "all 0.2s",
         display: "flex",
+        flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
         gap: 8,
+        position: "relative",
       }}
       onMouseEnter={(e) => {
         if (!checkedIn && !saving) {

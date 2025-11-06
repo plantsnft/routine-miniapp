@@ -54,10 +54,11 @@ export function SleepingCat() {
   return (
     <div
       style={{
-        display: "flex",
+        display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
         flexShrink: 0,
+        lineHeight: 1,
       }}
     >
       {/* Sleeping cat GIF - inline with button text */}
@@ -67,9 +68,10 @@ export function SleepingCat() {
           animation: "float 2s ease-in-out infinite",
           width: 32,
           height: 32,
-          display: "flex",
+          display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
+          verticalAlign: "middle",
         }}
       >
         {!gifLoaded && (
@@ -96,6 +98,7 @@ export function SleepingCat() {
               height: 32,
               objectFit: "contain",
               display: "block",
+              verticalAlign: "middle",
             }}
           />
         )}

@@ -66,10 +66,13 @@ export function FeedTab() {
     return (
       <div
         style={{
+          backgroundImage: "url(/wallpaper.png)",
+          backgroundRepeat: "repeat",
+          backgroundSize: "auto",
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
-          minHeight: "400px",
+          minHeight: "100vh",
           color: "#ffffff",
         }}
       >
@@ -95,10 +98,13 @@ export function FeedTab() {
     return (
       <div
         style={{
+          backgroundImage: "url(/wallpaper.png)",
+          backgroundRepeat: "repeat",
+          backgroundSize: "auto",
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
-          minHeight: "400px",
+          minHeight: "100vh",
           padding: "20px",
         }}
       >
@@ -126,10 +132,13 @@ export function FeedTab() {
     return (
       <div
         style={{
+          backgroundImage: "url(/wallpaper.png)",
+          backgroundRepeat: "repeat",
+          backgroundSize: "auto",
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
-          minHeight: "400px",
+          minHeight: "100vh",
           padding: "20px",
         }}
       >
@@ -156,6 +165,10 @@ export function FeedTab() {
   return (
     <div
       style={{
+        backgroundImage: "url(/wallpaper.png)",
+        backgroundRepeat: "repeat",
+        backgroundSize: "auto",
+        minHeight: "100vh",
         maxWidth: "600px",
         margin: "0 auto",
         padding: "0 16px 100px",

@@ -113,8 +113,11 @@ async function getTokenBalancesBatch(
  * For "streak" mode: Shows users ranked by check-in streaks (Most Walks).
  * 
  * Returns top 50 users, with their streaks and Farcaster usernames.
- * Only includes users who have verified wallet addresses in Farcaster.
- * Consolidates holdings across multiple verified wallets per user.
+ * Includes ALL wallet addresses associated with each Farcaster ID:
+ * - Verified addresses (external wallets connected by user)
+ * - Custodial addresses (Farcaster integrated wallet, Bankr bot, etc.)
+ * - Active status addresses (if available)
+ * Consolidates holdings across ALL wallets per user (one combined score per FID).
  */
 export async function GET(req: NextRequest) {
   try {
@@ -162,31 +165,67 @@ export async function GET(req: NextRequest) {
     // Fetch user data from Neynar (includes usernames and verified addresses)
     const { users } = await client.fetchBulkUsers({ fids });
 
-    // Create a map of FID to user data
+    // Helper function to collect ALL addresses from a user object
+    // This includes: verified addresses, custodial addresses, and any other linked addresses
+    const getAllUserAddresses = (u: any): string[] => {
+      const addresses: string[] = [];
+      
+      // Verified addresses (external wallets connected by user)
+      if (u.verified_addresses?.eth_addresses) {
+        addresses.push(...u.verified_addresses.eth_addresses);
+      }
+      
+      // Custodial address (Farcaster's integrated wallet, Bankr bot, etc.)
+      if (u.custodial_address) {
+        addresses.push(u.custodial_address);
+      }
+      
+      // Active status addresses (if available)
+      if (u.active_status?.addresses) {
+        addresses.push(...u.active_status.addresses);
+      }
+      
+      // Remove duplicates and normalize to lowercase for consistency
+      const uniqueAddresses = Array.from(new Set(addresses.map(addr => addr.toLowerCase())));
+      
+      return uniqueAddresses;
+    };
+
+    // Create a map of FID to user data with ALL addresses
     const userMap = new Map(
-      users.map((u) => [
-        u.fid,
-        {
-          username: u.username,
-          displayName: u.display_name,
-          verifiedAddresses: u.verified_addresses?.eth_addresses || [],
-        },
-      ])
+      users.map((u) => {
+        const allAddresses = getAllUserAddresses(u);
+        return [
+          u.fid,
+          {
+            username: u.username,
+            displayName: u.display_name,
+            allAddresses: allAddresses,
+          },
+        ];
+      })
     );
 
     // Collect all unique addresses to batch fetch balances
     const addressToFids = new Map<string, number[]>();
     const fidToAddresses = new Map<number, string[]>();
     
-    topCheckins.forEach((checkin) => {
-      const userData = userMap.get(checkin.fid);
-      if (userData?.verifiedAddresses && userData.verifiedAddresses.length > 0) {
-        fidToAddresses.set(checkin.fid, userData.verifiedAddresses);
-        userData.verifiedAddresses.forEach((addr) => {
-          if (!addressToFids.has(addr)) {
-            addressToFids.set(addr, []);
+    // For holdings mode: process all users, not just check-ins
+    // For streak mode: only process users who have checked in
+    const usersToProcess = sortBy === "holdings" 
+      ? Array.from(userMap.keys()).map((fid) => ({ fid }))
+      : fids.map((fid) => ({ fid }));
+    
+    usersToProcess.forEach(({ fid }) => {
+      const userData = userMap.get(fid);
+      if (userData?.allAddresses && userData.allAddresses.length > 0) {
+        fidToAddresses.set(fid, userData.allAddresses);
+        userData.allAddresses.forEach((addr) => {
+          const normalizedAddr = addr.toLowerCase();
+          if (!addressToFids.has(normalizedAddr)) {
+            addressToFids.set(normalizedAddr, []);
           }
-          addressToFids.get(addr)!.push(checkin.fid);
+          addressToFids.get(normalizedAddr)!.push(fid);
         });
       }
     });
@@ -204,14 +243,16 @@ export async function GET(req: NextRequest) {
       const username = userData?.username;
       const displayName = userData?.displayName;
       
-      // Get token balance from verified addresses (if any)
-      // Consolidate holdings across all verified wallets for this user
+      // Get token balance from ALL addresses (verified, custodial, integrated, etc.)
+      // Consolidate holdings across ALL wallets for this user (one combined score per FID)
       let tokenBalance = 0;
       const userAddresses = fidToAddresses.get(fid) || [];
       if (userAddresses.length > 0) {
-        // Sum all balances across multiple wallets for this user
+        // Sum all balances across ALL wallets for this user
+        // This includes: verified wallets, custodial wallets, integrated wallets, bot wallets, etc.
         tokenBalance = userAddresses.reduce((sum, addr) => {
-          const balance = balancesMap.get(addr) || 0;
+          const normalizedAddr = addr.toLowerCase();
+          const balance = balancesMap.get(normalizedAddr) || 0;
           return sum + balance;
         }, 0);
       }

@@ -300,15 +300,20 @@ export async function GET(req: NextRequest) {
       const addressToFid = new Map<string, number>();
       let totalHolders = 0;
       
-      // Step 1: Get all token holders from BaseScan API
-      // Try V1 API first (deprecated but might still work with API key)
+      // Step 1: Get all token holders from blockchain
+      // BaseScan V1 is deprecated, so we'll use Transfer events to build the holder list
       try {
         if (!BASESCAN_API_KEY) {
-          console.log("[Leaderboard] ⚠️ BASESCAN_API_KEY not set. Cannot fetch all holders. Will use Neynar fallback for known users only.");
+          console.log("[Leaderboard] ⚠️ BASESCAN_API_KEY not set. Will use Neynar fallback for known users only.");
         } else {
-          console.log(`[Leaderboard] Using BaseScan API key to fetch all token holders...`);
+          console.log(`[Leaderboard] Building holder list from Transfer events (BaseScan V1 tokenholderlist is deprecated)...`);
           
-          // Try to get holder count from token info first
+          // Method: Query Transfer events to build a map of current balances
+          // ERC20 Transfer event signature: Transfer(address indexed from, address indexed to, uint256 value)
+          // Topic0: 0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef
+          const transferEventTopic = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+          
+          // Method 1: Try to get holder count from token info (for display purposes)
           try {
             const tokenInfoUrl = `https://api.basescan.org/api?module=token&action=tokeninfo&contractaddress=${TOKEN_ADDRESS}&apikey=${BASESCAN_API_KEY}`;
             const tokenInfoResponse = await fetch(tokenInfoUrl, {
@@ -326,74 +331,118 @@ export async function GET(req: NextRequest) {
               }
             }
           } catch (_infoError) {
-            // Continue to holder list fetch
+            // Continue
           }
           
-          // Fetch holder list (V1 API - deprecated but might work with key)
-          let page = 1;
-          const pageSize = 1000;
-          let hasMore = true;
+          // Method 2: Query Transfer events in chunks to build holder list
+          // This is more reliable than the deprecated tokenholderlist endpoint
+          const addressesWithBalance = new Map<string, number>();
           
-          while (hasMore && page <= 10) { // Max 10,000 holders
-            const holderListUrl = `https://api.basescan.org/api?module=token&action=tokenholderlist&contractaddress=${TOKEN_ADDRESS}&page=${page}&offset=${pageSize}&apikey=${BASESCAN_API_KEY}`;
-            
-            console.log(`[Leaderboard] Fetching page ${page} of token holders...`);
-            const holderResponse = await fetch(holderListUrl, {
-              headers: { 
-                "User-Agent": "Catwalk-MiniApp",
-                "Accept": "application/json"
-              },
+          // Query Transfer events in chunks (BaseScan limits to 10,000 results per query)
+          // We'll query recent blocks first (last 100,000 blocks = ~14 days on Base)
+          try {
+            // First, get the latest block number
+            const latestBlockUrl = `https://api.basescan.org/api?module=proxy&action=eth_blockNumber&apikey=${BASESCAN_API_KEY}`;
+            const latestBlockResponse = await fetch(latestBlockUrl, {
+              headers: { "User-Agent": "Catwalk-MiniApp" },
             });
             
-            if (holderResponse.ok) {
-              const holderData = await holderResponse.json();
+            let latestBlock = 0;
+            if (latestBlockResponse.ok) {
+              const latestBlockData = await latestBlockResponse.json();
+              if (latestBlockData.result) {
+                latestBlock = parseInt(latestBlockData.result, 16);
+                console.log(`[Leaderboard] Latest block: ${latestBlock}`);
+              }
+            }
+            
+            // Query Transfer events in chunks of 10,000 blocks
+            const chunkSize = 10000;
+            let processedEvents = 0;
+            const maxChunks = 20; // Limit to 200,000 blocks to avoid timeout
+            
+            for (let chunk = 0; chunk < maxChunks; chunk++) {
+              const fromBlock = latestBlock - (chunk + 1) * chunkSize;
+              const toBlock = latestBlock - chunk * chunkSize;
               
-              if (holderData.status === "1" && holderData.result) {
-                const holders = Array.isArray(holderData.result) ? holderData.result : [];
+              if (fromBlock < 0) break;
+              
+              const logsUrl = `https://api.basescan.org/api?module=logs&action=getLogs&fromBlock=${fromBlock}&toBlock=${toBlock}&address=${TOKEN_ADDRESS}&topic0=${transferEventTopic}&apikey=${BASESCAN_API_KEY}`;
+              
+              console.log(`[Leaderboard] Querying Transfer events: blocks ${fromBlock} to ${toBlock}...`);
+              const logsResponse = await fetch(logsUrl, {
+                headers: { "User-Agent": "Catwalk-MiniApp" },
+              });
+              
+              if (logsResponse.ok) {
+                const logsData = await logsResponse.json();
                 
-                if (holders.length > 0) {
-                  holders.forEach((holder: any) => {
-                    const address = (holder.TokenHolderAddress || holder.address || holder.Address || "").toLowerCase();
-                    const balanceStr = holder.TokenHolderQuantity || holder.quantity || holder.balance || "0";
-                    const balance = parseFloat(String(balanceStr).replace(/,/g, "")) || 0;
-                    
-                    if (address && address.startsWith("0x") && balance > 0) {
-                      addressToBalance.set(address, balance);
+                if (logsData.status === "1" && logsData.result && Array.isArray(logsData.result)) {
+                  const eventsInChunk = logsData.result.length;
+                  processedEvents += eventsInChunk;
+                  
+                  // Process each transfer event
+                  logsData.result.forEach((log: any) => {
+                    if (log.topics && log.topics.length >= 3) {
+                      const fromAddress = "0x" + log.topics[1].slice(-40).toLowerCase();
+                      const toAddress = "0x" + log.topics[2].slice(-40).toLowerCase();
+                      const valueHex = log.data || "0x0";
+                      
+                      try {
+                        const value = BigInt(valueHex);
+                        const valueDecimal = Number(value) / Math.pow(10, 18);
+                        
+                        // Subtract from sender (unless it's the zero address = mint)
+                        if (fromAddress !== "0x0000000000000000000000000000000000000000") {
+                          const currentFrom = addressesWithBalance.get(fromAddress) || 0;
+                          addressesWithBalance.set(fromAddress, currentFrom - valueDecimal);
+                        }
+                        
+                        // Add to receiver (unless it's the zero address = burn)
+                        if (toAddress !== "0x0000000000000000000000000000000000000000") {
+                          const currentTo = addressesWithBalance.get(toAddress) || 0;
+                          addressesWithBalance.set(toAddress, currentTo + valueDecimal);
+                        }
+                      } catch (_parseError) {
+                        // Skip invalid values
+                      }
                     }
                   });
                   
-                  if (!totalHolders && holders.length > 0) {
-                    totalHolders = parseInt(holderData.result[0]?.TotalHolders || String(addressToBalance.size), 10) || addressToBalance.size;
-                  }
+                  console.log(`[Leaderboard] Processed chunk ${chunk + 1}: ${eventsInChunk} events (Total processed: ${processedEvents})`);
                   
-                  hasMore = holders.length === pageSize;
-                  console.log(`[Leaderboard] Page ${page}: ${holders.length} holders (Total: ${addressToBalance.size})`);
-                  page++;
-                  
-                  if (hasMore) {
-                    await new Promise(resolve => setTimeout(resolve, 500));
+                  // If this chunk returned less than 10,000 events, we might be done
+                  if (eventsInChunk < 10000) {
+                    break;
                   }
                 } else {
-                  hasMore = false;
+                  console.log(`[Leaderboard] No more events in chunk ${chunk + 1}`);
+                  break;
                 }
               } else {
-                const errorMsg = typeof holderData.result === 'string' ? holderData.result : holderData.message || 'Unknown error';
-                console.error(`[Leaderboard] BaseScan API error: ${errorMsg}`);
-                hasMore = false;
+                const errorText = await logsResponse.text();
+                if (errorText.includes('query timeout') || errorText.includes('result size')) {
+                  console.log(`[Leaderboard] Query limit reached at chunk ${chunk + 1}, stopping`);
+                  break;
+                }
               }
-            } else {
-              const errorText = await holderResponse.text();
-              if (errorText.includes('deprecated') || errorText.includes('V2')) {
-                console.error(`[Leaderboard] BaseScan V1 API is deprecated. Cannot fetch holder list.`);
-              } else {
-                console.error(`[Leaderboard] BaseScan API error: ${holderResponse.status}`);
-              }
-              hasMore = false;
+              
+              // Small delay between chunks
+              await new Promise(resolve => setTimeout(resolve, 300));
             }
+            
+            // Filter to only addresses with positive balances (current holders)
+            addressesWithBalance.forEach((balance, address) => {
+              if (balance > 0) {
+                addressToBalance.set(address, balance);
+              }
+            });
+            
+            totalTokenHolders = totalHolders || addressToBalance.size;
+            console.log(`[Leaderboard] Step 1 Complete: Found ${addressToBalance.size} token holder addresses from ${processedEvents} Transfer events (Total holders: ${totalTokenHolders})`);
+          } catch (logsError: any) {
+            console.error("[Leaderboard] Error building holder list from Transfer events:", logsError?.message || logsError);
           }
-          
-          totalTokenHolders = totalHolders || addressToBalance.size;
-          console.log(`[Leaderboard] Step 1 Complete: Found ${addressToBalance.size} token holder addresses (Total holders: ${totalTokenHolders})`);
         }
       } catch (holderError: any) {
         console.error("[Leaderboard] Error fetching token holders:", holderError?.message || holderError);
@@ -700,7 +749,7 @@ export async function GET(req: NextRequest) {
                 fidToBalance.set(fid, neynarBalance);
               }
               return { fid, balance: neynarBalance };
-            } catch (err: any) {
+            } catch (_err: any) {
               return { fid, balance: 0 };
             }
           });

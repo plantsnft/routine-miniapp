@@ -185,7 +185,7 @@ export function WelcomePopup({ onClose }: WelcomePopupProps) {
                 textAlign: "left",
               }}
             >
-              • Catwalk Entertainment Co: creators putting cat adventures on-chain.
+              <strong>Catwalk Entertainment Co</strong>: putting cat adventures on-chain.
             </p>
 
             <p
@@ -197,7 +197,7 @@ export function WelcomePopup({ onClose }: WelcomePopupProps) {
                 textAlign: "left",
               }}
             >
-              • Every moment—parks to city—becomes an on-chain story of cats + humans.
+              Every moment—parks to city—becomes an on-chain story of cats + humans.
             </p>
 
             <p
@@ -209,7 +209,25 @@ export function WelcomePopup({ onClose }: WelcomePopupProps) {
                 textAlign: "left",
               }}
             >
-              • $CATWALK powers it—rewards creators, fuels partners, builds cat-first entertainment on Farcaster.
+              <a
+                href="https://app.uniswap.org/swap?chain=base&outputCurrency=0xa5eb1cAD0dFC1c4f8d4f84f995aeDA9a7A047B07"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  color: "#c1b400",
+                  textDecoration: "none",
+                  fontWeight: 700,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.textDecoration = "underline";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.textDecoration = "none";
+                }}
+              >
+                <strong>$CATWALK</strong>
+              </a>{" "}
+              powers it—rewards creators, fuels partners, builds cat-first entertainment on Farcaster.
             </p>
           </div>
 

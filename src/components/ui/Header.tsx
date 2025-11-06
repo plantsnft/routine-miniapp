@@ -18,7 +18,7 @@ export function Header({ neynarUser }: HeaderProps) {
   return (
     <div className="relative">
       <div 
-        className="mt-4 mb-4 mx-4 px-4 py-3 bg-black rounded-lg flex items-center justify-between border-2 border-[#c1b400]"
+        className="mt-4 mb-0 mx-4 px-4 py-3 bg-black rounded-lg flex items-center justify-between border-2 border-[#c1b400]"
         style={{ background: "#000000", borderColor: "#c1b400" }}
       >
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>

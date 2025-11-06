@@ -95,7 +95,7 @@ export function HomeTab() {
       <div className="max-w-md mx-auto" style={{ position: "relative", zIndex: 1 }}>
 
         {/* Featured Photo - Add your photo here */}
-        <div style={{ textAlign: "center", marginBottom: 16 }}>
+        <div style={{ textAlign: "center", marginBottom: 12 }}>
           <img 
             src="/featured-photo.png" 
             alt="Catwalk Featured" 
@@ -118,7 +118,8 @@ export function HomeTab() {
         {/* Channel Stats */}
         <div
           style={{
-            marginBottom: 16,
+            marginTop: 12,
+            marginBottom: 12,
             padding: "14px 16px",
             background: "#000000",
             border: "2px solid #c1b400",

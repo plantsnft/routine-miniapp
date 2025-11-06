@@ -206,6 +206,23 @@ export function VideoPlayer({
     }
   };
 
+  // Check if video URL is HLS (.m3u8)
+  const isHLS = videoUrl.includes('.m3u8');
+  
+  // Check if native HLS is supported (for Safari, newer Chrome/Edge)
+  // If not, hls.js will be used instead
+  // NOTE: Hooks must be called before any conditional returns
+  const [useNativeHLS, setUseNativeHLS] = useState<boolean | null>(null);
+  
+  useEffect(() => {
+    if (videoRef.current && isHLS) {
+      const canPlayHLS = videoRef.current.canPlayType('application/vnd.apple.mpegurl');
+      setUseNativeHLS(!!canPlayHLS && canPlayHLS !== '');
+    } else if (!isHLS) {
+      setUseNativeHLS(true); // Regular video files use native playback
+    }
+  }, [isHLS]);
+
   if (hasError) {
     return (
       <div
@@ -238,22 +255,6 @@ export function VideoPlayer({
       </div>
     );
   }
-
-  // Check if video URL is HLS (.m3u8)
-  const isHLS = videoUrl.includes('.m3u8');
-  
-  // Check if native HLS is supported (for Safari, newer Chrome/Edge)
-  // If not, hls.js will be used instead
-  const [useNativeHLS, setUseNativeHLS] = useState<boolean | null>(null);
-  
-  useEffect(() => {
-    if (videoRef.current && isHLS) {
-      const canPlayHLS = videoRef.current.canPlayType('application/vnd.apple.mpegurl');
-      setUseNativeHLS(!!canPlayHLS && canPlayHLS !== '');
-    } else if (!isHLS) {
-      setUseNativeHLS(true); // Regular video files use native playback
-    }
-  }, [isHLS]);
 
   return (
     <div

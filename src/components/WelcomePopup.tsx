@@ -58,7 +58,7 @@ export function WelcomePopup({ onClose }: WelcomePopupProps) {
     } else {
       setLoading(false);
     }
-  }, [context?.user?.fid]);
+  }, [context]);
 
   const handleClose = () => {
     setShowPopup(false);

@@ -78,6 +78,7 @@ export function CreatorGreeting({ onClose }: CreatorGreetingProps) {
     } else {
       setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [context?.user?.fid]);
 
   const handleClose = () => {

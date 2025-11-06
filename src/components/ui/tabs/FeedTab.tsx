@@ -502,7 +502,7 @@ export function FeedTab() {
                           fid: u.fid,
                           username: u.username,
                           displayName: u.display_name,
-                          pfp_url: u.pfp_url || u.pfp?.url || null,
+                          pfp_url: u.pfp_url || u.pfp?.url || undefined,
                           castCount: castCountsData?.castCounts?.[u.fid], // undefined means unknown/loading
                         }))
                       );
@@ -511,13 +511,12 @@ export function FeedTab() {
                       setCreators(CATWALK_CREATOR_FIDS.map((fid) => ({ 
                         fid,
                         castCount: castCountsData?.castCounts?.[fid],
-                        pfp_url: null,
                       })));
                     }
                   } catch (error) {
                     console.error("Error fetching creators:", error);
                     // Fallback: just show FIDs
-                    setCreators(CATWALK_CREATOR_FIDS.map((fid) => ({ fid, pfp_url: null })));
+                    setCreators(CATWALK_CREATOR_FIDS.map((fid) => ({ fid })));
                   } finally {
                     setLoadingCastCounts(false);
                   }
@@ -531,7 +530,6 @@ export function FeedTab() {
                     fid: 0,
                     username: undefined,
                     displayName: `Creator ${i + 1}`,
-                    pfp_url: null,
                   }))
                 );
               }

@@ -66,17 +66,17 @@ export function HomeTab() {
                 fid: u.fid,
                 username: u.username,
                 displayName: u.display_name,
-                pfp_url: u.pfp_url || u.pfp?.url || null,
+                pfp_url: u.pfp_url || u.pfp?.url || undefined,
               }))
             );
           } else {
             // Fallback: just show FIDs if user fetch fails
-            setCreators(CATWALK_CREATOR_FIDS.map((fid) => ({ fid, pfp_url: null })));
+            setCreators(CATWALK_CREATOR_FIDS.map((fid) => ({ fid })));
           }
         } catch (error) {
           console.error("Error fetching creators:", error);
           // Fallback: just show FIDs
-          setCreators(CATWALK_CREATOR_FIDS.map((fid) => ({ fid, pfp_url: null })));
+          setCreators(CATWALK_CREATOR_FIDS.map((fid) => ({ fid })));
         }
       };
       fetchCreators();

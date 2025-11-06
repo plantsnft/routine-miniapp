@@ -18,34 +18,68 @@ async function getTokenBalanceFromNeynar(fid: number): Promise<number> {
       networks: ['base'],
     });
 
+    // Log response structure for first few users to debug
+    if (fid <= 3) {
+      console.log(`[Leaderboard] Neynar response for FID ${fid}:`, JSON.stringify(response, null, 2));
+    }
+
     // Neynar returns balances for all tokens across all connected wallets
     // The response structure may vary, so we use type assertion to access the data
     const userBalance = response.user_balance as any;
     
     // Check for tokens array in various possible locations
-    const tokens = userBalance?.tokens || userBalance?.token_balances || [];
+    const tokens = userBalance?.tokens || userBalance?.token_balances || userBalance?.balances || [];
+    
+    if (fid <= 3) {
+      console.log(`[Leaderboard] Found ${tokens.length} tokens for FID ${fid}`);
+    }
     
     if (Array.isArray(tokens) && tokens.length > 0) {
       const catwalkToken = tokens.find(
         (token: any) => {
-          const contractAddr = token.contract_address || token.contractAddress || token.address;
-          return contractAddr?.toLowerCase() === TOKEN_ADDRESS.toLowerCase();
+          const contractAddr = token.contract_address || token.contractAddress || token.address || token.token_address;
+          const matches = contractAddr?.toLowerCase() === TOKEN_ADDRESS.toLowerCase();
+          if (fid <= 3 && matches) {
+            console.log(`[Leaderboard] Found CATWALK token for FID ${fid}:`, token);
+          }
+          return matches;
         }
       );
       
       if (catwalkToken) {
         // Get balance from various possible property names
-        const balanceRaw = catwalkToken.balance || catwalkToken.amount || catwalkToken.value || '0';
+        const balanceRaw = catwalkToken.balance || catwalkToken.amount || catwalkToken.value || catwalkToken.quantity || '0';
+        
+        if (fid <= 3) {
+          console.log(`[Leaderboard] CATWALK balance raw for FID ${fid}:`, balanceRaw);
+        }
         
         // Convert from wei/raw balance to human-readable format
         // The balance is typically in the smallest unit (wei for ETH, smallest unit for tokens)
-        const balanceWei = BigInt(String(balanceRaw));
-        const decimals = BigInt(10 ** 18); // CATWALK has 18 decimals
-        const wholePart = balanceWei / decimals;
-        const fractionalPart = balanceWei % decimals;
-        const balance = Number(wholePart) + Number(fractionalPart) / Number(decimals);
-        return balance;
+        try {
+          const balanceWei = BigInt(String(balanceRaw));
+          const decimals = BigInt(10 ** 18); // CATWALK has 18 decimals
+          const wholePart = balanceWei / decimals;
+          const fractionalPart = balanceWei % decimals;
+          const balance = Number(wholePart) + Number(fractionalPart) / Number(decimals);
+          
+          if (fid <= 3) {
+            console.log(`[Leaderboard] CATWALK balance parsed for FID ${fid}:`, balance);
+          }
+          
+          return balance;
+        } catch (parseError) {
+          console.error(`[Leaderboard] Error parsing balance for FID ${fid}:`, parseError, 'Raw value:', balanceRaw);
+          return 0;
+        }
+      } else if (fid <= 3) {
+        console.log(`[Leaderboard] CATWALK token not found for FID ${fid}. Available tokens:`, tokens.map((t: any) => ({
+          address: t.contract_address || t.contractAddress || t.address || t.token_address,
+          symbol: t.symbol || t.token_symbol,
+        })));
       }
+    } else if (fid <= 3) {
+      console.log(`[Leaderboard] No tokens array found for FID ${fid}. User balance structure:`, Object.keys(userBalance || {}));
     }
     
     return 0;

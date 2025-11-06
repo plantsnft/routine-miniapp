@@ -54,31 +54,31 @@ export function StreakDisplay({
   return (
     <div
       style={{
-        marginBottom: 16,
-        padding: 14,
+        marginBottom: 8,
+        padding: 8,
         background: "#c1b400",
-        borderRadius: 12,
-        border: "2px solid #000000",
+        borderRadius: 8,
+        border: "1px solid #000000",
       }}
     >
       <p
         style={{
           margin: 0,
-          marginBottom: 6,
+          marginBottom: 4,
           color: "#000000",
-          fontWeight: 700,
-          fontSize: 20,
+          fontWeight: 600,
+          fontSize: 12,
         }}
       >
         🔥 {streak} day{streak === 1 ? "" : "s"} streak
       </p>
       {!checkedIn && lastCheckIn && (
-        <p style={{ margin: 0, marginBottom: 4, color: "#000000", fontSize: 13, opacity: 0.8 }}>
+        <p style={{ margin: 0, marginBottom: 2, color: "#000000", fontSize: 10, opacity: 0.8 }}>
           Last check-in: {formatLastCheckIn(lastCheckIn)}
         </p>
       )}
       {checkedIn && timeUntilNext && (
-        <p style={{ margin: 0, color: "#000000", fontSize: 13, fontWeight: 500 }}>
+        <p style={{ margin: 0, color: "#000000", fontSize: 10, fontWeight: 400 }}>
           Next check-in: {timeUntilNext} (9 AM Pacific)
         </p>
       )}

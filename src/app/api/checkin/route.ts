@@ -73,25 +73,32 @@ export async function GET(req: NextRequest) {
       ? checkin.streak
       : 0;
 
-    // Validate and adjust streak if user hasn't checked in for more than 1 day
-    // This ensures the displayed streak is accurate even before they check in again
-    if (lastCheckin) {
-      const lastDate = new Date(lastCheckin);
-      const nowDate = new Date();
-      const daysDiff = getPacificDaysDiff(lastDate, nowDate);
-      
-      // If more than 1 day has passed, streak should be reset (but don't update DB until they check in)
-      if (daysDiff > 1) {
-        streak = 0; // Reset streak for display purposes
-      }
-    }
-
     // Check if user has already checked in today (based on 9 AM Pacific reset)
     let hasCheckedInToday = false;
     if (lastCheckin) {
       const lastDate = new Date(lastCheckin);
       const nowDate = new Date();
       hasCheckedInToday = getCheckInDayId(lastDate) === getCheckInDayId(nowDate);
+    }
+
+    // Validate and adjust streak if user hasn't checked in today
+    // The streak should be 0 if they haven't checked in today (even if they checked in yesterday)
+    // This ensures the displayed streak is accurate even before they check in again
+    if (lastCheckin && !hasCheckedInToday) {
+      const lastDate = new Date(lastCheckin);
+      const nowDate = new Date();
+      const daysDiff = getPacificDaysDiff(lastDate, nowDate);
+      
+      // If they haven't checked in today (daysDiff >= 1), streak should be reset to 0
+      // This means if they checked in yesterday but not today, streak = 0
+      // If they checked in 2+ days ago, streak = 0
+      // Only if daysDiff === 0 (checked in today) should we keep the streak
+      if (daysDiff >= 1) {
+        streak = 0; // Reset streak for display purposes - they haven't maintained it today
+      }
+    } else if (!lastCheckin) {
+      // No check-in record at all - streak should be 0
+      streak = 0;
     }
 
     return NextResponse.json<CheckinResponse>({

@@ -89,7 +89,7 @@ export function HomeTab() {
       style={{ 
         backgroundImage: "url(/wallpaper.png)",
         backgroundRepeat: "repeat",
-        backgroundSize: "auto",
+        backgroundSize: "5%",
         minHeight: "100vh", 
         position: "relative" 
       }}

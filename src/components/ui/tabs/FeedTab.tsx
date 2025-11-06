@@ -210,7 +210,15 @@ export function FeedTab() {
             textAlign: "center",
           }}
         >
-          /Catwalk Feed
+          Catwalk Channel{" "}
+          <span
+            style={{
+              fontSize: 32,
+              fontWeight: 900,
+            }}
+          >
+            Live Feed
+          </span>
         </h2>
       </div>
 

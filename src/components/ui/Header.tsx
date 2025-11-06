@@ -18,7 +18,7 @@ export function Header({ neynarUser }: HeaderProps) {
   return (
     <div className="relative">
       <div 
-        className="mt-4 mb-0 mx-4 px-4 py-3 bg-black rounded-lg flex items-center justify-between border-2 border-[#c1b400]"
+        className="mt-4 mb-0 mx-4 px-4 py-2 bg-black rounded-lg flex items-center justify-between border-2 border-[#c1b400]"
         style={{ background: "#000000", borderColor: "#c1b400" }}
       >
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
@@ -31,14 +31,15 @@ export function Header({ neynarUser }: HeaderProps) {
               color: "#c1b400", 
               textDecoration: "none",
               cursor: "pointer",
-              marginBottom: 4,
+              marginBottom: 2,
+              fontSize: 16,
             }}
           >
             Welcome to /Catwalk
           </a>
           <p style={{ 
             margin: 0, 
-            fontSize: 12, 
+            fontSize: 11, 
             color: "#ffffff", 
             opacity: 0.8,
             fontWeight: 400,

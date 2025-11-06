@@ -107,7 +107,11 @@ async function getTokenBalancesBatch(
 
 /**
  * GET endpoint to fetch leaderboard data.
- * Supports sorting by either $CATWALK holdings or streak.
+ * Supports sorting by either $CATWALK holdings or streak (Most Walks).
+ * 
+ * For "holdings" mode: Includes ALL token holders (even if they haven't checked in).
+ * For "streak" mode: Shows users ranked by check-in streaks (Most Walks).
+ * 
  * Returns top 50 users, with their streaks and Farcaster usernames.
  * Only includes users who have verified wallet addresses in Farcaster.
  * Consolidates holdings across multiple verified wallets per user.
@@ -118,21 +122,44 @@ export async function GET(req: NextRequest) {
     const sortBy = searchParams.get("sortBy") || "holdings"; // "holdings" or "streak"
     const limit = parseInt(searchParams.get("limit") || "50", 10);
 
-    // Get a larger pool of users (up to 200) to ensure we have enough data
-    const topCheckins = await getTopUsersByStreak(200);
+    const client = getNeynarClient();
+    let fids: number[] = [];
+    let checkinMap = new Map<number, { streak: number; last_checkin: string | null; total_checkins: number }>();
+
+    if (sortBy === "holdings") {
+      // For holdings mode: Get ALL users who have checked in (up to 500 for broader coverage)
+      // This ensures we include as many potential holders as possible
+      const allCheckins = await getTopUsersByStreak(500);
+      fids = allCheckins.map((c) => c.fid);
+      // Create map for quick lookup but we won't require check-in for ranking
+      allCheckins.forEach((c) => {
+        checkinMap.set(c.fid, {
+          streak: c.streak || 0,
+          last_checkin: c.last_checkin || null,
+          total_checkins: c.total_checkins || 0,
+        });
+      });
+    } else {
+      // For streak mode: Only get users who have checked in (for streak ranking)
+      const topCheckins = await getTopUsersByStreak(200);
+      fids = topCheckins.map((c) => c.fid);
+      topCheckins.forEach((c) => {
+        checkinMap.set(c.fid, {
+          streak: c.streak || 0,
+          last_checkin: c.last_checkin || null,
+          total_checkins: c.total_checkins || 0,
+        });
+      });
+    }
     
-    if (topCheckins.length === 0) {
+    if (fids.length === 0) {
       return NextResponse.json({
         ok: true,
         entries: [],
       });
     }
 
-    // Extract FIDs
-    const fids = topCheckins.map((c) => c.fid);
-
     // Fetch user data from Neynar (includes usernames and verified addresses)
-    const client = getNeynarClient();
     const { users } = await client.fetchBulkUsers({ fids });
 
     // Create a map of FID to user data
@@ -169,15 +196,18 @@ export async function GET(req: NextRequest) {
     const balancesMap = await getTokenBalancesBatch(allAddresses);
 
     // Build leaderboard entries with token balances
-    const entriesWithBalances: LeaderboardEntry[] = topCheckins.map((checkin) => {
-      const userData = userMap.get(checkin.fid);
+    // For holdings mode: Include ALL users with verified addresses (even if no check-in)
+    // For streak mode: Only include users who have checked in
+    const entriesWithBalances: LeaderboardEntry[] = [];
+    
+    for (const [fid, userData] of userMap.entries()) {
       const username = userData?.username;
       const displayName = userData?.displayName;
       
       // Get token balance from verified addresses (if any)
       // Consolidate holdings across all verified wallets for this user
       let tokenBalance = 0;
-      const userAddresses = fidToAddresses.get(checkin.fid) || [];
+      const userAddresses = fidToAddresses.get(fid) || [];
       if (userAddresses.length > 0) {
         // Sum all balances across multiple wallets for this user
         tokenBalance = userAddresses.reduce((sum, addr) => {
@@ -185,18 +215,40 @@ export async function GET(req: NextRequest) {
           return sum + balance;
         }, 0);
       }
-
-      return {
-        fid: checkin.fid,
-        streak: checkin.streak,
-        last_checkin: checkin.last_checkin,
-        total_checkins: checkin.total_checkins || 0,
-        username,
-        displayName,
-        rank: 0, // Will be set after sorting
-        tokenBalance: tokenBalance,
-      };
-    });
+      
+      // For holdings mode: Include users with tokens OR users who have checked in (for broader coverage)
+      // For streak mode: Only include users who have checked in
+      const checkinData = checkinMap.get(fid);
+      if (sortBy === "holdings") {
+        // Include if they have tokens OR if they have checked in (to show all potential holders)
+        if (tokenBalance > 0 || checkinData) {
+          entriesWithBalances.push({
+            fid,
+            streak: checkinData?.streak || 0,
+            last_checkin: checkinData?.last_checkin || null,
+            total_checkins: checkinData?.total_checkins || 0,
+            username,
+            displayName,
+            rank: 0, // Will be set after sorting
+            tokenBalance: tokenBalance,
+          });
+        }
+      } else {
+        // Streak mode: Only include users who have checked in
+        if (checkinData) {
+          entriesWithBalances.push({
+            fid,
+            streak: checkinData.streak,
+            last_checkin: checkinData.last_checkin,
+            total_checkins: checkinData.total_checkins || 0,
+            username,
+            displayName,
+            rank: 0, // Will be set after sorting
+            tokenBalance: tokenBalance,
+          });
+        }
+      }
+    }
 
     // Sort based on sortBy parameter
     if (sortBy === "streak") {
@@ -209,7 +261,7 @@ export async function GET(req: NextRequest) {
       });
     } else {
       // Sort by token balance (descending) - most to least holdings
-      // Only users with token balance > 0 should be ranked, then by streak as tiebreaker
+      // For holdings mode: Rank by balance only, don't require check-in
       entriesWithBalances.sort((a, b) => {
         const balanceA = a.tokenBalance || 0;
         const balanceB = b.tokenBalance || 0;
@@ -219,8 +271,8 @@ export async function GET(req: NextRequest) {
           return balanceB - balanceA;
         }
         
-        // Tiebreaker: by streak (descending)
-        return (b.streak || 0) - (a.streak || 0);
+        // Tiebreaker: by FID (for consistency, not by streak as requested)
+        return b.fid - a.fid;
       });
     }
     

@@ -187,7 +187,7 @@ export function LeaderboardTab() {
               transition: "all 0.2s",
             }}
           >
-            🔥 Top Streaks
+            🚶 Most Walks
           </button>
         </div>
 
@@ -328,21 +328,7 @@ export function LeaderboardTab() {
                         >
                           💰 {formatTokenBalance(entry.tokenBalance)} $CATWALK
                         </span>
-                        {entry.streak > 0 && (
-                          <span
-                            style={{
-                              color: "#ffffff",
-                              fontSize: 12,
-                              background: "transparent",
-                              border: "1px solid #c1b400",
-                              padding: "4px 10px",
-                              borderRadius: 6,
-                              fontWeight: 600,
-                            }}
-                          >
-                            🔥 {entry.streak} day{entry.streak === 1 ? "" : "s"}
-                          </span>
-                        )}
+                        {/* Don't show streak/days for Top Holders as requested */}
                       </>
                     ) : (
                       <>

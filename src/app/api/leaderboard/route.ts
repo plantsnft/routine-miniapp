@@ -163,30 +163,121 @@ export async function GET(req: NextRequest) {
     }
 
     // Fetch user data from Neynar (includes usernames and verified addresses)
-    const { users } = await client.fetchBulkUsers({ fids });
+    // Try to get comprehensive wallet data by using the API directly if needed
+    let users: any[] = [];
+    try {
+      const response = await client.fetchBulkUsers({ fids });
+      users = response.users || [];
+    } catch (error) {
+      console.error("[Leaderboard] Error fetching users from Neynar SDK:", error);
+      // Fallback: Try direct API call
+      try {
+        const apiKey = process.env.NEYNAR_API_KEY;
+        if (apiKey) {
+          const fidsParam = fids.join(',');
+          const apiResponse = await fetch(
+            `https://api.neynar.com/v2/farcaster/user/bulk?fids=${fidsParam}`,
+            {
+              headers: {
+                'api_key': apiKey,
+              },
+            }
+          );
+          if (apiResponse.ok) {
+            const apiData = await apiResponse.json();
+            users = apiData.users || [];
+            console.log(`[Leaderboard] Fetched ${users.length} users via direct API call`);
+          }
+        }
+      } catch (apiError) {
+        console.error("[Leaderboard] Direct API call also failed:", apiError);
+        throw error; // Throw original error
+      }
+    }
 
     // Helper function to collect ALL addresses from a user object
     // This includes: verified addresses, custodial addresses, and any other linked addresses
-    const getAllUserAddresses = (u: any): string[] => {
+    const getAllUserAddresses = (u: any, fid: number): string[] => {
       const addresses: string[] = [];
       
+      // Log the user object structure for debugging (only for first few users to avoid spam)
+      if (fid <= 5) {
+        console.log(`[Leaderboard] User ${fid} wallet data:`, {
+          verified_addresses: u.verified_addresses,
+          custodial_address: u.custodial_address,
+          active_status: u.active_status,
+          // Check for other possible wallet fields
+          wallets: (u as any).wallets,
+          connected_addresses: (u as any).connected_addresses,
+          eth_addresses: (u as any).eth_addresses,
+        });
+      }
+      
       // Verified addresses (external wallets connected by user)
+      // Check multiple possible structures
       if (u.verified_addresses?.eth_addresses) {
         addresses.push(...u.verified_addresses.eth_addresses);
+      }
+      if (u.verified_addresses?.ethAddresses) {
+        addresses.push(...u.verified_addresses.ethAddresses);
+      }
+      if (Array.isArray(u.verified_addresses)) {
+        addresses.push(...u.verified_addresses);
+      }
+      
+      // Direct eth_addresses field (if exists)
+      if (u.eth_addresses && Array.isArray(u.eth_addresses)) {
+        addresses.push(...u.eth_addresses);
       }
       
       // Custodial address (Farcaster's integrated wallet, Bankr bot, etc.)
       if (u.custodial_address) {
         addresses.push(u.custodial_address);
       }
+      if (u.custodialAddress) {
+        addresses.push(u.custodialAddress);
+      }
       
       // Active status addresses (if available)
       if (u.active_status?.addresses) {
         addresses.push(...u.active_status.addresses);
       }
+      if (u.activeStatus?.addresses) {
+        addresses.push(...u.activeStatus.addresses);
+      }
       
-      // Remove duplicates and normalize to lowercase for consistency
-      const uniqueAddresses = Array.from(new Set(addresses.map(addr => addr.toLowerCase())));
+      // Check for wallets array (if it exists)
+      if (u.wallets && Array.isArray(u.wallets)) {
+        u.wallets.forEach((wallet: any) => {
+          if (wallet.address) {
+            addresses.push(wallet.address);
+          }
+          if (wallet.eth_address) {
+            addresses.push(wallet.eth_address);
+          }
+        });
+      }
+      
+      // Check for connected_addresses (if it exists)
+      if (u.connected_addresses && Array.isArray(u.connected_addresses)) {
+        addresses.push(...u.connected_addresses);
+      }
+      
+      // Filter out invalid addresses and normalize
+      const validAddresses = addresses
+        .filter((addr): addr is string => {
+          if (!addr || typeof addr !== 'string') return false;
+          // Basic Ethereum address validation (0x followed by 40 hex chars)
+          return /^0x[a-fA-F0-9]{40}$/.test(addr);
+        })
+        .map(addr => addr.toLowerCase());
+      
+      // Remove duplicates
+      const uniqueAddresses = Array.from(new Set(validAddresses));
+      
+      if (fid <= 5) {
+        console.log(`[Leaderboard] User ${fid} extracted ${uniqueAddresses.length} unique addresses:`, uniqueAddresses);
+      }
       
       return uniqueAddresses;
     };
@@ -194,7 +285,7 @@ export async function GET(req: NextRequest) {
     // Create a map of FID to user data with ALL addresses
     const userMap = new Map(
       users.map((u) => {
-        const allAddresses = getAllUserAddresses(u);
+        const allAddresses = getAllUserAddresses(u, u.fid);
         return [
           u.fid,
           {
@@ -344,6 +435,9 @@ export async function GET(req: NextRequest) {
     // Log summary for debugging
     const totalHoldings = entriesWithBalances.reduce((sum, entry) => sum + (entry.tokenBalance || 0), 0);
     const usersWithHoldings = entriesWithBalances.filter(e => (e.tokenBalance || 0) > 0).length;
+    const totalAddressesChecked = Array.from(fidToAddresses.values()).reduce((sum, addrs) => sum + addrs.length, 0);
+    const usersWithAddresses = Array.from(fidToAddresses.keys()).length;
+    console.log(`[Leaderboard] Summary: ${usersWithAddresses} users with ${totalAddressesChecked} total addresses checked`);
     console.log(`[Leaderboard] Total $CATWALK holdings: ${totalHoldings.toFixed(2)}, Users with holdings: ${usersWithHoldings}/${entriesWithBalances.length}`);
 
     // Assign ranks and limit to top entries

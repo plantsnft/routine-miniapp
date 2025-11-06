@@ -4,28 +4,24 @@ import { useState } from "react";
 
 const CATWALK_CHANNEL_URL = "https://farcaster.xyz/~/channel/Catwalk";
 
-export function FollowChannelButton() {
+interface FollowChannelButtonProps {
+  isFollowing?: boolean;
+}
+
+export function FollowChannelButton({ isFollowing = false }: FollowChannelButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleFollow = async () => {
+  const handleClick = async () => {
     try {
       setIsLoading(true);
       
-      // Try to use SDK to follow channel
-      // Note: Farcaster SDK may not have direct channel follow, so we'll open the channel URL
-      // Users can follow from there
+      // Open channel URL in new tab (users can follow or visit from there)
       if (typeof window !== "undefined") {
         window.open(CATWALK_CHANNEL_URL, "_blank");
       }
       
-      // Alternative: If SDK has followChannel method
-      // if (sdk?.actions?.followChannel) {
-      //   await sdk.actions.followChannel({ channelId: "catwalk" });
-      //   setIsFollowing(true);
-      // }
-      
     } catch (error) {
-      console.error("Error following channel:", error);
+      console.error("Error opening channel:", error);
     } finally {
       setIsLoading(false);
     }
@@ -33,7 +29,7 @@ export function FollowChannelButton() {
 
   return (
     <button
-      onClick={handleFollow}
+      onClick={handleClick}
       disabled={isLoading}
       style={{
         position: "fixed",
@@ -42,15 +38,15 @@ export function FollowChannelButton() {
         transform: "translateX(-50%)",
         background: "#c1b400",
         color: "#000000",
-        border: "1px solid #000000",
+        border: "2px solid #000000",
         borderRadius: 20,
-        padding: "6px 16px",
-        fontSize: "11px",
-        fontWeight: 600,
+        padding: "8px 20px",
+        fontSize: "12px",
+        fontWeight: 700,
         cursor: isLoading ? "not-allowed" : "pointer",
         opacity: isLoading ? 0.6 : 1,
         zIndex: 1000,
-        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.3)",
+        boxShadow: "0 4px 12px rgba(0, 0, 0, 0.4)",
         transition: "all 0.2s",
       }}
       onMouseEnter={(e) => {
@@ -64,7 +60,7 @@ export function FollowChannelButton() {
         }
       }}
     >
-      {isLoading ? "Loading..." : "Follow /Catwalk"}
+      {isLoading ? "Loading..." : isFollowing ? "Visit the Channel" : "Follow /Catwalk"}
     </button>
   );
 }

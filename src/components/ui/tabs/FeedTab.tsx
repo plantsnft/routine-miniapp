@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useMiniApp } from "@neynar/react";
+import { FollowChannelButton } from "~/components/ui/FollowChannelButton";
+import { VideoPlayer } from "~/components/ui/VideoPlayer";
 
 interface Cast {
   hash: string;
@@ -22,15 +25,20 @@ interface Cast {
 }
 
 export function FeedTab() {
+  const { context } = useMiniApp();
   const [casts, setCasts] = useState<Cast[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | { message: string; debug?: any } | null>(null);
+  const [isFollowingChannel, setIsFollowingChannel] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchFeed = async () => {
       try {
         setLoading(true);
-        const res = await fetch("/api/channel-feed");
+        // Include viewer FID if available to check following status
+        const viewerFid = context?.user?.fid;
+        const url = viewerFid ? `/api/channel-feed?viewerFid=${viewerFid}` : "/api/channel-feed";
+        const res = await fetch(url);
         const data = await res.json();
         
         if (data.error) {
@@ -39,6 +47,7 @@ export function FeedTab() {
           console.error("[FeedTab] API error:", data);
         } else {
           setCasts(data.casts || []);
+          setIsFollowingChannel(data.isFollowingChannel || false);
           setError(null);
         }
       } catch (err) {
@@ -175,13 +184,12 @@ export function FeedTab() {
   return (
     <div
       style={{
-        backgroundImage: "url(/wallpaper.png)",
-        backgroundRepeat: "repeat",
-        backgroundSize: "auto",
+        background: "transparent",
         minHeight: "100vh",
         maxWidth: "600px",
         margin: "0 auto",
         padding: "0 16px 100px",
+        position: "relative",
       }}
     >
       {/* Feed Header */}
@@ -190,6 +198,7 @@ export function FeedTab() {
           padding: "20px 0",
           borderBottom: "2px solid #c1b400",
           marginBottom: 16,
+          background: "transparent",
         }}
       >
         <h2
@@ -314,50 +323,14 @@ export function FeedTab() {
                 }}
               />
             </div>
-          ) : cast.hasVideo ? (
-            <div
-              style={{
-                width: "100%",
-                aspectRatio: "1",
-                background: "#1a1a1a",
-                position: "relative",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                borderBottom: "1px solid rgba(193, 180, 0, 0.2)",
-              }}
-            >
-              <div style={{ textAlign: "center" }}>
-                <div
-                  style={{
-                    fontSize: 48,
-                    marginBottom: 12,
-                  }}
-                >
-                  🎥
-                </div>
-                <p
-                  style={{
-                    color: "#c1b400",
-                    fontSize: 14,
-                    fontWeight: 600,
-                    margin: 0,
-                  }}
-                >
-                  Video Post
-                </p>
-                <p
-                  style={{
-                    color: "#ffffff",
-                    fontSize: 12,
-                    opacity: 0.7,
-                    margin: "4px 0 0 0",
-                  }}
-                >
-                  Tap to view on Warpcast
-                </p>
-              </div>
-            </div>
+          ) : cast.hasVideo && cast.videoUrl ? (
+            <VideoPlayer
+              videoUrl={cast.videoUrl}
+              autoplay={true}
+              loop={true}
+              muted={true}
+              playsInline={true}
+            />
           ) : null}
 
           {/* Post Content */}
@@ -422,6 +395,11 @@ export function FeedTab() {
           </div>
         </div>
       ))}
+
+      {/* Floating Follow Button - only show if user is logged in */}
+      {context?.user && (
+        <FollowChannelButton isFollowing={isFollowingChannel} />
+      )}
     </div>
   );
 }

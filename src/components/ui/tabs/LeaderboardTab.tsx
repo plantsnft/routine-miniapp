@@ -307,7 +307,7 @@ export function LeaderboardTab() {
                   gap: 12,
                 }}
               >
-                {/* Rank */}
+                {/* Rank with trending up emoji */}
                 <div
                   style={{
                     minWidth: "50px",
@@ -315,9 +315,16 @@ export function LeaderboardTab() {
                     color: "#c1b400",
                     fontSize: entry.rank <= 3 ? 24 : 18,
                     fontWeight: 700,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 4,
                   }}
                 >
-                  {getRankEmoji(entry.rank)}
+                  <span>📈</span>
+                  <span style={{ fontSize: entry.rank <= 3 ? 24 : 18 }}>
+                    {getRankEmoji(entry.rank)}
+                  </span>
                 </div>
 
                 {/* User info */}

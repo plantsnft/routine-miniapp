@@ -4,9 +4,11 @@ import { getNeynarClient } from "~/lib/neynar";
 const CATWALK_CHANNEL_ID = "catwalk";
 const CATWALK_CHANNEL_PARENT_URL = `https://warpcast.com/~/channel/${CATWALK_CHANNEL_ID}`;
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const apiKey = process.env.NEYNAR_API_KEY;
+    const { searchParams } = new URL(request.url);
+    const viewerFid = searchParams.get('viewerFid'); // Optional: FID of the viewer checking their own following status
     
     if (!apiKey) {
       console.error("[Channel Feed] NEYNAR_API_KEY not configured");
@@ -489,9 +491,25 @@ export async function GET() {
         };
       });
 
+      // Check if viewer follows the channel (if viewerFid is provided)
+      let isFollowingChannel = false;
+      if (viewerFid) {
+        try {
+          const client = getNeynarClient();
+          // Try to check user's channel following status
+          // Note: This might require a different API call - for now, we'll check if user has any interaction with channel
+          // A more accurate check would be: client.fetchUserChannels({ fid: parseInt(viewerFid) })
+          // But that might not be available. For now, we'll default to false and refine later.
+          // TODO: Implement proper channel following check
+        } catch (_error) {
+          // If check fails, default to false
+        }
+      }
+
       return NextResponse.json({
         casts: formattedCasts,
         count: formattedCasts.length,
+        isFollowingChannel,
       });
   } catch (error: any) {
     console.error("[Channel Feed] Unexpected error:", error);

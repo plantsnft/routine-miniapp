@@ -31,10 +31,8 @@ export function SleepingCat() {
       <div
         style={{
           display: "flex",
-          flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          gap: 8,
         }}
       >
         <div
@@ -45,20 +43,6 @@ export function SleepingCat() {
         >
           🐱
         </div>
-        <div
-          style={{
-            display: "flex",
-            gap: 4,
-            fontSize: 16,
-            color: "#c1b400",
-            fontWeight: 700,
-            animation: "fadeInOut 2s ease-in-out infinite",
-          }}
-        >
-          <span style={{ animationDelay: "0s" }}>z</span>
-          <span style={{ animationDelay: "0.2s" }}>z</span>
-          <span style={{ animationDelay: "0.4s" }}>z</span>
-        </div>
       </div>
     );
   }
@@ -67,10 +51,8 @@ export function SleepingCat() {
     <div
       style={{
         display: "flex",
-        flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: 8,
       }}
     >
       {/* Sleeping cat GIF */}
@@ -107,44 +89,6 @@ export function SleepingCat() {
             }}
           />
         )}
-      </div>
-
-      {/* Animated zzz's */}
-      <div
-        style={{
-          display: "flex",
-          gap: 4,
-          fontSize: 16,
-          color: "#c1b400",
-          fontWeight: 700,
-          height: 20,
-          alignItems: "center",
-        }}
-      >
-        <span
-          style={{
-            animation: "riseFade 2s ease-in-out infinite",
-            animationDelay: "0s",
-          }}
-        >
-          z
-        </span>
-        <span
-          style={{
-            animation: "riseFade 2s ease-in-out infinite",
-            animationDelay: "0.2s",
-          }}
-        >
-          z
-        </span>
-        <span
-          style={{
-            animation: "riseFade 2s ease-in-out infinite",
-            animationDelay: "0.4s",
-          }}
-        >
-          z
-        </span>
       </div>
     </div>
   );

@@ -34,13 +34,13 @@ export function SleepingCat() {
           alignItems: "center",
           justifyContent: "center",
           flexShrink: 0,
-          width: 36,
-          height: 36,
+          width: 54,
+          height: 54,
         }}
       >
         <div
           style={{
-            fontSize: 28,
+            fontSize: 42,
             animation: "float 2s ease-in-out infinite",
             color: "#999999",
           }}
@@ -61,29 +61,31 @@ export function SleepingCat() {
         lineHeight: 1,
       }}
     >
-      {/* Sleeping cat GIF - inline with button text */}
+      {/* Sleeping cat GIF - inline with button text, transparent background */}
       <div
         style={{
           position: "relative",
           animation: "float 2s ease-in-out infinite",
-          width: 36,
-          height: 36,
+          width: 54,
+          height: 54,
           display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
           verticalAlign: "middle",
+          backgroundColor: "transparent",
         }}
       >
         {!gifLoaded && (
           <div
             style={{
-              width: 36,
-              height: 36,
+              width: 54,
+              height: 54,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               color: "#999999",
-              fontSize: 28,
+              fontSize: 42,
+              backgroundColor: "transparent",
             }}
           >
             🐱
@@ -94,11 +96,13 @@ export function SleepingCat() {
             src="/sleeping-cat.gif"
             alt="Sleeping cat"
             style={{
-              width: 36,
-              height: 36,
+              width: 54,
+              height: 54,
               objectFit: "contain",
               display: "block",
               verticalAlign: "middle",
+              backgroundColor: "transparent",
+              mixBlendMode: "normal",
             }}
           />
         )}

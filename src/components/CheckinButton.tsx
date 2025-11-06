@@ -46,14 +46,14 @@ export function CheckinButton({ checkedIn, saving, onClick }: CheckinButtonProps
         }
       }}
     >
+      <span style={{ display: "inline-block", lineHeight: 1 }}>
+        {saving ? "Saving..." : checkedIn ? "Cat is Resting" : "Walk Your Cat"}
+      </span>
       {checkedIn && (
         <span style={{ display: "inline-flex", alignItems: "center", lineHeight: 1 }}>
           <SleepingCat />
         </span>
       )}
-      <span style={{ display: "inline-block", lineHeight: 1 }}>
-        {saving ? "Saving..." : checkedIn ? "Cat is Resting" : "Walk Your Cat"}
-      </span>
     </button>
   );
 }

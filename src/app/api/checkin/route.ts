@@ -101,10 +101,15 @@ export async function GET(req: NextRequest) {
       streak = 0;
     }
 
+    const totalCheckins = typeof checkin.total_checkins === "number" && !isNaN(checkin.total_checkins)
+      ? checkin.total_checkins
+      : 0;
+
     return NextResponse.json<CheckinResponse>({
       ok: true,
       streak,
       last_checkin: lastCheckin,
+      total_checkins: totalCheckins,
       hasCheckedIn: !!lastCheckin,
       hasCheckedInToday,
     });
@@ -290,6 +295,7 @@ export async function POST(req: NextRequest) {
       {
         ok: true,
         streak: updated.streak,
+        total_checkins: updated.total_checkins || newTotalCheckins,
         mode: "update",
       },
       { status: 200, headers: { "Content-Type": "application/json" } }

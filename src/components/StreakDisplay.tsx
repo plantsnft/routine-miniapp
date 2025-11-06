@@ -6,6 +6,7 @@
 
 interface StreakDisplayProps {
   streak: number | null;
+  totalCheckins: number | null;
   lastCheckIn: string | null;
   checkedIn: boolean;
   timeUntilNext: string | null;
@@ -45,6 +46,7 @@ function formatLastCheckIn(timestamp: string | null): string {
 
 export function StreakDisplay({
   streak,
+  totalCheckins,
   lastCheckIn,
   checkedIn,
   timeUntilNext,
@@ -61,25 +63,28 @@ export function StreakDisplay({
         border: "1px solid #000000",
       }}
     >
-      <p
-        style={{
-          margin: 0,
-          marginBottom: 4,
-          color: "#000000",
-          fontWeight: 600,
-          fontSize: 12,
-        }}
-      >
-        🔥 {streak} day{streak === 1 ? "" : "s"} streak
-      </p>
-      {!checkedIn && lastCheckIn && (
-        <p style={{ margin: 0, marginBottom: 2, color: "#000000", fontSize: 10, opacity: 0.8 }}>
-          Last check-in: {formatLastCheckIn(lastCheckIn)}
+      {/* First line: Streak and next check-in time on one line */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+        <p
+          style={{
+            margin: 0,
+            color: "#000000",
+            fontWeight: 600,
+            fontSize: 12,
+          }}
+        >
+          Cat has walk {streak} day{streak === 1 ? "" : "s"} in a row
         </p>
-      )}
-      {checkedIn && timeUntilNext && (
+        {checkedIn && timeUntilNext && (
+          <span style={{ color: "#000000", fontSize: 10, fontWeight: 400, marginLeft: 8 }}>
+            {timeUntilNext}
+          </span>
+        )}
+      </div>
+      {/* Second line: All-time walks */}
+      {totalCheckins !== null && totalCheckins > 0 && (
         <p style={{ margin: 0, color: "#000000", fontSize: 10, fontWeight: 400 }}>
-          Next check-in: {timeUntilNext} (9 AM Pacific)
+          {totalCheckins} All-Time Walk{totalCheckins === 1 ? "" : "s"}
         </p>
       )}
     </div>

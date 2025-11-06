@@ -129,7 +129,7 @@ export default function DailyCheckin() {
         }}
       >
         <p style={{ margin: 0, marginBottom: 16, color: "#ffffff", fontSize: 14, lineHeight: 1.5 }}>
-          Check in once per day to keep your streak and earn{" "}
+          Walk your cat to earn{" "}
           <a
             href="https://dexscreener.com/base/0xa5eb1cAD0dFC1c4f8d4f84f995aeDA9a7A047B07"
             target="_blank"
@@ -142,14 +142,14 @@ export default function DailyCheckin() {
             }}
           >
             $CATWALK
-          </a>{" "}
-          later.
+          </a>
         </p>
 
         {/* Display current streak and check-in info if user is signed in */}
         {fid && checkin.status.streak !== null && checkin.status.streak > 0 && (
           <StreakDisplay
             streak={checkin.status.streak}
+            totalCheckins={checkin.status.totalCheckins}
             lastCheckIn={checkin.status.lastCheckIn}
             checkedIn={checkin.status.checkedIn}
             timeUntilNext={checkin.status.timeUntilNext}

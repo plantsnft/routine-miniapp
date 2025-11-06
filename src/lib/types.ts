@@ -43,6 +43,7 @@ export interface CheckinResponse {
   ok: boolean;
   streak?: number;
   last_checkin?: string | null;
+  total_checkins?: number;
   hasCheckedIn?: boolean;
   hasCheckedInToday?: boolean;
   error?: string;
@@ -55,6 +56,7 @@ export interface CheckinResponse {
 export interface CheckinStatus {
   checkedIn: boolean;
   streak: number | null;
+  totalCheckins: number | null;
   lastCheckIn: string | null;
   timeUntilNext: string | null;
 }

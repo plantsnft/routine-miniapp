@@ -114,14 +114,14 @@ export function HomeTab() {
       />
       
       <div className="max-w-md mx-auto" style={{ position: "relative", zIndex: 1 }}>
-        {/* Logo - Catwalk logo image - 10% smaller and centered */}
-        <div style={{ textAlign: "center", marginBottom: 16, display: "flex", flexDirection: "column", alignItems: "center" }}>
+        {/* Logo - Catwalk logo image - bigger */}
+        <div style={{ textAlign: "center", marginBottom: 8, display: "flex", flexDirection: "column", alignItems: "center" }}>
           <img 
             src="/logo.png" 
             alt="Catwalk Logo" 
             style={{ 
-              maxWidth: "18%", // 10% smaller (was ~20%, now 18%)
-              width: "18%",
+              maxWidth: "30%",
+              width: "30%",
               height: "auto",
               objectFit: "contain",
             }}

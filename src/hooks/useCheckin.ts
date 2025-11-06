@@ -24,6 +24,7 @@ export function useCheckin(): UseCheckinResult {
   const [status, setStatus] = useState<CheckinStatus>({
     checkedIn: false,
     streak: null,
+    totalCheckins: null,
     lastCheckIn: null,
     timeUntilNext: null,
   });
@@ -89,6 +90,7 @@ export function useCheckin(): UseCheckinResult {
         setStatus({
           checkedIn: hasCheckedInToday,
           streak: data.streak || 0,
+          totalCheckins: data.total_checkins || 0,
           lastCheckIn: data.last_checkin || null,
           timeUntilNext: hasCheckedInToday ? calculateTimeUntilNextCheckIn() : null,
         });
@@ -120,6 +122,7 @@ export function useCheckin(): UseCheckinResult {
       setStatus({
         checkedIn: false,
         streak: 0,
+        totalCheckins: 0,
         lastCheckIn: null,
         timeUntilNext: null,
       });
@@ -163,9 +166,11 @@ export function useCheckin(): UseCheckinResult {
       if (res.ok && data.ok) {
         setError(null); // Clear error on success
         const newStreak = data.streak ?? (status.streak ?? 0) + 1;
+        const newTotalCheckins = data.total_checkins ?? (status.totalCheckins ?? 0) + 1;
         setStatus({
           checkedIn: true,
           streak: newStreak,
+          totalCheckins: newTotalCheckins,
           lastCheckIn: new Date().toISOString(),
           timeUntilNext: calculateTimeUntilNextCheckIn(),
         });

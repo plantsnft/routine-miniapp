@@ -49,33 +49,22 @@ export function CheckinGifAnimation({
       setShowGif(true);
     }, 50);
 
-    // Countdown interval
+    // Countdown interval - update every second
     setSecondsLeft(Math.ceil(duration / 1000));
     const interval = setInterval(() => {
       setSecondsLeft((prev) => {
         if (prev <= 1) {
-          clearInterval(interval);
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
 
-    // Auto-hide after duration - strict
+    // Auto-hide after exact duration - guaranteed to close
     const hideTimer = setTimeout(() => {
-      // Ensure at least `duration` ms have passed from visibility start
-      const elapsed = Date.now() - startTime;
-      const remaining = Math.max(0, duration - elapsed);
-      const finalize = () => {
-        setShowGif(false);
-        setShouldRender(false);
-        onComplete?.();
-      };
-      if (remaining > 0) {
-        setTimeout(finalize, remaining);
-      } else {
-        finalize();
-      }
+      setShowGif(false);
+      setShouldRender(false);
+      onComplete?.();
     }, duration);
 
     return () => {

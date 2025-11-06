@@ -33,11 +33,11 @@ export const Footer: React.FC<FooterProps> = ({ activeTab, setActiveTab }) => {
         bottom: 0,
         left: 0,
         right: 0,
-        background: "#000000",
-        borderTop: "2px solid #c1b400",
-        padding: "12px 16px 8px 16px",
-        zIndex: 50,
-        boxShadow: "0 -4px 12px rgba(193, 180, 0, 0.2)",
+      background: "#000000",
+      borderTop: "2px solid #c1b400",
+      padding: "7px 16px 5px 16px", // Reduced from 12px 16px 8px 16px (40% reduction: 12*0.6=7.2≈7, 8*0.6=4.8≈5)
+      zIndex: 50,
+      boxShadow: "0 -4px 12px rgba(193, 180, 0, 0.2)",
       }}
     >
       <div
@@ -60,7 +60,7 @@ export const Footer: React.FC<FooterProps> = ({ activeTab, setActiveTab }) => {
           background: "transparent",
           border: "none",
           cursor: "pointer",
-          padding: "8px 16px",
+          padding: "4px 16px", // Reduced from 8px 16px (50% reduction to match 40% overall)
           color: activeTab === Tab.Home ? "#c1b400" : "#666666",
           transition: "color 0.2s",
         }}
@@ -69,10 +69,10 @@ export const Footer: React.FC<FooterProps> = ({ activeTab, setActiveTab }) => {
           src="/logo.png" 
           alt="Go Home" 
           style={{ 
-            width: "24px", 
-            height: "24px", 
+            width: "20px", // Reduced from 24px (17% reduction)
+            height: "20px", // Reduced from 24px (17% reduction) 
             objectFit: "contain",
-            marginBottom: 4,
+            marginBottom: 2, // Reduced from 4px (50% reduction)
             opacity: activeTab === Tab.Home ? 1 : 0.6,
           }}
           onError={(e) => {
@@ -84,13 +84,13 @@ export const Footer: React.FC<FooterProps> = ({ activeTab, setActiveTab }) => {
               const fallback = document.createElement("span");
               fallback.className = "fallback-emoji";
               fallback.textContent = "🏠";
-              fallback.style.fontSize = "24px";
-              fallback.style.marginBottom = "4px";
+              fallback.style.fontSize = "20px"; // Reduced from 24px (17% reduction)
+              fallback.style.marginBottom = "2px"; // Reduced from 4px
               parent.insertBefore(fallback, target);
             }
           }}
         />
-        <span style={{ fontSize: 12, fontWeight: activeTab === Tab.Home ? 700 : 400 }}>
+        <span style={{ fontSize: 10, fontWeight: activeTab === Tab.Home ? 700 : 400 }}> {/* Reduced from 12px (17% reduction) */}
           go home
         </span>
       </button>
@@ -104,13 +104,13 @@ export const Footer: React.FC<FooterProps> = ({ activeTab, setActiveTab }) => {
           background: "transparent",
           border: "none",
           cursor: "pointer",
-          padding: "8px 16px",
+          padding: "4px 16px", // Reduced from 8px 16px
           color: activeTab === Tab.Leaderboard ? "#c1b400" : "#666666",
           transition: "color 0.2s",
         }}
       >
-        <span style={{ fontSize: 24, marginBottom: 4 }}>🏆</span>
-        <span style={{ fontSize: 12, fontWeight: activeTab === Tab.Leaderboard ? 700 : 400 }}>
+        <span style={{ fontSize: 20, marginBottom: 2 }}>🏆</span> {/* Reduced from 24px and 4px */}
+        <span style={{ fontSize: 10, fontWeight: activeTab === Tab.Leaderboard ? 700 : 400 }}> {/* Reduced from 12px */}
           Leaderboard
         </span>
       </button>
@@ -124,13 +124,13 @@ export const Footer: React.FC<FooterProps> = ({ activeTab, setActiveTab }) => {
           background: "transparent",
           border: "none",
           cursor: "pointer",
-          padding: "8px 16px",
+          padding: "4px 16px", // Reduced from 8px 16px
           color: activeTab === Tab.Feed ? "#c1b400" : "#666666",
           transition: "color 0.2s",
         }}
       >
-        <span style={{ fontSize: 24, marginBottom: 4 }}>📱</span>
-        <span style={{ fontSize: 12, fontWeight: activeTab === Tab.Feed ? 700 : 400 }}>
+        <span style={{ fontSize: 20, marginBottom: 2 }}>📱</span> {/* Reduced from 24px and 4px */}
+        <span style={{ fontSize: 10, fontWeight: activeTab === Tab.Feed ? 700 : 400 }}> {/* Reduced from 12px */}
           Feed
         </span>
       </button>
@@ -149,7 +149,7 @@ export const Footer: React.FC<FooterProps> = ({ activeTab, setActiveTab }) => {
           color: "#000000",
           border: "2px solid #000000",
           borderRadius: 8,
-          fontSize: "12px",
+          fontSize: "11px", // Reduced from 12px (10% reduction: 12*0.9=10.8≈11)
           fontWeight: 700,
           cursor: isLoading ? "not-allowed" : "pointer",
           opacity: isLoading ? 0.6 : 1,

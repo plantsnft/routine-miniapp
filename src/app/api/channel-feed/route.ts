@@ -35,6 +35,16 @@ export async function GET() {
         // Log available properties
         if (channelInfo) {
           debugInfo.push(`Channel properties: ${Object.keys(channelInfo).join(', ')}`);
+          // Check if channel object has nested channel property
+          if ((channelInfo as any).channel) {
+            const nestedChannel = (channelInfo as any).channel;
+            debugInfo.push(`Nested channel properties: ${Object.keys(nestedChannel).join(', ')}`);
+            // Check if there are casts directly in the channel
+            if (nestedChannel.casts || nestedChannel.recent_casts) {
+              casts = nestedChannel.casts || nestedChannel.recent_casts || [];
+              debugInfo.push(`Found ${casts.length} casts in channel object`);
+            }
+          }
         }
       } catch (lookupError: any) {
         debugInfo.push(`Channel lookup failed: ${lookupError?.message}`);
@@ -104,35 +114,29 @@ export async function GET() {
       }
     }
 
-    // Strategy 2: Try using parent_url without requiring fid (maybe it works for public channels)
+    // Strategy 2: Use feed_type=filter with filter_type=parent_url (correct way per Neynar docs)
     if (casts.length === 0) {
       try {
-        console.log("[Channel Feed] Strategy 2: Trying feed with parent_url (no fid)");
+        console.log("[Channel Feed] Strategy 2: Using feed_type=filter with filter_type=parent_url");
         const response = await fetch(
-          `https://api.neynar.com/v2/farcaster/feed?feed_type=channel&parent_url=${encodeURIComponent(CATWALK_CHANNEL_PARENT_URL)}&limit=5`,
+          `https://api.neynar.com/v2/farcaster/feed?feed_type=filter&filter_type=parent_url&parent_url=${encodeURIComponent(CATWALK_CHANNEL_PARENT_URL)}&limit=5`,
           {
-            method: 'POST',
             headers: {
               "x-api-key": apiKey,
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-              feed_type: 'channel',
-              parent_url: CATWALK_CHANNEL_PARENT_URL,
-              limit: 5,
-            }),
           }
         );
 
         const responseText = await response.text();
-        debugInfo.push(`Strategy 2 (POST parent_url): Status ${response.status}`);
+        debugInfo.push(`Strategy 2 (filter/parent_url): Status ${response.status}`);
         
         if (response.ok) {
           try {
             const data = JSON.parse(responseText);
-            casts = data.casts || data.result?.casts || [];
+            casts = data.casts || data.result?.casts || data.result?.feed || [];
             if (casts.length > 0) {
-              console.log(`[Channel Feed] ✅ Strategy 2 (POST parent_url) succeeded: ${casts.length} casts`);
+              console.log(`[Channel Feed] ✅ Strategy 2 (filter/parent_url) succeeded: ${casts.length} casts`);
               debugInfo.push(`Strategy 2: Success - ${casts.length} casts`);
             } else {
               debugInfo.push(`Strategy 2: Response OK but no casts (response keys: ${Object.keys(data).join(', ')})`);

@@ -22,9 +22,6 @@ async function getTokenBalanceFromNeynar(fid: number): Promise<number> {
       networks: ['base'],
     });
 
-    // Log response structure for debugging
-    console.log(`[Leaderboard] Neynar response for FID ${fid}:`, JSON.stringify(response, null, 2).substring(0, 1000));
-
     // Neynar returns balances for all tokens across all connected wallets
     // The response structure: user_balance.address_balances[].token_balances[]
     const userBalance = response.user_balance as any;
@@ -33,16 +30,24 @@ async function getTokenBalanceFromNeynar(fid: number): Promise<number> {
     const addressBalances = userBalance?.address_balances || [];
     let totalBalance = 0;
     let foundCatwalk = false;
+    const allTokens: any[] = [];
     
     // Iterate through all address balances and sum up CATWALK tokens
     for (const addressBalance of addressBalances) {
       const tokenBalances = addressBalance?.token_balances || [];
+      const address = addressBalance?.verified_address?.address || 'unknown';
       
       for (const tokenBalance of tokenBalances) {
         const token = tokenBalance?.token;
         if (!token) continue;
         
         const contractAddr = token.contract_address || token.contractAddress || token.address;
+        const symbol = token.symbol || 'unknown';
+        
+        // Collect all tokens for debugging
+        allTokens.push({ address: contractAddr, symbol, balance: tokenBalance.balance?.in_token });
+        
+        // Check if this is CATWALK token
         if (contractAddr?.toLowerCase() === TOKEN_ADDRESS.toLowerCase()) {
           // Balance is already in human-readable format in balance.in_token
           const balance = tokenBalance.balance?.in_token || tokenBalance.balance || 0;
@@ -51,24 +56,23 @@ async function getTokenBalanceFromNeynar(fid: number): Promise<number> {
           if (balanceNum > 0) {
             totalBalance += balanceNum;
             foundCatwalk = true;
-            console.log(`[Leaderboard] Found CATWALK for FID ${fid} at ${addressBalance.verified_address?.address}: ${balanceNum}`);
+            console.log(`[Leaderboard] ✅ Found CATWALK for FID ${fid} at ${address}: ${balanceNum.toLocaleString()} CATWALK`);
           }
         }
       }
     }
     
     if (foundCatwalk) {
-      console.log(`[Leaderboard] Total CATWALK balance for FID ${fid}: ${totalBalance}`);
+      console.log(`[Leaderboard] ✅ Total CATWALK balance for FID ${fid}: ${totalBalance.toLocaleString()}`);
       return totalBalance;
     } else {
-      // Log available tokens for debugging (first address only)
-      if (addressBalances.length > 0 && addressBalances[0]?.token_balances?.length > 0) {
-        const sampleTokens = addressBalances[0].token_balances.slice(0, 3).map((tb: any) => ({
-          address: tb.token?.contract_address,
-          symbol: tb.token?.symbol,
-        }));
-        console.log(`[Leaderboard] CATWALK not found for FID ${fid}. Sample tokens:`, sampleTokens);
+      // Log all tokens for debugging
+      console.log(`[Leaderboard] ❌ CATWALK not found for FID ${fid}. Total addresses: ${addressBalances.length}, Total tokens: ${allTokens.length}`);
+      if (allTokens.length > 0) {
+        console.log(`[Leaderboard] All tokens for FID ${fid}:`, allTokens.slice(0, 10).map(t => `${t.symbol}@${t.address?.substring(0, 10)}...`).join(', '));
       }
+      // Also check if TOKEN_ADDRESS matches
+      console.log(`[Leaderboard] Looking for token address: ${TOKEN_ADDRESS.toLowerCase()}`);
     }
     
     return 0;

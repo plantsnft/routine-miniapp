@@ -7,7 +7,45 @@ const TOKEN_ADDRESS = "0xa5eb1cAD0dFC1c4f8d4f84f995aeDA9a7A047B07"; // CATWALK o
 const BASESCAN_API_KEY = process.env.BASESCAN_API_KEY || "";
 
 /**
- * Get token balance for a wallet address on Base chain.
+ * Get CATWALK token balance for a Farcaster user using Neynar API.
+ * This is the preferred method as it aggregates all connected wallets automatically.
+ */
+async function getTokenBalanceFromNeynar(fid: number): Promise<number> {
+  try {
+    const client = getNeynarClient();
+    const response = await client.fetchUserBalance({
+      fid: fid,
+      networks: ['base'],
+    });
+
+    // Neynar returns balances for all tokens across all connected wallets
+    // We need to find the CATWALK token balance
+    if (response.user_balance?.tokens) {
+      const catwalkToken = response.user_balance.tokens.find(
+        (token: any) => token.contract_address?.toLowerCase() === TOKEN_ADDRESS.toLowerCase()
+      );
+      
+      if (catwalkToken?.balance) {
+        // Convert from wei/raw balance to human-readable format
+        // The balance is typically in the smallest unit (wei for ETH, smallest unit for tokens)
+        const balanceWei = BigInt(catwalkToken.balance);
+        const decimals = BigInt(10 ** 18); // CATWALK has 18 decimals
+        const wholePart = balanceWei / decimals;
+        const fractionalPart = balanceWei % decimals;
+        const balance = Number(wholePart) + Number(fractionalPart) / Number(decimals);
+        return balance;
+      }
+    }
+    
+    return 0;
+  } catch (error: any) {
+    console.error(`[Leaderboard] Error fetching balance from Neynar for FID ${fid}:`, error?.message || error);
+    return 0;
+  }
+}
+
+/**
+ * Get token balance for a wallet address on Base chain (fallback method).
  * Uses BaseScan API (with API key if available) for better rate limits.
  * Falls back to direct RPC if BaseScan fails.
  * Includes retry logic with exponential backoff for rate limiting.
@@ -380,40 +418,40 @@ export async function GET(req: NextRequest) {
       })
     );
 
-    // Collect all unique addresses to batch fetch balances
-    const addressToFids = new Map<string, number[]>();
-    const fidToAddresses = new Map<number, string[]>();
+    // Fetch token balances using Neynar API (preferred method)
+    // This automatically aggregates all connected wallets per user
+    const fidToBalance = new Map<number, number>();
     
-    // For holdings mode: process all users, not just check-ins
-    // For streak mode: only process users who have checked in
-    const usersToProcess = sortBy === "holdings" 
-      ? Array.from(userMap.keys()).map((fid) => ({ fid }))
-      : fids.map((fid) => ({ fid }));
-    
-    usersToProcess.forEach(({ fid }) => {
-      const userData = userMap.get(fid);
-      if (userData?.allAddresses && userData.allAddresses.length > 0) {
-        fidToAddresses.set(fid, userData.allAddresses);
-        userData.allAddresses.forEach((addr) => {
-          const normalizedAddr = addr.toLowerCase();
-          if (!addressToFids.has(normalizedAddr)) {
-            addressToFids.set(normalizedAddr, []);
-          }
-          addressToFids.get(normalizedAddr)!.push(fid);
+    if (sortBy === "holdings") {
+      console.log(`[Leaderboard] Fetching token balances from Neynar API for ${fids.length} users (holdings mode)`);
+      
+      // Fetch balances in batches to avoid overwhelming the API
+      const batchSize = 10; // Process 10 users at a time
+      for (let i = 0; i < fids.length; i += batchSize) {
+        const batch = fids.slice(i, i + batchSize);
+        
+        // Fetch balances in parallel for the batch
+        const balancePromises = batch.map(async (fid) => {
+          const balance = await getTokenBalanceFromNeynar(fid);
+          return { fid, balance };
         });
+        
+        const batchResults = await Promise.all(balancePromises);
+        batchResults.forEach(({ fid, balance }) => {
+          fidToBalance.set(fid, balance);
+        });
+        
+        // Small delay between batches to respect rate limits
+        if (i + batchSize < fids.length) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
       }
-    });
-
-    // Batch fetch all token balances at once
-    // Note: Ethereum addresses are case-insensitive, but we normalize to lowercase for consistency
-    const allAddresses = Array.from(addressToFids.keys());
-    const balancesMap = await getTokenBalancesBatch(allAddresses);
-    
-    // Normalize the balances map keys to lowercase for lookup
-    const normalizedBalancesMap = new Map<string, number>();
-    balancesMap.forEach((balance, addr) => {
-      normalizedBalancesMap.set(addr.toLowerCase(), balance);
-    });
+      
+      console.log(`[Leaderboard] Fetched balances for ${fidToBalance.size} users from Neynar`);
+    } else {
+      // For streak/total_checkins mode, we don't need balances
+      console.log(`[Leaderboard] Skipping balance fetch for ${sortBy} mode (not needed)`);
+    }
 
     // Build leaderboard entries with token balances
     // For holdings mode: Include ALL users with verified addresses (even if no check-in)
@@ -424,18 +462,11 @@ export async function GET(req: NextRequest) {
       const username = userData?.username;
       const displayName = userData?.displayName;
       
-      // Get token balance from ALL addresses (verified, custodial, integrated, etc.)
-      // Consolidate holdings across ALL wallets for this user (one combined score per FID)
+      // Get token balance from Neynar API (already aggregated across all wallets)
+      // For holdings mode, use Neynar balance; for other modes, use 0
       let tokenBalance = 0;
-      const userAddresses = fidToAddresses.get(fid) || [];
-      if (userAddresses.length > 0) {
-        // Sum all balances across ALL wallets for this user
-        // This includes: verified wallets, custodial wallets, integrated wallets, bot wallets, etc.
-        tokenBalance = userAddresses.reduce((sum, addr) => {
-          const normalizedAddr = addr.toLowerCase();
-          const balance = normalizedBalancesMap.get(normalizedAddr) || 0;
-          return sum + balance;
-        }, 0);
+      if (sortBy === "holdings") {
+        tokenBalance = fidToBalance.get(fid) || 0;
       }
       
       // For holdings mode: Include users with tokens OR users who have checked in (for broader coverage)
@@ -468,7 +499,7 @@ export async function GET(req: NextRequest) {
             displayName,
             pfp_url: userData?.pfp_url,
             rank: 0, // Will be set after sorting
-            tokenBalance: tokenBalance,
+            tokenBalance: 0, // Not needed for streak mode
           });
         }
       }
@@ -517,10 +548,8 @@ export async function GET(req: NextRequest) {
     // Log summary for debugging
     const totalHoldings = entriesWithBalances.reduce((sum, entry) => sum + (entry.tokenBalance || 0), 0);
     const usersWithHoldings = entriesWithBalances.filter(e => (e.tokenBalance || 0) > 0).length;
-    const totalAddressesChecked = Array.from(fidToAddresses.values()).reduce((sum, addrs) => sum + addrs.length, 0);
-    const usersWithAddresses = Array.from(fidToAddresses.keys()).length;
-    console.log(`[Leaderboard] Summary: ${usersWithAddresses} users with ${totalAddressesChecked} total addresses checked`);
-    console.log(`[Leaderboard] Total $CATWALK holdings: ${totalHoldings.toFixed(2)}, Users with holdings: ${usersWithHoldings}/${entriesWithBalances.length}`);
+    console.log(`[Leaderboard] Summary: ${entriesWithBalances.length} entries, ${usersWithHoldings} users with $CATWALK holdings`);
+    console.log(`[Leaderboard] Total $CATWALK holdings: ${totalHoldings.toFixed(2)}`);
 
     // Assign ranks and limit to top entries
     const topEntries = entriesWithBalances.slice(0, limit).map((entry, index) => ({

@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { getNeynarClient } from '~/lib/neynar';
 
 const CATWALK_CHANNEL_URL = "https://warpcast.com/~/channel/catwalk";
 

@@ -56,13 +56,15 @@ export async function GET(request: Request) {
       }
 
       // Fallback to Neynar API if available
+      // Note: Neynar API lookupUserByUsername returns User directly, not wrapped in result
       if (!fid && apiKey) {
         try {
           const client = getNeynarClient();
           const userResponse = await client.lookupUserByUsername({ username });
-          if (userResponse?.result?.user?.fid) {
-            fid = userResponse.result.user.fid;
-            fids.push(fid);
+          // Access user directly - the SDK returns User object, not wrapped
+          const fid = (userResponse as any)?.user?.fid || (userResponse as any)?.fid;
+          if (fid) {
+            fids.push(parseInt(String(fid), 10));
             continue; // Success
           }
         } catch (_error: any) {

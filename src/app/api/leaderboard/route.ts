@@ -8,99 +8,142 @@ const TOKEN_ADDRESS = "0xa5eb1cAD0dFC1c4f8d4f84f995aeDA9a7A047B07"; // CATWALK o
 /**
  * Get token balance for a wallet address on Base chain using direct RPC call.
  * More reliable than BaseScan API and doesn't require API key.
+ * Includes retry logic with exponential backoff for rate limiting.
  */
-async function getTokenBalance(address: string): Promise<number> {
-  try {
-    const rpcUrl = "https://mainnet.base.org";
-    
-    // ERC20 balanceOf(address) function selector: 0x70a08231
-    // Pad address to 32 bytes (64 hex chars)
-    const addressParam = address.slice(2).toLowerCase().padStart(64, '0');
-    const balanceCall = {
-      jsonrpc: "2.0",
-      method: "eth_call",
-      params: [
-        {
-          to: TOKEN_ADDRESS,
-          data: `0x70a08231${addressParam}`, // balanceOf(address)
-        },
-        "latest",
-      ],
-      id: 1,
-    };
-
-    const response = await fetch(rpcUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "User-Agent": "Catwalk-MiniApp",
+async function getTokenBalance(address: string, retries: number = 3): Promise<number> {
+  const rpcUrl = "https://mainnet.base.org";
+  
+  // ERC20 balanceOf(address) function selector: 0x70a08231
+  // Pad address to 32 bytes (64 hex chars)
+  const addressParam = address.slice(2).toLowerCase().padStart(64, '0');
+  const balanceCall = {
+    jsonrpc: "2.0",
+    method: "eth_call",
+    params: [
+      {
+        to: TOKEN_ADDRESS,
+        data: `0x70a08231${addressParam}`, // balanceOf(address)
       },
-      body: JSON.stringify(balanceCall),
-      signal: AbortSignal.timeout(10000), // 10 second timeout
-    });
+      "latest",
+    ],
+    id: 1,
+  };
 
-    if (!response.ok) {
-      console.error(`[Leaderboard] RPC call failed for ${address}:`, response.status);
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const response = await fetch(rpcUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent": "Catwalk-MiniApp",
+        },
+        body: JSON.stringify(balanceCall),
+        signal: AbortSignal.timeout(15000), // 15 second timeout
+      });
+
+      // Handle rate limiting (429) with exponential backoff
+      if (response.status === 429) {
+        const retryAfter = response.headers.get('Retry-After');
+        const waitTime = retryAfter 
+          ? parseInt(retryAfter) * 1000 
+          : Math.min(1000 * Math.pow(2, attempt), 10000); // Exponential backoff, max 10s
+        
+        if (attempt < retries - 1) {
+          console.log(`[Leaderboard] Rate limited for ${address}, retrying after ${waitTime}ms (attempt ${attempt + 1}/${retries})`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue; // Retry
+        } else {
+          console.error(`[Leaderboard] Rate limited for ${address} after ${retries} attempts`);
+          return 0;
+        }
+      }
+
+      if (!response.ok) {
+        if (attempt < retries - 1) {
+          const waitTime = Math.min(500 * Math.pow(2, attempt), 5000);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        }
+        console.error(`[Leaderboard] RPC call failed for ${address}:`, response.status);
+        return 0;
+      }
+
+      const data = await response.json();
+      
+      if (data.result && data.result !== "0x" && !data.error) {
+        // Convert from hex to BigInt, then divide by 10^18 (18 decimals)
+        const balanceRaw = BigInt(data.result);
+        const decimals = BigInt(10 ** 18);
+        const wholePart = balanceRaw / decimals;
+        const fractionalPart = balanceRaw % decimals;
+        
+        // Convert to number with precision
+        const balance = Number(wholePart) + Number(fractionalPart) / Number(decimals);
+        
+        return balance;
+      }
+      
+      return 0;
+    } catch (error: any) {
+      if (error.name === 'AbortError' || error.name === 'TimeoutError') {
+        if (attempt < retries - 1) {
+          const waitTime = Math.min(1000 * Math.pow(2, attempt), 5000);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        }
+        return 0;
+      }
+      
+      if (attempt < retries - 1) {
+        const waitTime = Math.min(500 * Math.pow(2, attempt), 5000);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        continue;
+      }
+      
+      console.error(`[Leaderboard] Error fetching balance for ${address}:`, error);
       return 0;
     }
-
-    const data = await response.json();
-    
-    if (data.result && data.result !== "0x" && !data.error) {
-      // Convert from hex to BigInt, then divide by 10^18 (18 decimals)
-      const balanceRaw = BigInt(data.result);
-      const decimals = BigInt(10 ** 18);
-      const wholePart = balanceRaw / decimals;
-      const fractionalPart = balanceRaw % decimals;
-      
-      // Convert to number with precision
-      const balance = Number(wholePart) + Number(fractionalPart) / Number(decimals);
-      
-      return balance;
-    }
-    
-    return 0;
-  } catch (error: any) {
-    if (error.name !== 'AbortError' && error.name !== 'TimeoutError') {
-      console.error(`[Leaderboard] Error fetching balance for ${address}:`, error);
-    }
-    return 0;
   }
+  
+  return 0;
 }
 
 /**
  * Batch fetch token balances with rate limiting.
- * Processes addresses in chunks to avoid overwhelming the RPC endpoint.
+ * Processes addresses sequentially to avoid overwhelming the RPC endpoint.
+ * Uses smaller batches and longer delays to respect rate limits.
  */
 async function getTokenBalancesBatch(
   addresses: string[],
-  batchSize: number = 5,
-  delayBetweenBatches: number = 200
+  batchSize: number = 2, // Reduced from 5 to 2 to avoid rate limits
+  delayBetweenBatches: number = 1000 // Increased from 200ms to 1000ms (1 second)
 ): Promise<Map<string, number>> {
   const balances = new Map<string, number>();
   
-  // Process in batches to avoid rate limits
+  console.log(`[Leaderboard] Fetching balances for ${addresses.length} addresses in batches of ${batchSize} with ${delayBetweenBatches}ms delay`);
+  
+  // Process in smaller batches to avoid rate limits
   for (let i = 0; i < addresses.length; i += batchSize) {
     const batch = addresses.slice(i, i + batchSize);
     
-    // Fetch all balances in the batch in parallel
-    const batchPromises = batch.map(async (addr) => {
+    // Fetch balances sequentially within batch to avoid overwhelming the endpoint
+    for (const addr of batch) {
       const balance = await getTokenBalance(addr);
-      return { address: addr, balance };
-    });
+      balances.set(addr, balance);
+      
+      // Small delay between individual requests within batch
+      if (batch.indexOf(addr) < batch.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 300)); // 300ms between requests
+      }
+    }
     
-    const batchResults = await Promise.all(batchPromises);
-    
-    // Store results
-    batchResults.forEach(({ address, balance }) => {
-      balances.set(address, balance);
-    });
-    
-    // Small delay between batches to respect rate limits
+    // Longer delay between batches to respect rate limits
     if (i + batchSize < addresses.length) {
       await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
     }
   }
+  
+  console.log(`[Leaderboard] Completed fetching balances for ${addresses.length} addresses`);
   
   return balances;
 }

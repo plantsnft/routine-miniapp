@@ -73,8 +73,33 @@ export const APP_SPLASH_BACKGROUND_COLOR: string = '#000000';
  * TODO: Update this list with the actual creator FIDs when provided
  */
 export const CATWALK_CREATOR_FIDS: number[] = [
-  // Add creator FIDs here when provided
-  // Example: 318447, 123456, etc.
+  8926,
+  11632,
+  14511,
+  16567,
+  277636,
+  298587,
+  318447,
+  324497,
+  325807,
+  342855,
+  364953,
+  380950,
+  394027,
+  399658,
+  414695,
+  417063,
+  420915,
+  430044,
+  445534,
+  451916,
+  458764,
+  476033,
+  532378,
+  623879,
+  871872,
+  923379,
+  991976,
 ];
 
 /**

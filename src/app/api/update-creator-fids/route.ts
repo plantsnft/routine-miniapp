@@ -54,8 +54,9 @@ export async function GET() {
         // Remove .eth suffix for lookup
         const lookupUsername = username.replace(/\.eth$/, '');
         
-        const userResponse = await client.lookupUserByUsername(lookupUsername);
-        const fid = userResponse?.result?.user?.fid;
+        const userResponse = await client.lookupUserByUsername({ username: lookupUsername });
+        // Access user directly - the SDK returns User object, not wrapped
+        const fid = (userResponse as any)?.user?.fid || (userResponse as any)?.fid;
         
         if (fid) {
           results.push({ username, fid });
@@ -73,8 +74,9 @@ export async function GET() {
         }
         
         try {
-          const userResponse = await client.lookupUserByUsername(username);
-          const fid = userResponse?.result?.user?.fid;
+          const userResponse = await client.lookupUserByUsername({ username });
+          // Access user directly - the SDK returns User object, not wrapped
+          const fid = (userResponse as any)?.user?.fid || (userResponse as any)?.fid;
           
           if (fid) {
             results.push({ username, fid });

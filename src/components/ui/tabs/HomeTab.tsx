@@ -219,7 +219,26 @@ export function HomeTab() {
               lineHeight: 1.5,
             }}
           >
-            It&apos;s a Cat owners sharing content and tips of our feline family outside the home…..
+            On Farcaster, Catwalk lets creators share cat adventures and earn{" "}
+            <a
+              href="https://app.uniswap.org/swap?chain=base&outputCurrency=0xa5eb1cAD0dFC1c4f8d4f84f995aeDA9a7A047B07"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                color: "#c1b400",
+                textDecoration: "none",
+                fontWeight: 700,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.textDecoration = "underline";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.textDecoration = "none";
+              }}
+            >
+              $CATWALK
+            </a>
+            , a token funded by trading fees and advertising revenue
           </p>
           
           {/* Cycling keywords animation - fixed double flash */}

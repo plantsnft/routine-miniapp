@@ -40,7 +40,7 @@ export function VideoPlayer({
       // Check if native HLS is supported
       const canPlayHLS = video.canPlayType('application/vnd.apple.mpegurl');
       
-      if (!canPlayHLS || canPlayHLS === '') {
+      if (!canPlayHLS) {
         // Browser doesn't support native HLS - try to use hls.js if available
         // Note: hls.js needs to be installed: npm install hls.js
         // For now, we'll try native support which works in Safari and newer Chrome/Edge

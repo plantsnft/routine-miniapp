@@ -47,7 +47,7 @@ export const Footer: React.FC<FooterProps> = ({ activeTab, setActiveTab }) => {
           alignItems: "center",
           maxWidth: "600px",
           margin: "0 auto",
-          marginBottom: 8,
+          marginBottom: 4, // Reduced from 8px (50% reduction)
         }}
       >
       <button
@@ -144,7 +144,7 @@ export const Footer: React.FC<FooterProps> = ({ activeTab, setActiveTab }) => {
           width: "100%",
           maxWidth: "600px",
           margin: "0 auto",
-          padding: "6px 16px",
+          padding: "5px 16px", // Reduced from 6px (10% reduction: 6*0.9=5.4≈5)
           background: "#c1b400",
           color: "#000000",
           border: "2px solid #000000",

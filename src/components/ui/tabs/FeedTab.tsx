@@ -33,7 +33,7 @@ export function FeedTab() {
   const [error, setError] = useState<string | { message: string; debug?: any } | null>(null);
   const [_isFollowingChannel, setIsFollowingChannel] = useState<boolean>(false);
   const [showCreatorsModal, setShowCreatorsModal] = useState(false);
-  const [creators, setCreators] = useState<Array<{ fid: number; username?: string; displayName?: string; castCount?: number }>>([]);
+  const [creators, setCreators] = useState<Array<{ fid: number; username?: string; displayName?: string; castCount?: number; pfp_url?: string }>>([]);
   const [loadingCastCounts, setLoadingCastCounts] = useState(false);
 
   useEffect(() => {
@@ -502,6 +502,7 @@ export function FeedTab() {
                           fid: u.fid,
                           username: u.username,
                           displayName: u.display_name,
+                          pfp_url: u.pfp_url || u.pfp?.url || null,
                           castCount: castCountsData?.castCounts?.[u.fid], // undefined means unknown/loading
                         }))
                       );
@@ -510,12 +511,13 @@ export function FeedTab() {
                       setCreators(CATWALK_CREATOR_FIDS.map((fid) => ({ 
                         fid,
                         castCount: castCountsData?.castCounts?.[fid],
+                        pfp_url: null,
                       })));
                     }
                   } catch (error) {
                     console.error("Error fetching creators:", error);
                     // Fallback: just show FIDs
-                    setCreators(CATWALK_CREATOR_FIDS.map((fid) => ({ fid })));
+                    setCreators(CATWALK_CREATOR_FIDS.map((fid) => ({ fid, pfp_url: null })));
                   } finally {
                     setLoadingCastCounts(false);
                   }
@@ -529,6 +531,7 @@ export function FeedTab() {
                     fid: 0,
                     username: undefined,
                     displayName: `Creator ${i + 1}`,
+                    pfp_url: null,
                   }))
                 );
               }
@@ -592,6 +595,9 @@ export function FeedTab() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <h3 style={{ margin: 0, color: "#c1b400", fontSize: 20, fontWeight: 700 }}>
                 Official Catwalk Creators
+                <p style={{ margin: 0, marginTop: 8, color: "#ffffff", fontSize: 12, opacity: 0.8 }}>
+                  Thank you for sharing your cats !
+                </p>
               </h3>
               <button
                 onClick={() => setShowCreatorsModal(false)}
@@ -626,11 +632,43 @@ export function FeedTab() {
                       border: "1px solid #000000",
                     }}
                   >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                      <div style={{ flex: 1 }}>
-                        <p style={{ margin: 0, color: "#000000", fontSize: 14, fontWeight: 600 }}>
-                          {creator.displayName || creator.username || `FID: ${creator.fid}`}
-                        </p>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                      {/* Profile Picture */}
+                      {creator.pfp_url && (
+                        <img
+                          src={creator.pfp_url}
+                          alt={creator.displayName || creator.username || "Creator"}
+                          style={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: "50%",
+                            border: "2px solid #000000",
+                            objectFit: "cover",
+                            flexShrink: 0,
+                          }}
+                        />
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <a
+                          href={creator.username ? `https://warpcast.com/${creator.username}` : `https://warpcast.com/~/profile/${creator.fid}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            color: "#000000",
+                            textDecoration: "none",
+                            fontWeight: 600,
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.textDecoration = "underline";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.textDecoration = "none";
+                          }}
+                        >
+                          <p style={{ margin: 0, color: "#000000", fontSize: 14, fontWeight: 600 }}>
+                            {creator.displayName || creator.username || `FID: ${creator.fid}`}
+                          </p>
+                        </a>
                         {creator.username && (
                           <p style={{ margin: 0, marginTop: 4, color: "#000000", fontSize: 12, opacity: 0.7 }}>
                             @{creator.username}

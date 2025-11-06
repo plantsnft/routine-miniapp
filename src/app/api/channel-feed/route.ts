@@ -31,7 +31,11 @@ export async function GET() {
       try {
         channelInfo = await client.lookupChannel({ id: CATWALK_CHANNEL_ID });
         debugInfo.push(`Channel lookup: Success - found channel`);
-        console.log("[Channel Feed] Channel lookup successful:", channelInfo);
+        console.log("[Channel Feed] Channel lookup successful:", JSON.stringify(channelInfo, null, 2));
+        // Log available properties
+        if (channelInfo) {
+          debugInfo.push(`Channel properties: ${Object.keys(channelInfo).join(', ')}`);
+        }
       } catch (lookupError: any) {
         debugInfo.push(`Channel lookup failed: ${lookupError?.message}`);
         console.log("[Channel Feed] Channel lookup failed, trying search:", lookupError?.message);
@@ -144,19 +148,29 @@ export async function GET() {
       }
     }
 
-    // Strategy 3: Try using a generic/public feed endpoint (if channel info found, use its ID)
+    // Strategy 3: Try using channel info properties and various endpoint formats
     if (casts.length === 0 && channelInfo) {
       try {
-        const channelId = channelInfo.id || channelInfo.channel_id || CATWALK_CHANNEL_ID;
-        console.log("[Channel Feed] Strategy 3: Trying with resolved channel ID:", channelId);
+        // Extract all possible channel identifiers
+        const channelId = (channelInfo as any).id || (channelInfo as any).channel_id || CATWALK_CHANNEL_ID;
+        const channelUrl = (channelInfo as any).url || (channelInfo as any).parent_url || CATWALK_CHANNEL_PARENT_URL;
+        const channelParentUrl = (channelInfo as any).parent_url || channelUrl;
         
-        // Try different endpoint formats with the resolved channel ID
-        const endpoints = [
-          `https://api.neynar.com/v2/farcaster/feed?feed_type=channel&channel_id=${channelId}&limit=5`,
-          `https://api.neynar.com/v2/farcaster/feed?feed_type=channel&parent_url=${encodeURIComponent(channelInfo.url || CATWALK_CHANNEL_PARENT_URL)}&limit=5`,
-        ];
+        console.log("[Channel Feed] Strategy 3: Channel ID:", channelId, "URL:", channelUrl);
+        debugInfo.push(`Strategy 3: Using channelId=${channelId}, url=${channelUrl}`);
         
-        for (const endpoint of endpoints) {
+        // Try using fetchFeed with a dummy fid (0 or -1 might work for public feeds)
+        // Or try without fid parameter
+        const testEndpoints = [
+          // Try with parent_url and no fid (some APIs allow public channel access)
+          `https://api.neynar.com/v2/farcaster/feed?feed_type=channel&parent_url=${encodeURIComponent(channelParentUrl)}&limit=5`,
+          // Try with channel_id (if it's numeric)
+          typeof channelId === 'number' ? `https://api.neynar.com/v2/farcaster/feed?feed_type=channel&channel_id=${channelId}&limit=5` : null,
+          // Try with channel ID as string
+          `https://api.neynar.com/v2/farcaster/feed?feed_type=channel&channel_id=${encodeURIComponent(channelId)}&limit=5`,
+        ].filter(Boolean) as string[];
+        
+        for (const endpoint of testEndpoints) {
           try {
             const response = await fetch(endpoint, {
               headers: {
@@ -166,27 +180,74 @@ export async function GET() {
             });
 
             const responseText = await response.text();
-            debugInfo.push(`Strategy 3 (${endpoint.substring(0, 50)}...): Status ${response.status}`);
+            const endpointKey = endpoint.substring(endpoint.indexOf('/v2/'));
+            debugInfo.push(`Strategy 3 (${endpointKey}): Status ${response.status}`);
             
             if (response.ok) {
               try {
                 const data = JSON.parse(responseText);
-                casts = data.casts || data.result?.casts || [];
+                casts = data.casts || data.result?.casts || data.result?.feed || [];
                 if (casts.length > 0) {
                   console.log(`[Channel Feed] ✅ Strategy 3 succeeded: ${casts.length} casts`);
                   debugInfo.push(`Strategy 3: Success - ${casts.length} casts`);
                   break;
+                } else {
+                  debugInfo.push(`Strategy 3: Response OK but no casts (keys: ${Object.keys(data).join(', ')})`);
                 }
               } catch (_parseError) {
-                // Continue to next endpoint
+                debugInfo.push(`Strategy 3: Parse error - ${responseText.substring(0, 100)}`);
               }
+            } else {
+              const errorText = responseText.substring(0, 150);
+              debugInfo.push(`Strategy 3: Failed ${response.status} - ${errorText}`);
             }
           } catch (_error) {
-            // Continue to next endpoint
+            debugInfo.push(`Strategy 3: Exception for ${endpoint.substring(0, 50)}`);
           }
         }
       } catch (error: any) {
         debugInfo.push(`Strategy 3: Exception - ${error?.message}`);
+      }
+    }
+    
+    // Strategy 4: Try using recent casts endpoint and filter by channel
+    // This is a fallback - fetch recent casts and filter by parent_url
+    if (casts.length === 0 && channelInfo) {
+      try {
+        console.log("[Channel Feed] Strategy 4: Trying recent casts filtered by channel");
+        // This might not work if recent casts endpoint also requires fid, but worth trying
+        const channelUrl = (channelInfo as any).url || (channelInfo as any).parent_url || CATWALK_CHANNEL_PARENT_URL;
+        
+        // Try fetching recent casts (if this endpoint exists and doesn't require fid)
+        const response = await fetch(
+          `https://api.neynar.com/v2/farcaster/cast/recent?limit=100`,
+          {
+            headers: {
+              "x-api-key": apiKey,
+            },
+          }
+        );
+        
+        if (response.ok) {
+          const data = await response.json();
+          const allCasts = data.casts || data.result?.casts || [];
+          // Filter casts that belong to our channel
+          casts = allCasts.filter((cast: any) => 
+            cast.parent_url === channelUrl || 
+            cast.parent_url?.includes(CATWALK_CHANNEL_ID) ||
+            cast.channel?.id === CATWALK_CHANNEL_ID
+          ).slice(0, 5);
+          
+          if (casts.length > 0) {
+            debugInfo.push(`Strategy 4: Success - found ${casts.length} casts by filtering`);
+          } else {
+            debugInfo.push(`Strategy 4: Found ${allCasts.length} recent casts but none match channel`);
+          }
+        } else {
+          debugInfo.push(`Strategy 4: Recent casts endpoint failed - ${response.status}`);
+        }
+      } catch (error: any) {
+        debugInfo.push(`Strategy 4: Exception - ${error?.message}`);
       }
     }
 

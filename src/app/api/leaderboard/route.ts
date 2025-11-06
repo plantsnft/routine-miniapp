@@ -262,44 +262,122 @@ export async function GET(req: NextRequest) {
     const client = getNeynarClient();
     let fids: number[] = [];
     const checkinMap = new Map<number, { streak: number; last_checkin: string | null; total_checkins: number }>();
+    let blockchainBalances = new Map<number, number>(); // Balances from BaseScan
+    let totalTokenHolders = 0; // Total holders from blockchain
 
     if (sortBy === "holdings") {
-      // For holdings mode: Get users from multiple sources to find ALL potential holders
-      const allFidsSet = new Set<number>();
+      // For holdings mode: Get ALL token holders from blockchain, then match to Farcaster FIDs
+      console.log("[Leaderboard] Fetching ALL token holders from BaseScan...");
       
-      // 1. Get all users who have checked in
-      const allCheckins = await getTopUsersByStreak(1000); // Increased limit
+      const addressToBalance = new Map<string, number>();
+      const addressToFid = new Map<string, number>();
+      let totalHolders = 0;
+      
+      // 1. Get all token holders from BaseScan API (paginated)
+      try {
+        const apiKeyParam = BASESCAN_API_KEY ? `&apikey=${BASESCAN_API_KEY}` : "";
+        let page = 1;
+        const pageSize = 1000; // Max per page
+        let hasMore = true;
+        
+        while (hasMore && page <= 10) { // Limit to 10 pages (10,000 holders max) to avoid timeout
+          const holderListUrl = `https://api.basescan.org/api?module=token&action=tokenholderlist&contractaddress=${TOKEN_ADDRESS}&page=${page}&offset=${pageSize}${apiKeyParam}`;
+          
+          const holderResponse = await fetch(holderListUrl, {
+            headers: { "User-Agent": "Catwalk-MiniApp" },
+          });
+          
+          if (holderResponse.ok) {
+            const holderData = await holderResponse.json();
+            if (holderData.status === "1" && holderData.result && Array.isArray(holderData.result)) {
+              holderData.result.forEach((holder: any) => {
+                const address = holder.TokenHolderAddress?.toLowerCase();
+                const balance = parseFloat(holder.TokenHolderQuantity || "0");
+                if (address && balance > 0) {
+                  addressToBalance.set(address, balance);
+                }
+              });
+              
+              totalHolders = parseInt(holderData.result[0]?.TotalHolders || "0", 10) || addressToBalance.size;
+              hasMore = holderData.result.length === pageSize;
+              console.log(`[Leaderboard] Fetched page ${page}: ${holderData.result.length} holders (Total so far: ${addressToBalance.size})`);
+              page++;
+              
+              // Small delay between pages
+              if (hasMore) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+              }
+            } else {
+              hasMore = false;
+            }
+          } else {
+            console.error(`[Leaderboard] BaseScan API error: ${holderResponse.status}`);
+            hasMore = false;
+          }
+        }
+        
+        console.log(`[Leaderboard] Total token holders found: ${totalHolders || addressToBalance.size}`);
+      } catch (holderError) {
+        console.error("[Leaderboard] Error fetching token holders from BaseScan:", holderError);
+      }
+      
+      // 2. For each holder address, try to find their Farcaster FID using Neynar
+      console.log(`[Leaderboard] Looking up Farcaster FIDs for ${addressToBalance.size} token holders...`);
+      const addresses = Array.from(addressToBalance.keys());
+      const batchSize = 10;
+      
+      for (let i = 0; i < Math.min(addresses.length, 500); i += batchSize) { // Limit to 500 addresses to avoid timeout
+        const batch = addresses.slice(i, i + batchSize);
+        
+        const fidPromises = batch.map(async (address) => {
+          try {
+            // Use Neynar to find FID by address
+            const userResponse = await client.fetchUserByAddress(address);
+            if (userResponse && userResponse.length > 0) {
+              const fid = userResponse[0]?.fid;
+              if (fid) {
+                return { address, fid };
+              }
+            }
+          } catch (_err) {
+            // Address not linked to Farcaster, skip
+          }
+          return null;
+        });
+        
+        const fidResults = await Promise.all(fidPromises);
+        fidResults.forEach((result) => {
+          if (result) {
+            addressToFid.set(result.address, result.fid);
+          }
+        });
+        
+        // Delay between batches
+        if (i + batchSize < addresses.length) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+      }
+      
+      // 3. Build FID list with balances from blockchain
+      addressToFid.forEach((fid, address) => {
+        const balance = addressToBalance.get(address) || 0;
+        const currentBalance = blockchainBalances.get(fid) || 0;
+        blockchainBalances.set(fid, currentBalance + balance); // Sum if user has multiple addresses
+      });
+      
+      fids = Array.from(blockchainBalances.keys());
+      totalTokenHolders = totalHolders || addressToBalance.size;
+      console.log(`[Leaderboard] Found ${fids.length} Farcaster users among ${addressToBalance.size} token holders (Total holders: ${totalTokenHolders})`);
+      
+      // 4. Also get check-in data for users we found
+      const allCheckins = await getTopUsersByStreak(1000);
       allCheckins.forEach((c) => {
-        allFidsSet.add(c.fid);
         checkinMap.set(c.fid, {
           streak: c.streak || 0,
           last_checkin: c.last_checkin || null,
           total_checkins: c.total_checkins || 0,
         });
       });
-      
-      // 2. Get users from channel feed (people who have posted in /catwalk)
-      try {
-        console.log("[Leaderboard] Fetching channel participants for holdings mode...");
-        const channelResponse = await fetch(`${new URL(req.url).origin}/api/channel-feed?limit=500`);
-        if (channelResponse.ok) {
-          const channelData = await channelResponse.json();
-          if (channelData.casts && Array.isArray(channelData.casts)) {
-            channelData.casts.forEach((cast: any) => {
-              if (cast.author?.fid) {
-                allFidsSet.add(cast.author.fid);
-              }
-            });
-            console.log(`[Leaderboard] Added ${channelData.casts.length} channel participants`);
-          }
-        }
-      } catch (_channelError) {
-        console.error("[Leaderboard] Error fetching channel participants:", _channelError);
-        // Continue even if channel fetch fails
-      }
-      
-      fids = Array.from(allFidsSet);
-      console.log(`[Leaderboard] Total unique FIDs for holdings mode: ${fids.length} (${allCheckins.length} from check-ins, ${fids.length - allCheckins.length} from channel)`);
     } else {
       // For streak mode: Only get users who have checked in (for streak ranking)
       const topCheckins = await getTopUsersByStreak(200);
@@ -456,48 +534,36 @@ export async function GET(req: NextRequest) {
       })
     );
 
-    // Fetch token balances using Neynar API (preferred method)
-    // This automatically aggregates all connected wallets per user
+    // Use balances from BaseScan (already fetched) or fetch from Neynar as fallback
     const fidToBalance = new Map<number, number>();
     
     if (sortBy === "holdings") {
-      console.log(`[Leaderboard] Fetching token balances from Neynar API for ${fids.length} users (holdings mode)`);
+      // Use blockchain balances we already fetched, verify/update with Neynar for accuracy
+      blockchainBalances.forEach((balance, fid) => {
+        fidToBalance.set(fid, balance);
+      });
       
-      // Fetch balances in batches to avoid overwhelming the API
-      const batchSize = 10; // Process 10 users at a time
-      let successCount = 0;
-      let errorCount = 0;
+      console.log(`[Leaderboard] Using ${blockchainBalances.size} balances from BaseScan, verifying top holders with Neynar...`);
       
-      for (let i = 0; i < fids.length; i += batchSize) {
-        const batch = fids.slice(i, i + batchSize);
-        
-        // Fetch balances in parallel for the batch
-        const balancePromises = batch.map(async (fid) => {
-          try {
-            const balance = await getTokenBalanceFromNeynar(fid);
-            if (balance > 0) {
-              successCount++;
-            }
-            return { fid, balance, error: null };
-          } catch (err) {
-            errorCount++;
-            console.error(`[Leaderboard] Error fetching balance for FID ${fid}:`, err);
-            return { fid, balance: 0, error: err };
-          }
-        });
-        
-        const batchResults = await Promise.all(balancePromises);
-        batchResults.forEach(({ fid, balance }) => {
-          fidToBalance.set(fid, balance);
-        });
-        
-        // Small delay between batches to respect rate limits
-        if (i + batchSize < fids.length) {
-          await new Promise(resolve => setTimeout(resolve, 200));
+      // Verify top holders with Neynar (limit to top 50 to avoid timeout)
+      const topFids = Array.from(blockchainBalances.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 50)
+        .map(([fid]) => fid);
+      
+      for (const fid of topFids) {
+        try {
+          const neynarBalance = await getTokenBalanceFromNeynar(fid);
+          // Use the higher balance (Neynar aggregates all wallets, might be more accurate)
+          const blockchainBalance = blockchainBalances.get(fid) || 0;
+          fidToBalance.set(fid, Math.max(neynarBalance, blockchainBalance));
+          await new Promise(resolve => setTimeout(resolve, 100)); // Small delay
+        } catch (_err) {
+          // Keep blockchain balance if Neynar fails
         }
       }
       
-      console.log(`[Leaderboard] Fetched balances for ${fidToBalance.size} users from Neynar (${successCount} with balances > 0, ${errorCount} errors)`);
+      console.log(`[Leaderboard] Final balances for ${fidToBalance.size} Farcaster users (Total token holders: ${totalTokenHolders})`);
     } else {
       // For streak/total_checkins mode, we don't need balances
       console.log(`[Leaderboard] Skipping balance fetch for ${sortBy} mode (not needed)`);
@@ -598,8 +664,11 @@ export async function GET(req: NextRequest) {
     // Log summary for debugging
     const totalHoldings = entriesWithBalances.reduce((sum, entry) => sum + (entry.tokenBalance || 0), 0);
     const usersWithHoldings = entriesWithBalances.filter(e => (e.tokenBalance || 0) > 0).length;
-    console.log(`[Leaderboard] Summary: ${entriesWithBalances.length} entries, ${usersWithHoldings} users with $CATWALK holdings`);
-    console.log(`[Leaderboard] Total $CATWALK holdings: ${totalHoldings.toFixed(2)}`);
+    console.log(`[Leaderboard] Summary: ${entriesWithBalances.length} entries, ${usersWithHoldings} Farcaster users with $CATWALK holdings`);
+    if (sortBy === "holdings" && totalTokenHolders > 0) {
+      console.log(`[Leaderboard] Total token holders (all wallets): ${totalTokenHolders}`);
+    }
+    console.log(`[Leaderboard] Total $CATWALK holdings (Farcaster users): ${totalHoldings.toFixed(2)}`);
 
     // Assign ranks and limit to top entries
     const topEntries = entriesWithBalances.slice(0, limit).map((entry, index) => ({
@@ -610,6 +679,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       entries: topEntries,
+      totalHolders: sortBy === "holdings" ? totalTokenHolders : undefined, // Include total holders count
     });
   } catch (err: any) {
     console.error("[API] /api/leaderboard error:", err);

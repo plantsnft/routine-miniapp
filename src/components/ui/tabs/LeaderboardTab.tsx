@@ -24,6 +24,7 @@ export function LeaderboardTab() {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [totalHolders, setTotalHolders] = useState<number | null>(null);
   
   // Calculate total holdings across all entries
   const totalHoldings = entries.reduce((sum, entry) => sum + (entry.tokenBalance || 0), 0);
@@ -42,6 +43,7 @@ export function LeaderboardTab() {
 
         if (data?.ok && data?.entries) {
           setEntries(data.entries);
+          setTotalHolders(data?.totalHolders || null);
         } else {
           setError(data?.error || "Failed to fetch leaderboard");
         }
@@ -243,6 +245,7 @@ export function LeaderboardTab() {
                     const data = await res.json();
                     if (data?.ok && data?.entries) {
                       setEntries(data.entries);
+                      setTotalHolders(data?.totalHolders || null);
                     } else {
                       setError(data?.error || "Failed to fetch leaderboard");
                     }
@@ -388,7 +391,7 @@ export function LeaderboardTab() {
               ))}
             </div>
             
-            {/* Total holdings display */}
+            {/* Total holdings and holders display */}
             <div
               style={{
                 marginTop: 20,
@@ -399,6 +402,19 @@ export function LeaderboardTab() {
                 textAlign: "center",
               }}
             >
+              {sortBy === "holdings" && totalHolders !== null && (
+                <p
+                  style={{
+                    margin: 0,
+                    marginBottom: 12,
+                    color: "#c1b400",
+                    fontSize: 12,
+                    fontWeight: 700,
+                  }}
+                >
+                  Total Token Holders: {totalHolders.toLocaleString()}
+                </p>
+              )}
               <p
                 style={{
                   margin: 0,
@@ -408,7 +424,7 @@ export function LeaderboardTab() {
                   fontWeight: 700,
                 }}
               >
-                Total $CATWALK Holdings
+                {sortBy === "holdings" ? "Farcaster Users Holdings" : "Total $CATWALK Holdings"}
               </p>
               <p
                 style={{

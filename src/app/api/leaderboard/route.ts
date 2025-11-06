@@ -299,29 +299,33 @@ export async function GET(req: NextRequest) {
         console.log("[Leaderboard] Could not fetch token info, will try holder list");
       }
       
-      // Now fetch the actual holder list using V2 API (requires API key)
+      // Now fetch the actual holder list using BaseScan API (V1 with API key to bypass Cloudflare)
       try {
         if (!BASESCAN_API_KEY) {
           console.log("[Leaderboard] BASESCAN_API_KEY not set, skipping BaseScan holder list (will use Neynar fallback)");
         } else {
+          console.log(`[Leaderboard] Using BaseScan API key (length: ${BASESCAN_API_KEY.length})`);
           let page = 1;
           const pageSize = 1000; // Max per page
           let hasMore = true;
           
-          console.log(`[Leaderboard] Fetching holders from BaseScan V2 API for token ${TOKEN_ADDRESS}...`);
+          console.log(`[Leaderboard] Fetching holders from BaseScan API for token ${TOKEN_ADDRESS}...`);
           
           while (hasMore && page <= 10) { // Limit to 10 pages (10,000 holders max) to avoid timeout
-            // BaseScan V2 API endpoint
-            const holderListUrl = `https://api.basescan.org/v2/api?module=token&action=tokenholderlist&contractaddress=${TOKEN_ADDRESS}&page=${page}&offset=${pageSize}&apikey=${BASESCAN_API_KEY}`;
+            // BaseScan V1 API endpoint with API key (should bypass Cloudflare)
+            const holderListUrl = `https://api.basescan.org/api?module=token&action=tokenholderlist&contractaddress=${TOKEN_ADDRESS}&page=${page}&offset=${pageSize}&apikey=${BASESCAN_API_KEY}`;
           
-            console.log(`[Leaderboard] Fetching page ${page} from BaseScan V2...`);
+            console.log(`[Leaderboard] Fetching page ${page} from BaseScan API...`);
             const holderResponse = await fetch(holderListUrl, {
-              headers: { "User-Agent": "Catwalk-MiniApp" },
+              headers: { 
+                "User-Agent": "Catwalk-MiniApp",
+                "Accept": "application/json"
+              },
             });
             
             if (holderResponse.ok) {
               const holderData = await holderResponse.json();
-              console.log(`[Leaderboard] BaseScan V2 response for page ${page}: status=${holderData.status}, result type=${typeof holderData.result}`);
+              console.log(`[Leaderboard] BaseScan API response for page ${page}: status=${holderData.status}, result type=${typeof holderData.result}`);
               
               if (holderData.status === "1" && holderData.result) {
                 // V2 API might return result as array or object
@@ -358,9 +362,9 @@ export async function GET(req: NextRequest) {
               } else {
                 // Check if result is an error message string
                 if (typeof holderData.result === 'string') {
-                  console.error(`[Leaderboard] BaseScan V2 API error: ${holderData.result}`);
+                  console.error(`[Leaderboard] BaseScan API error: ${holderData.result}`);
                 } else {
-                  console.error(`[Leaderboard] BaseScan V2 API returned error status: ${holderData.status}, message: ${holderData.message || JSON.stringify(holderData).substring(0, 200)}`);
+                  console.error(`[Leaderboard] BaseScan API returned error status: ${holderData.status}, message: ${holderData.message || JSON.stringify(holderData).substring(0, 200)}`);
                 }
                 hasMore = false;
               }
@@ -368,9 +372,9 @@ export async function GET(req: NextRequest) {
               const errorText = await holderResponse.text();
               // Check if it's a Cloudflare challenge page
               if (errorText.includes('Just a moment') || errorText.includes('cloudflare')) {
-                console.error(`[Leaderboard] BaseScan V2 API blocked by Cloudflare (403). This requires an API key or different approach.`);
+                console.error(`[Leaderboard] BaseScan API still blocked by Cloudflare (${holderResponse.status}) even with API key. Response: ${errorText.substring(0, 300)}`);
               } else {
-                console.error(`[Leaderboard] BaseScan V2 API error: ${holderResponse.status} - ${errorText.substring(0, 200)}`);
+                console.error(`[Leaderboard] BaseScan API error: ${holderResponse.status} - ${errorText.substring(0, 200)}`);
               }
               hasMore = false;
             }

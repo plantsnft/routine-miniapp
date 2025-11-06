@@ -15,19 +15,15 @@ async function getTokenBalanceFromNeynar(fid: number): Promise<number> {
     const client = getNeynarClient();
     
     // Log that we're attempting to fetch
-    if (fid <= 5) {
-      console.log(`[Leaderboard] Attempting to fetch balance from Neynar for FID ${fid}...`);
-    }
+    console.log(`[Leaderboard] Attempting to fetch balance from Neynar for FID ${fid}...`);
     
     const response = await client.fetchUserBalance({
       fid: fid,
       networks: ['base'],
     });
 
-    // Log response structure for first few users to debug
-    if (fid <= 5) {
-      console.log(`[Leaderboard] Neynar response for FID ${fid}:`, JSON.stringify(response, null, 2));
-    }
+    // Log response structure for debugging
+    console.log(`[Leaderboard] Neynar response for FID ${fid}:`, JSON.stringify(response, null, 2).substring(0, 1000));
 
     // Neynar returns balances for all tokens across all connected wallets
     // The response structure may vary, so we use type assertion to access the data
@@ -36,17 +32,15 @@ async function getTokenBalanceFromNeynar(fid: number): Promise<number> {
     // Check for tokens array in various possible locations
     const tokens = userBalance?.tokens || userBalance?.token_balances || userBalance?.balances || [];
     
-    if (fid <= 3) {
-      console.log(`[Leaderboard] Found ${tokens.length} tokens for FID ${fid}`);
-    }
+    console.log(`[Leaderboard] Found ${tokens.length} tokens for FID ${fid}, userBalance keys:`, Object.keys(userBalance || {}));
     
     if (Array.isArray(tokens) && tokens.length > 0) {
       const catwalkToken = tokens.find(
         (token: any) => {
           const contractAddr = token.contract_address || token.contractAddress || token.address || token.token_address;
           const matches = contractAddr?.toLowerCase() === TOKEN_ADDRESS.toLowerCase();
-          if (fid <= 3 && matches) {
-            console.log(`[Leaderboard] Found CATWALK token for FID ${fid}:`, token);
+          if (matches) {
+            console.log(`[Leaderboard] Found CATWALK token for FID ${fid}:`, JSON.stringify(token).substring(0, 500));
           }
           return matches;
         }
@@ -56,9 +50,7 @@ async function getTokenBalanceFromNeynar(fid: number): Promise<number> {
         // Get balance from various possible property names
         const balanceRaw = catwalkToken.balance || catwalkToken.amount || catwalkToken.value || catwalkToken.quantity || '0';
         
-        if (fid <= 3) {
-          console.log(`[Leaderboard] CATWALK balance raw for FID ${fid}:`, balanceRaw);
-        }
+        console.log(`[Leaderboard] CATWALK balance raw for FID ${fid}:`, balanceRaw, 'Type:', typeof balanceRaw);
         
         // Convert from wei/raw balance to human-readable format
         // The balance is typically in the smallest unit (wei for ETH, smallest unit for tokens)
@@ -69,22 +61,20 @@ async function getTokenBalanceFromNeynar(fid: number): Promise<number> {
           const fractionalPart = balanceWei % decimals;
           const balance = Number(wholePart) + Number(fractionalPart) / Number(decimals);
           
-          if (fid <= 3) {
-            console.log(`[Leaderboard] CATWALK balance parsed for FID ${fid}:`, balance);
-          }
+          console.log(`[Leaderboard] CATWALK balance parsed for FID ${fid}:`, balance);
           
           return balance;
         } catch (parseError) {
           console.error(`[Leaderboard] Error parsing balance for FID ${fid}:`, parseError, 'Raw value:', balanceRaw);
           return 0;
         }
-      } else if (fid <= 3) {
-        console.log(`[Leaderboard] CATWALK token not found for FID ${fid}. Available tokens:`, tokens.map((t: any) => ({
+      } else {
+        console.log(`[Leaderboard] CATWALK token not found for FID ${fid}. Available tokens (first 5):`, tokens.slice(0, 5).map((t: any) => ({
           address: t.contract_address || t.contractAddress || t.address || t.token_address,
           symbol: t.symbol || t.token_symbol,
         })));
       }
-    } else if (fid <= 3) {
+    } else {
       console.log(`[Leaderboard] No tokens array found for FID ${fid}. User balance structure:`, Object.keys(userBalance || {}));
     }
     
@@ -278,8 +268,10 @@ export async function GET(req: NextRequest) {
       try {
         const apiKeyParam = BASESCAN_API_KEY ? `&apikey=${BASESCAN_API_KEY}` : "";
         
-        // Try token info endpoint first to get total holder count
-        const tokenInfoUrl = `https://api.basescan.org/api?module=token&action=tokeninfo&contractaddress=${TOKEN_ADDRESS}${apiKeyParam}`;
+        // Try token info endpoint first to get total holder count (V2 API)
+        const tokenInfoUrl = BASESCAN_API_KEY 
+          ? `https://api.basescan.org/v2/api?module=token&action=tokeninfo&contractaddress=${TOKEN_ADDRESS}&apikey=${BASESCAN_API_KEY}`
+          : `https://api.basescan.org/api?module=token&action=tokeninfo&contractaddress=${TOKEN_ADDRESS}`;
         const tokenInfoResponse = await fetch(tokenInfoUrl, {
           headers: { "User-Agent": "Catwalk-MiniApp" },
         });
@@ -298,76 +290,80 @@ export async function GET(req: NextRequest) {
         console.log("[Leaderboard] Could not fetch token info, will try holder list");
       }
       
-      // Now fetch the actual holder list
+      // Now fetch the actual holder list using V2 API (requires API key)
       try {
-        const apiKeyParam = BASESCAN_API_KEY ? `&apikey=${BASESCAN_API_KEY}` : "";
-        let page = 1;
-        const pageSize = 1000; // Max per page
-        let hasMore = true;
-        
-        console.log(`[Leaderboard] Fetching holders from BaseScan for token ${TOKEN_ADDRESS}...`);
-        
-        while (hasMore && page <= 10) { // Limit to 10 pages (10,000 holders max) to avoid timeout
-          const holderListUrl = `https://api.basescan.org/api?module=token&action=tokenholderlist&contractaddress=${TOKEN_ADDRESS}&page=${page}&offset=${pageSize}${apiKeyParam}`;
+        if (!BASESCAN_API_KEY) {
+          console.log("[Leaderboard] BASESCAN_API_KEY not set, skipping BaseScan holder list (will use Neynar fallback)");
+        } else {
+          let page = 1;
+          const pageSize = 1000; // Max per page
+          let hasMore = true;
           
-          console.log(`[Leaderboard] Fetching page ${page} from BaseScan: ${holderListUrl.substring(0, 100)}...`);
-          const holderResponse = await fetch(holderListUrl, {
-            headers: { "User-Agent": "Catwalk-MiniApp" },
-          });
+          console.log(`[Leaderboard] Fetching holders from BaseScan V2 API for token ${TOKEN_ADDRESS}...`);
           
-          if (holderResponse.ok) {
-            const holderData = await holderResponse.json();
-            console.log(`[Leaderboard] BaseScan response for page ${page}: status=${holderData.status}, result type=${typeof holderData.result}, keys=${holderData.result ? Object.keys(holderData.result).join(',') : 'none'}`);
+          while (hasMore && page <= 10) { // Limit to 10 pages (10,000 holders max) to avoid timeout
+            // BaseScan V2 API endpoint
+            const holderListUrl = `https://api.basescan.org/v2/api?module=token&action=tokenholderlist&contractaddress=${TOKEN_ADDRESS}&page=${page}&offset=${pageSize}&apikey=${BASESCAN_API_KEY}`;
+          
+            console.log(`[Leaderboard] Fetching page ${page} from BaseScan V2...`);
+            const holderResponse = await fetch(holderListUrl, {
+              headers: { "User-Agent": "Catwalk-MiniApp" },
+            });
             
-            if (holderData.status === "1" && holderData.result) {
-              // Check if result is an array or object
-              const holders = Array.isArray(holderData.result) ? holderData.result : [];
+            if (holderResponse.ok) {
+              const holderData = await holderResponse.json();
+              console.log(`[Leaderboard] BaseScan V2 response for page ${page}: status=${holderData.status}, result type=${typeof holderData.result}`);
               
-              if (holders.length > 0) {
-                holders.forEach((holder: any) => {
-                  // Try different possible field names
-                  const address = (holder.TokenHolderAddress || holder.address || holder.Address || holder.TokenHolder || "").toLowerCase();
-                  const balanceStr = holder.TokenHolderQuantity || holder.quantity || holder.balance || holder.Balance || holder.Value || "0";
-                  const balance = parseFloat(String(balanceStr).replace(/,/g, "")) || 0;
+              if (holderData.status === "1" && holderData.result) {
+                // V2 API might return result as array or object
+                const holders = Array.isArray(holderData.result) ? holderData.result : [];
+                
+                if (holders.length > 0) {
+                  holders.forEach((holder: any) => {
+                    // Try different possible field names for V2 API
+                    const address = (holder.TokenHolderAddress || holder.address || holder.Address || holder.TokenHolder || "").toLowerCase();
+                    const balanceStr = holder.TokenHolderQuantity || holder.quantity || holder.balance || holder.Balance || holder.Value || "0";
+                    const balance = parseFloat(String(balanceStr).replace(/,/g, "")) || 0;
+                    
+                    if (address && address.startsWith("0x") && balance > 0) {
+                      addressToBalance.set(address, balance);
+                    }
+                  });
                   
-                  if (address && address.startsWith("0x") && balance > 0) {
-                    addressToBalance.set(address, balance);
+                  // Get total holders count from response
+                  if (!totalHolders) {
+                    totalHolders = parseInt(holderData.result[0]?.TotalHolders || holderData.TotalHolders || String(addressToBalance.size), 10) || addressToBalance.size;
                   }
-                });
-                
-                // Get total holders count from response
-                if (!totalHolders) {
-                  totalHolders = parseInt(holderData.result[0]?.TotalHolders || holderData.TotalHolders || String(addressToBalance.size), 10) || addressToBalance.size;
-                }
-                hasMore = holders.length === pageSize;
-                console.log(`[Leaderboard] Fetched page ${page}: ${holders.length} holders (Total so far: ${addressToBalance.size}, Total holders: ${totalHolders})`);
-                page++;
-                
-                // Small delay between pages
-                if (hasMore) {
-                  await new Promise(resolve => setTimeout(resolve, 500));
+                  hasMore = holders.length === pageSize;
+                  console.log(`[Leaderboard] Fetched page ${page}: ${holders.length} holders (Total so far: ${addressToBalance.size}, Total holders: ${totalHolders})`);
+                  page++;
+                  
+                  // Small delay between pages
+                  if (hasMore) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                  }
+                } else {
+                  console.log(`[Leaderboard] No more holders on page ${page}`);
+                  hasMore = false;
                 }
               } else {
-                console.log(`[Leaderboard] No more holders on page ${page}`);
+                // Check if result is an error message string
+                if (typeof holderData.result === 'string') {
+                  console.error(`[Leaderboard] BaseScan V2 API error: ${holderData.result}`);
+                } else {
+                  console.error(`[Leaderboard] BaseScan V2 API returned error status: ${holderData.status}, message: ${holderData.message || JSON.stringify(holderData).substring(0, 200)}`);
+                }
                 hasMore = false;
               }
             } else {
-              // Check if result is an error message string
-              if (typeof holderData.result === 'string') {
-                console.error(`[Leaderboard] BaseScan API error: ${holderData.result}`);
-              } else {
-                console.error(`[Leaderboard] BaseScan API returned error status: ${holderData.status}, message: ${holderData.message || JSON.stringify(holderData).substring(0, 200)}`);
-              }
+              const errorText = await holderResponse.text();
+              console.error(`[Leaderboard] BaseScan V2 API error: ${holderResponse.status} - ${errorText.substring(0, 200)}`);
               hasMore = false;
             }
-          } else {
-            const errorText = await holderResponse.text();
-            console.error(`[Leaderboard] BaseScan API error: ${holderResponse.status} - ${errorText.substring(0, 200)}`);
-            hasMore = false;
           }
+          
+          console.log(`[Leaderboard] Total token holders found: ${totalHolders || addressToBalance.size} (from ${addressToBalance.size} addresses)`);
         }
-        
-        console.log(`[Leaderboard] Total token holders found: ${totalHolders || addressToBalance.size} (from ${addressToBalance.size} addresses)`);
       } catch (holderError: any) {
         console.error("[Leaderboard] Error fetching token holders from BaseScan:", holderError?.message || holderError);
       }

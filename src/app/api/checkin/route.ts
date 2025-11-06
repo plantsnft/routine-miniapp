@@ -109,7 +109,7 @@ export async function GET(req: NextRequest) {
         { ok: false, error: err?.message ?? "Unknown server error" },
         { status: 500, headers: { "Content-Type": "application/json" } }
       );
-    } catch (jsonErr) {
+    } catch (_jsonErr) {
       // Fallback if JSON serialization fails
       return new NextResponse(
         JSON.stringify({ ok: false, error: "Internal server error" }),
@@ -307,7 +307,7 @@ export async function POST(req: NextRequest) {
         { ok: false, error: errorMessage },
         { status: 500, headers: { "Content-Type": "application/json" } }
       );
-    } catch (jsonErr) {
+    } catch (_jsonErr) {
       // Fallback if JSON serialization fails
       return new NextResponse(
         JSON.stringify({ ok: false, error: "Internal server error" }),

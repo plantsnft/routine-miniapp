@@ -26,56 +26,49 @@ async function getTokenBalanceFromNeynar(fid: number): Promise<number> {
     console.log(`[Leaderboard] Neynar response for FID ${fid}:`, JSON.stringify(response, null, 2).substring(0, 1000));
 
     // Neynar returns balances for all tokens across all connected wallets
-    // The response structure may vary, so we use type assertion to access the data
+    // The response structure: user_balance.address_balances[].token_balances[]
     const userBalance = response.user_balance as any;
     
-    // Check for tokens array in various possible locations
-    const tokens = userBalance?.tokens || userBalance?.token_balances || userBalance?.balances || [];
+    // Extract all tokens from all address balances
+    const addressBalances = userBalance?.address_balances || [];
+    let totalBalance = 0;
+    let foundCatwalk = false;
     
-    console.log(`[Leaderboard] Found ${tokens.length} tokens for FID ${fid}, userBalance keys:`, Object.keys(userBalance || {}));
-    
-    if (Array.isArray(tokens) && tokens.length > 0) {
-      const catwalkToken = tokens.find(
-        (token: any) => {
-          const contractAddr = token.contract_address || token.contractAddress || token.address || token.token_address;
-          const matches = contractAddr?.toLowerCase() === TOKEN_ADDRESS.toLowerCase();
-          if (matches) {
-            console.log(`[Leaderboard] Found CATWALK token for FID ${fid}:`, JSON.stringify(token).substring(0, 500));
-          }
-          return matches;
-        }
-      );
+    // Iterate through all address balances and sum up CATWALK tokens
+    for (const addressBalance of addressBalances) {
+      const tokenBalances = addressBalance?.token_balances || [];
       
-      if (catwalkToken) {
-        // Get balance from various possible property names
-        const balanceRaw = catwalkToken.balance || catwalkToken.amount || catwalkToken.value || catwalkToken.quantity || '0';
+      for (const tokenBalance of tokenBalances) {
+        const token = tokenBalance?.token;
+        if (!token) continue;
         
-        console.log(`[Leaderboard] CATWALK balance raw for FID ${fid}:`, balanceRaw, 'Type:', typeof balanceRaw);
-        
-        // Convert from wei/raw balance to human-readable format
-        // The balance is typically in the smallest unit (wei for ETH, smallest unit for tokens)
-        try {
-          const balanceWei = BigInt(String(balanceRaw));
-          const decimals = BigInt(10 ** 18); // CATWALK has 18 decimals
-          const wholePart = balanceWei / decimals;
-          const fractionalPart = balanceWei % decimals;
-          const balance = Number(wholePart) + Number(fractionalPart) / Number(decimals);
+        const contractAddr = token.contract_address || token.contractAddress || token.address;
+        if (contractAddr?.toLowerCase() === TOKEN_ADDRESS.toLowerCase()) {
+          // Balance is already in human-readable format in balance.in_token
+          const balance = tokenBalance.balance?.in_token || tokenBalance.balance || 0;
+          const balanceNum = typeof balance === 'number' ? balance : parseFloat(String(balance)) || 0;
           
-          console.log(`[Leaderboard] CATWALK balance parsed for FID ${fid}:`, balance);
-          
-          return balance;
-        } catch (parseError) {
-          console.error(`[Leaderboard] Error parsing balance for FID ${fid}:`, parseError, 'Raw value:', balanceRaw);
-          return 0;
+          if (balanceNum > 0) {
+            totalBalance += balanceNum;
+            foundCatwalk = true;
+            console.log(`[Leaderboard] Found CATWALK for FID ${fid} at ${addressBalance.verified_address?.address}: ${balanceNum}`);
+          }
         }
-      } else {
-        console.log(`[Leaderboard] CATWALK token not found for FID ${fid}. Available tokens (first 5):`, tokens.slice(0, 5).map((t: any) => ({
-          address: t.contract_address || t.contractAddress || t.address || t.token_address,
-          symbol: t.symbol || t.token_symbol,
-        })));
       }
+    }
+    
+    if (foundCatwalk) {
+      console.log(`[Leaderboard] Total CATWALK balance for FID ${fid}: ${totalBalance}`);
+      return totalBalance;
     } else {
-      console.log(`[Leaderboard] No tokens array found for FID ${fid}. User balance structure:`, Object.keys(userBalance || {}));
+      // Log available tokens for debugging (first address only)
+      if (addressBalances.length > 0 && addressBalances[0]?.token_balances?.length > 0) {
+        const sampleTokens = addressBalances[0].token_balances.slice(0, 3).map((tb: any) => ({
+          address: tb.token?.contract_address,
+          symbol: tb.token?.symbol,
+        }));
+        console.log(`[Leaderboard] CATWALK not found for FID ${fid}. Sample tokens:`, sampleTokens);
+      }
     }
     
     return 0;
@@ -266,8 +259,6 @@ export async function GET(req: NextRequest) {
       // 1. Get all token holders from BaseScan API (paginated)
       // First, try to get holder count from token info
       try {
-        const apiKeyParam = BASESCAN_API_KEY ? `&apikey=${BASESCAN_API_KEY}` : "";
-        
         // Try token info endpoint first to get total holder count (V2 API)
         const tokenInfoUrl = BASESCAN_API_KEY 
           ? `https://api.basescan.org/v2/api?module=token&action=tokeninfo&contractaddress=${TOKEN_ADDRESS}&apikey=${BASESCAN_API_KEY}`
@@ -357,7 +348,12 @@ export async function GET(req: NextRequest) {
               }
             } else {
               const errorText = await holderResponse.text();
-              console.error(`[Leaderboard] BaseScan V2 API error: ${holderResponse.status} - ${errorText.substring(0, 200)}`);
+              // Check if it's a Cloudflare challenge page
+              if (errorText.includes('Just a moment') || errorText.includes('cloudflare')) {
+                console.error(`[Leaderboard] BaseScan V2 API blocked by Cloudflare (403). This requires an API key or different approach.`);
+              } else {
+                console.error(`[Leaderboard] BaseScan V2 API error: ${holderResponse.status} - ${errorText.substring(0, 200)}`);
+              }
               hasMore = false;
             }
           }

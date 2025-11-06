@@ -22,7 +22,7 @@ export function CheckinButton({ checkedIn, saving, onClick }: CheckinButtonProps
         color: checkedIn ? "#999999" : "#000000",
         border: "2px solid #000000",
         borderRadius: 9999,
-        padding: "12px 24px",
+        padding: "8px 24px",
         cursor: checkedIn || saving ? "not-allowed" : "pointer",
         fontWeight: 700,
         width: "100%",

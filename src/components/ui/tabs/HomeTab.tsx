@@ -179,7 +179,7 @@ export function HomeTab() {
         <div
           style={{
             marginTop: 32,
-            padding: "20px 16px",
+            padding: "12px 16px",
             background: "#000000",
             border: "2px solid #c1b400",
             borderRadius: 12,

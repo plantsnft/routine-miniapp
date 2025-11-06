@@ -20,7 +20,7 @@ export async function GET() {
     // Try multiple endpoint formats to find the correct one
     let casts: any[] = [];
     let lastError: any = null;
-    let debugInfo: string[] = [];
+    const debugInfo: string[] = [];
 
     // Strategy 1: Try using fetchFeed with parent_url (most common for channels)
     try {
@@ -84,7 +84,7 @@ export async function GET() {
             } else {
               debugInfo.push(`Strategy 2: Response OK but no casts (response keys: ${Object.keys(data).join(', ')})`);
             }
-          } catch (parseError) {
+          } catch (_parseError) {
             debugInfo.push(`Strategy 2: JSON parse error - ${responseText.substring(0, 200)}`);
           }
         } else {
@@ -125,7 +125,7 @@ export async function GET() {
             } else {
               debugInfo.push(`Strategy 3: Response OK but no casts (response keys: ${Object.keys(data).join(', ')})`);
             }
-          } catch (parseError) {
+          } catch (_parseError) {
             debugInfo.push(`Strategy 3: JSON parse error - ${responseText.substring(0, 200)}`);
           }
         } else {
@@ -166,7 +166,7 @@ export async function GET() {
             } else {
               debugInfo.push(`Strategy 4: Response OK but no casts (response keys: ${Object.keys(data).join(', ')})`);
             }
-          } catch (parseError) {
+          } catch (_parseError) {
             debugInfo.push(`Strategy 4: JSON parse error - ${responseText.substring(0, 200)}`);
           }
         } else {

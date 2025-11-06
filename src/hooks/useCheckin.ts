@@ -249,7 +249,7 @@ export function useCheckin(): UseCheckinResult {
     } finally {
       setSaving(false);
     }
-  }, [status.streak, fetchStreak]);
+  }, [status.streak, status.totalCheckins, fetchStreak]);
 
   const clearError = useCallback(() => {
     setError(null);

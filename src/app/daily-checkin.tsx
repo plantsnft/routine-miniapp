@@ -6,7 +6,6 @@ import { useCheckin } from "~/hooks/useCheckin";
 import { CheckinGifAnimation } from "~/components/CheckinGifAnimation";
 import { CheckinButton } from "~/components/CheckinButton";
 import { StreakDisplay } from "~/components/StreakDisplay";
-import { SleepingCat } from "~/components/SleepingCat";
 import { isInWarpcast } from "~/lib/auth";
 import { useMiniApp } from "@neynar/react";
 

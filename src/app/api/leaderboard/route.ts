@@ -19,16 +19,27 @@ async function getTokenBalanceFromNeynar(fid: number): Promise<number> {
     });
 
     // Neynar returns balances for all tokens across all connected wallets
-    // We need to find the CATWALK token balance
-    if (response.user_balance?.tokens) {
-      const catwalkToken = response.user_balance.tokens.find(
-        (token: any) => token.contract_address?.toLowerCase() === TOKEN_ADDRESS.toLowerCase()
+    // The response structure may vary, so we use type assertion to access the data
+    const userBalance = response.user_balance as any;
+    
+    // Check for tokens array in various possible locations
+    const tokens = userBalance?.tokens || userBalance?.token_balances || [];
+    
+    if (Array.isArray(tokens) && tokens.length > 0) {
+      const catwalkToken = tokens.find(
+        (token: any) => {
+          const contractAddr = token.contract_address || token.contractAddress || token.address;
+          return contractAddr?.toLowerCase() === TOKEN_ADDRESS.toLowerCase();
+        }
       );
       
-      if (catwalkToken?.balance) {
+      if (catwalkToken) {
+        // Get balance from various possible property names
+        const balanceRaw = catwalkToken.balance || catwalkToken.amount || catwalkToken.value || '0';
+        
         // Convert from wei/raw balance to human-readable format
         // The balance is typically in the smallest unit (wei for ETH, smallest unit for tokens)
-        const balanceWei = BigInt(catwalkToken.balance);
+        const balanceWei = BigInt(String(balanceRaw));
         const decimals = BigInt(10 ** 18); // CATWALK has 18 decimals
         const wholePart = balanceWei / decimals;
         const fractionalPart = balanceWei % decimals;
@@ -38,7 +49,8 @@ async function getTokenBalanceFromNeynar(fid: number): Promise<number> {
     }
     
     return 0;
-  } catch (error: any) {
+  } catch (_error: any) {
+    const error = _error as Error;
     console.error(`[Leaderboard] Error fetching balance from Neynar for FID ${fid}:`, error?.message || error);
     return 0;
   }
@@ -183,47 +195,8 @@ async function getTokenBalance(address: string, retries: number = 3): Promise<nu
   return 0;
 }
 
-/**
- * Batch fetch token balances with rate limiting.
- * Uses BaseScan API if available (better rate limits), otherwise falls back to RPC.
- * Processes addresses with appropriate delays based on the endpoint used.
- */
-async function getTokenBalancesBatch(
-  addresses: string[],
-  batchSize: number = BASESCAN_API_KEY ? 5 : 2, // Larger batches if using BaseScan API
-  delayBetweenBatches: number = BASESCAN_API_KEY ? 200 : 1000 // Faster if using BaseScan API
-): Promise<Map<string, number>> {
-  const balances = new Map<string, number>();
-  
-  const method = BASESCAN_API_KEY ? "BaseScan API" : "RPC";
-  console.log(`[Leaderboard] Fetching balances for ${addresses.length} addresses using ${method} in batches of ${batchSize} with ${delayBetweenBatches}ms delay`);
-  
-  // Process in batches
-  for (let i = 0; i < addresses.length; i += batchSize) {
-    const batch = addresses.slice(i, i + batchSize);
-    
-    // Fetch balances sequentially within batch
-    for (const addr of batch) {
-      const balance = await getTokenBalance(addr);
-      balances.set(addr, balance);
-      
-      // Delay between individual requests (shorter if using BaseScan API)
-      if (batch.indexOf(addr) < batch.length - 1) {
-        const delay = BASESCAN_API_KEY ? 100 : 300;
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-    
-    // Delay between batches
-    if (i + batchSize < addresses.length) {
-      await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
-    }
-  }
-  
-  console.log(`[Leaderboard] Completed fetching balances for ${addresses.length} addresses`);
-  
-  return balances;
-}
+// Note: getTokenBalancesBatch removed - now using Neynar API which aggregates all wallets automatically
+// The individual getTokenBalance function is kept as a fallback if needed
 
 /**
  * GET endpoint to fetch leaderboard data.

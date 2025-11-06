@@ -282,7 +282,19 @@ export async function GET() {
         if (cast.embeds && cast.embeds.length > 0) {
           console.log(`[Channel Feed] Cast ${index + 1} (${cast.hash?.substring(0, 10)}...) has ${cast.embeds.length} embed(s)`);
           cast.embeds.forEach((embed: any, embedIdx: number) => {
-            console.log(`[Channel Feed]   Embed ${embedIdx + 1}: type=${embed.type || 'none'}, url=${embed.url?.substring(0, 80) || 'none'}, hasMetadata=${!!embed.metadata}, hasOpenGraph=${!!embed.open_graph}`);
+            const isVideo = embed.url && embed.url.includes('.m3u8');
+            console.log(`[Channel Feed]   Embed ${embedIdx + 1}: type=${embed.type || 'none'}, url=${embed.url?.substring(0, 80) || 'none'}, hasMetadata=${!!embed.metadata}, hasOpenGraph=${!!embed.open_graph}, isVideo=${isVideo}`);
+            // Log video metadata if it's a video
+            if (isVideo && embed.metadata && embed.metadata.video) {
+              console.log(`[Channel Feed]     Video metadata keys: ${Object.keys(embed.metadata.video).join(', ')}`);
+              const video = embed.metadata.video;
+              Object.keys(video).forEach((key: string) => {
+                const val = video[key];
+                if (typeof val === 'string' && val.startsWith('http')) {
+                  console.log(`[Channel Feed]     Video.${key} = ${val.substring(0, 100)}`);
+                }
+              });
+            }
           });
         }
         
@@ -370,12 +382,44 @@ export async function GET() {
               }
             }
             
-            // Video metadata might have thumbnail
+            // Video metadata might have thumbnail - check thoroughly
             if (embed.metadata && embed.metadata.video) {
               const video = embed.metadata.video;
               if (video.thumbnail_url) images.push(video.thumbnail_url);
               if (video.poster_url) images.push(video.poster_url);
+              if (video.poster) images.push(video.poster);
               if (video.cover_image) images.push(video.cover_image);
+              if (video.cover) images.push(video.cover);
+              if (video.thumbnail) images.push(video.thumbnail);
+              // Check all properties in video object for image URLs
+              Object.keys(video).forEach((key: string) => {
+                const val = video[key];
+                if (typeof val === 'string' && val.startsWith('http') && 
+                    (val.includes('image') || val.includes('thumbnail') || val.includes('poster') ||
+                     val.includes('imagedelivery.net') || val.match(/\.(jpg|jpeg|png|gif|webp)$/i))) {
+                  if (!images.includes(val)) images.push(val);
+                }
+              });
+            }
+            
+            // If it's a video embed, try to generate thumbnail URL from video URL
+            // Farcaster videos sometimes have thumbnails at predictable paths
+            if (embed.url && embed.url.includes('stream.farcaster.xyz') && embed.url.includes('.m3u8')) {
+              // Try to construct thumbnail URL from video URL
+              const videoIdMatch = embed.url.match(/video\/([^/]+)/);
+              if (videoIdMatch) {
+                const videoId = videoIdMatch[1];
+                // Try common thumbnail URL patterns
+                const thumbnailUrls = [
+                  `https://stream.farcaster.xyz/v1/thumbnail/${videoId}`,
+                  `https://stream.farcaster.xyz/v1/video/${videoId}/thumbnail.jpg`,
+                  `https://stream.farcaster.xyz/v1/video/${videoId}/poster.jpg`,
+                ];
+                // Note: We'll add these but they might not exist - frontend will handle 404s
+                thumbnailUrls.forEach(url => {
+                  if (!images.includes(url)) images.push(url);
+                });
+              }
             }
             
             // If embed has metadata but no type, check if URL looks like an image

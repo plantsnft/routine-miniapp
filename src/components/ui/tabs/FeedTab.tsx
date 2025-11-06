@@ -33,7 +33,8 @@ export function FeedTab() {
   const [error, setError] = useState<string | { message: string; debug?: any } | null>(null);
   const [isFollowingChannel, setIsFollowingChannel] = useState<boolean>(false);
   const [showCreatorsModal, setShowCreatorsModal] = useState(false);
-  const [creators, setCreators] = useState<Array<{ fid: number; username?: string; displayName?: string }>>([]);
+  const [creators, setCreators] = useState<Array<{ fid: number; username?: string; displayName?: string; castCount?: number }>>([]);
+  const [loadingCastCounts, setLoadingCastCounts] = useState(false);
 
   useEffect(() => {
     const fetchFeed = async () => {
@@ -460,25 +461,48 @@ export function FeedTab() {
               if (CATWALK_CREATOR_FIDS.length > 0) {
                 const fetchCreators = async () => {
                   try {
+                    setLoadingCastCounts(true);
                     const fidsString = CATWALK_CREATOR_FIDS.join(",");
-                    const res = await fetch(`/api/users?fids=${fidsString}`);
-                    const data = await res.json();
-                    if (data.users) {
+                    
+                    // Fetch user data and cast counts in parallel
+                    const [usersRes, castCountsRes] = await Promise.all([
+                      fetch(`/api/users?fids=${fidsString}`),
+                      fetch(`/api/creator-cast-counts?fids=${fidsString}`).catch(() => null), // Don't fail if cast counts fail
+                    ]);
+                    
+                    const usersData = await usersRes.json();
+                    let castCountsData: any = null;
+                    
+                    if (castCountsRes && castCountsRes.ok) {
+                      try {
+                        castCountsData = await castCountsRes.json();
+                      } catch (e) {
+                        console.error("Error parsing cast counts:", e);
+                      }
+                    }
+                    
+                    if (usersData.users) {
                       setCreators(
-                        data.users.map((u: any) => ({
+                        usersData.users.map((u: any) => ({
                           fid: u.fid,
                           username: u.username,
                           displayName: u.display_name,
+                          castCount: castCountsData?.castCounts?.[u.fid] ?? null, // null means unknown/loading
                         }))
                       );
                     } else {
                       // Fallback: just show FIDs if user fetch fails
-                      setCreators(CATWALK_CREATOR_FIDS.map((fid) => ({ fid })));
+                      setCreators(CATWALK_CREATOR_FIDS.map((fid) => ({ 
+                        fid,
+                        castCount: castCountsData?.castCounts?.[fid] ?? null,
+                      })));
                     }
                   } catch (error) {
                     console.error("Error fetching creators:", error);
                     // Fallback: just show FIDs
-                    setCreators(CATWALK_CREATOR_FIDS.map((fid) => ({ fid })));
+                    setCreators(CATWALK_CREATOR_FIDS.map((fid) => ({ fid, castCount: null })));
+                  } finally {
+                    setLoadingCastCounts(false);
                   }
                 };
                 fetchCreators();
@@ -489,6 +513,7 @@ export function FeedTab() {
                     fid: 0,
                     username: undefined,
                     displayName: `Creator ${i + 1}`,
+                    castCount: null,
                   }))
                 );
               }
@@ -586,19 +611,37 @@ export function FeedTab() {
                       border: "1px solid #000000",
                     }}
                   >
-                    <p style={{ margin: 0, color: "#000000", fontSize: 14, fontWeight: 600 }}>
-                      {creator.displayName || creator.username || `FID: ${creator.fid}`}
-                    </p>
-                    {creator.username && (
-                      <p style={{ margin: 0, marginTop: 4, color: "#000000", fontSize: 12, opacity: 0.7 }}>
-                        @{creator.username} • FID: {creator.fid}
-                      </p>
-                    )}
-                    {!creator.username && creator.fid === 0 && (
-                      <p style={{ margin: 0, marginTop: 4, color: "#000000", fontSize: 12, opacity: 0.7 }}>
-                        Placeholder - Creator list coming soon
-                      </p>
-                    )}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ margin: 0, color: "#000000", fontSize: 14, fontWeight: 600 }}>
+                          {creator.displayName || creator.username || `FID: ${creator.fid}`}
+                        </p>
+                        {creator.username && (
+                          <p style={{ margin: 0, marginTop: 4, color: "#000000", fontSize: 12, opacity: 0.7 }}>
+                            @{creator.username}
+                          </p>
+                        )}
+                        {!creator.username && creator.fid === 0 && (
+                          <p style={{ margin: 0, marginTop: 4, color: "#000000", fontSize: 12, opacity: 0.7 }}>
+                            Placeholder - Creator list coming soon
+                          </p>
+                        )}
+                      </div>
+                      <div style={{ marginLeft: 12, textAlign: "right" }}>
+                        <p style={{ margin: 0, color: "#000000", fontSize: 12, fontWeight: 600 }}>
+                          {loadingCastCounts && creator.castCount === null ? (
+                            <span style={{ opacity: 0.5 }}>...</span>
+                          ) : creator.castCount !== null && creator.castCount !== undefined ? (
+                            `${creator.castCount} ${creator.castCount === 1 ? 'post' : 'posts'}`
+                          ) : (
+                            <span style={{ opacity: 0.5 }}>—</span>
+                          )}
+                        </p>
+                        <p style={{ margin: 0, marginTop: 2, color: "#000000", fontSize: 10, opacity: 0.6 }}>
+                          in channel
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>

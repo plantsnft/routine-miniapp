@@ -76,35 +76,14 @@ export function LeaderboardTab() {
   return (
     <div
       className="px-6 py-4"
-      style={{ background: "transparent", minHeight: "100vh", position: "relative" }}
+      style={{ 
+        backgroundImage: "url(/wallpaper.png)",
+        backgroundRepeat: "repeat",
+        backgroundSize: "auto",
+        minHeight: "100vh", 
+        position: "relative" 
+      }}
     >
-      {/* Cat pattern borders - matching HomeTab style */}
-      <div
-        style={{
-          position: "fixed",
-          left: 0,
-          top: 0,
-          bottom: 0,
-          width: "30px",
-          background: "repeating-linear-gradient(to bottom, #c1b400 0px, #c1b400 25px, #000000 25px, #000000 50px)",
-          opacity: 0.15,
-          zIndex: 0,
-          pointerEvents: "none",
-        }}
-      />
-      <div
-        style={{
-          position: "fixed",
-          right: 0,
-          top: 0,
-          bottom: 0,
-          width: "30px",
-          background: "repeating-linear-gradient(to bottom, #000000 0px, #000000 25px, #c1b400 25px, #c1b400 50px)",
-          opacity: 0.15,
-          zIndex: 0,
-          pointerEvents: "none",
-        }}
-      />
 
       <div className="max-w-md mx-auto" style={{ position: "relative", zIndex: 1 }}>
         {/* Logo - Catwalk logo image */}

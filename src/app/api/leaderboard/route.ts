@@ -352,7 +352,12 @@ export async function GET(req: NextRequest) {
                 hasMore = false;
               }
             } else {
-              console.error(`[Leaderboard] BaseScan API returned error status: ${holderData.status}, message: ${holderData.message || JSON.stringify(holderData).substring(0, 200)}`);
+              // Check if result is an error message string
+              if (typeof holderData.result === 'string') {
+                console.error(`[Leaderboard] BaseScan API error: ${holderData.result}`);
+              } else {
+                console.error(`[Leaderboard] BaseScan API returned error status: ${holderData.status}, message: ${holderData.message || JSON.stringify(holderData).substring(0, 200)}`);
+              }
               hasMore = false;
             }
           } else {
@@ -633,36 +638,65 @@ export async function GET(req: NextRequest) {
       })
     );
 
-    // Use balances from BaseScan (already fetched) or fetch from Neynar as fallback
+    // Fetch balances from Neynar API
     const fidToBalance = new Map<number, number>();
     
     if (sortBy === "holdings") {
-      // Use blockchain balances we already fetched, verify/update with Neynar for accuracy
-      blockchainBalances.forEach((balance, fid) => {
-        fidToBalance.set(fid, balance);
-      });
+      // If we have blockchain balances, use those as starting point
+      if (blockchainBalances.size > 0) {
+        blockchainBalances.forEach((balance, fid) => {
+          fidToBalance.set(fid, balance);
+        });
+        console.log(`[Leaderboard] Using ${blockchainBalances.size} balances from BaseScan, verifying with Neynar...`);
+      } else {
+        console.log(`[Leaderboard] No BaseScan balances, fetching all balances from Neynar API for ${fids.length} users...`);
+      }
       
-      console.log(`[Leaderboard] Using ${blockchainBalances.size} balances from BaseScan, verifying top holders with Neynar...`);
+      // Fetch balances from Neynar for all FIDs (or verify top ones if we have BaseScan data)
+      const fidsToFetch = blockchainBalances.size > 0
+        ? Array.from(blockchainBalances.entries())
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 50)
+            .map(([fid]) => fid)
+        : fids;
       
-      // Verify top holders with Neynar (limit to top 50 to avoid timeout)
-      const topFids = Array.from(blockchainBalances.entries())
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 50)
-        .map(([fid]) => fid);
+      const batchSize = 10;
+      let successCount = 0;
       
-      for (const fid of topFids) {
-        try {
-          const neynarBalance = await getTokenBalanceFromNeynar(fid);
-          // Use the higher balance (Neynar aggregates all wallets, might be more accurate)
-          const blockchainBalance = blockchainBalances.get(fid) || 0;
-          fidToBalance.set(fid, Math.max(neynarBalance, blockchainBalance));
-          await new Promise(resolve => setTimeout(resolve, 100)); // Small delay
-        } catch (_err) {
-          // Keep blockchain balance if Neynar fails
+      for (let i = 0; i < fidsToFetch.length; i += batchSize) {
+        const batch = fidsToFetch.slice(i, i + batchSize);
+        
+        const balancePromises = batch.map(async (fid) => {
+          try {
+            const neynarBalance = await getTokenBalanceFromNeynar(fid);
+            if (neynarBalance > 0) {
+              successCount++;
+            }
+            // Use the higher balance (Neynar aggregates all wallets, might be more accurate)
+            const existingBalance = fidToBalance.get(fid) || 0;
+            const finalBalance = Math.max(neynarBalance, existingBalance);
+            fidToBalance.set(fid, finalBalance);
+            return { fid, balance: finalBalance };
+          } catch (err: any) {
+            // Log error for debugging
+            if (fid <= 5) {
+              console.error(`[Leaderboard] Error fetching balance for FID ${fid}:`, err?.message || err);
+            }
+            // Keep existing balance if Neynar fails
+            const existingBalance = fidToBalance.get(fid) || 0;
+            return { fid, balance: existingBalance };
+          }
+        });
+        
+        await Promise.all(balancePromises);
+        
+        // Small delay between batches
+        if (i + batchSize < fidsToFetch.length) {
+          await new Promise(resolve => setTimeout(resolve, 200));
         }
       }
       
-      console.log(`[Leaderboard] Final balances for ${fidToBalance.size} Farcaster users (Total token holders: ${totalTokenHolders})`);
+      console.log(`[Leaderboard] Final balances for ${fidToBalance.size} Farcaster users (${successCount} with balances > 0, Total token holders: ${totalTokenHolders || 'unknown'})`);
     } else {
       // For streak/total_checkins mode, we don't need balances
       console.log(`[Leaderboard] Skipping balance fetch for ${sortBy} mode (not needed)`);

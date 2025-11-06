@@ -6,7 +6,10 @@ import { useCheckin } from "~/hooks/useCheckin";
 import { CheckinGifAnimation } from "~/components/CheckinGifAnimation";
 import { CheckinButton } from "~/components/CheckinButton";
 import { StreakDisplay } from "~/components/StreakDisplay";
+import { SleepingCat } from "~/components/SleepingCat";
+import { AddMiniAppPrompt } from "~/components/AddMiniAppPrompt";
 import { isInWarpcast } from "~/lib/auth";
+import { useMiniApp } from "@neynar/react";
 
 /**
  * Daily check-in component.
@@ -27,6 +30,9 @@ export default function DailyCheckin() {
       checkin.fetchStreak(fid, false);
     }
   });
+
+  // Check if mini-app is added
+  const { added } = useMiniApp();
 
   // Initial fetch when fid is available (only once, prevent infinite loops)
   useEffect(() => {
@@ -262,12 +268,37 @@ export default function DailyCheckin() {
               </div>
             </div>
           )}
-          <CheckinButton
-            checkedIn={checkin.status.checkedIn}
-            saving={checkin.saving}
-            onClick={handleCheckIn}
-          />
+          {/* Check-in button with sleeping cat - centered when checked in */}
+          {checkin.status.checkedIn ? (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 16,
+              }}
+            >
+              <SleepingCat />
+              <CheckinButton
+                checkedIn={checkin.status.checkedIn}
+                saving={checkin.saving}
+                onClick={handleCheckIn}
+              />
+            </div>
+          ) : (
+            <CheckinButton
+              checkedIn={checkin.status.checkedIn}
+              saving={checkin.saving}
+              onClick={handleCheckIn}
+            />
+          )}
         </div>
+
+        {/* Mini-app prompt - show when checked in and mini-app is not added */}
+        {checkin.status.checkedIn && !added && (
+          <AddMiniAppPrompt />
+        )}
 
         {/* Success message */}
         {showSuccessMessage && (

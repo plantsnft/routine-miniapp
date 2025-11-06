@@ -275,23 +275,16 @@ export async function GET() {
 
     // Format the casts for the feed
     const formattedCasts = casts.map((cast: any, index: number) => {
-        // Debug: Log cast structure for first cast to understand data format
-        if (index === 0) {
-          console.log("[Channel Feed] Sample cast structure:", JSON.stringify(cast, null, 2));
-          console.log("[Channel Feed] Cast keys:", Object.keys(cast));
-          if (cast.embeds) {
-            console.log("[Channel Feed] Embeds:", JSON.stringify(cast.embeds, null, 2));
-          }
-          if (cast.attachments) {
-            console.log("[Channel Feed] Attachments:", JSON.stringify(cast.attachments, null, 2));
-          }
-          if (cast.media) {
-            console.log("[Channel Feed] Media:", JSON.stringify(cast.media, null, 2));
-          }
-        }
-        
         // Extract images/embeds from the cast - comprehensive extraction
         const images: string[] = [];
+        
+        // Log embeds for debugging
+        if (cast.embeds && cast.embeds.length > 0) {
+          console.log(`[Channel Feed] Cast ${index + 1} (${cast.hash?.substring(0, 10)}...) has ${cast.embeds.length} embed(s)`);
+          cast.embeds.forEach((embed: any, embedIdx: number) => {
+            console.log(`[Channel Feed]   Embed ${embedIdx + 1}: type=${embed.type || 'none'}, url=${embed.url?.substring(0, 80) || 'none'}, hasMetadata=${!!embed.metadata}, hasOpenGraph=${!!embed.open_graph}`);
+          });
+        }
         
         // Method 1: Check embeds array (most common for images in Neynar)
         if (cast.embeds && Array.isArray(cast.embeds)) {
@@ -376,6 +369,42 @@ export async function GET() {
                 images.push(embed.url);
               }
             }
+            
+            // Video metadata might have thumbnail
+            if (embed.metadata && embed.metadata.video) {
+              const video = embed.metadata.video;
+              if (video.thumbnail_url) images.push(video.thumbnail_url);
+              if (video.poster_url) images.push(video.poster_url);
+              if (video.cover_image) images.push(video.cover_image);
+            }
+            
+            // If embed has metadata but no type, check if URL looks like an image
+            if (!embedType && embed.url) {
+              // Check if URL is from known image hosting services
+              if (embed.url.includes('imagedelivery.net') ||
+                  embed.url.includes('i.imgur.com') ||
+                  embed.url.includes('cdn') ||
+                  embed.url.match(/\.(jpg|jpeg|png|gif|webp|avif|svg)$/i)) {
+                if (!images.includes(embed.url)) {
+                  images.push(embed.url);
+                }
+              }
+            }
+            
+            // Check all string properties in embed for image URLs
+            Object.keys(embed).forEach((key: string) => {
+              const value = embed[key];
+              if (typeof value === 'string' && value.startsWith('http')) {
+                // Check if it looks like an image URL
+                if (value.includes('imagedelivery.net') ||
+                    value.includes('image') ||
+                    value.match(/\.(jpg|jpeg|png|gif|webp|avif|svg)$/i)) {
+                  if (!images.includes(value)) {
+                    images.push(value);
+                  }
+                }
+              }
+            });
           });
         }
         

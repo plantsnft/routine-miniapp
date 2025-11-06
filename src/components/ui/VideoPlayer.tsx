@@ -40,7 +40,7 @@ export function VideoPlayer({
       // Check if native HLS is supported
       const canPlayHLS = video.canPlayType('application/vnd.apple.mpegurl');
       
-      if (!canPlayHLS || canPlayHLS === '') {
+      if (!canPlayHLS) {
         // Browser doesn't support native HLS - load hls.js from CDN
         console.log("[VideoPlayer] Native HLS not supported, loading hls.js...");
         

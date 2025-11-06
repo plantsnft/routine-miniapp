@@ -487,20 +487,20 @@ export function FeedTab() {
                           fid: u.fid,
                           username: u.username,
                           displayName: u.display_name,
-                          castCount: castCountsData?.castCounts?.[u.fid] ?? null, // null means unknown/loading
+                          castCount: castCountsData?.castCounts?.[u.fid], // undefined means unknown/loading
                         }))
                       );
                     } else {
                       // Fallback: just show FIDs if user fetch fails
                       setCreators(CATWALK_CREATOR_FIDS.map((fid) => ({ 
                         fid,
-                        castCount: castCountsData?.castCounts?.[fid] ?? null,
+                        castCount: castCountsData?.castCounts?.[fid],
                       })));
                     }
                   } catch (error) {
                     console.error("Error fetching creators:", error);
                     // Fallback: just show FIDs
-                    setCreators(CATWALK_CREATOR_FIDS.map((fid) => ({ fid, castCount: null })));
+                    setCreators(CATWALK_CREATOR_FIDS.map((fid) => ({ fid })));
                   } finally {
                     setLoadingCastCounts(false);
                   }
@@ -513,7 +513,6 @@ export function FeedTab() {
                     fid: 0,
                     username: undefined,
                     displayName: `Creator ${i + 1}`,
-                    castCount: null,
                   }))
                 );
               }
@@ -629,9 +628,9 @@ export function FeedTab() {
                       </div>
                       <div style={{ marginLeft: 12, textAlign: "right" }}>
                         <p style={{ margin: 0, color: "#000000", fontSize: 12, fontWeight: 600 }}>
-                          {loadingCastCounts && creator.castCount === null ? (
+                          {loadingCastCounts && creator.castCount === undefined ? (
                             <span style={{ opacity: 0.5 }}>...</span>
-                          ) : creator.castCount !== null && creator.castCount !== undefined ? (
+                          ) : creator.castCount !== undefined ? (
                             `${creator.castCount} ${creator.castCount === 1 ? 'post' : 'posts'}`
                           ) : (
                             <span style={{ opacity: 0.5 }}>—</span>

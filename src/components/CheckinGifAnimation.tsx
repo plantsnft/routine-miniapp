@@ -28,6 +28,7 @@ export function CheckinGifAnimation({
   const [gifLoaded, setGifLoaded] = useState(false);
   const [gifError, setGifError] = useState(false);
   const [showGif, setShowGif] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState<number>(Math.ceil(duration / 1000));
 
   useEffect(() => {
     if (!isVisible) {
@@ -35,6 +36,7 @@ export function CheckinGifAnimation({
       setShowGif(false);
       setGifLoaded(false);
       setGifError(false);
+      setSecondsLeft(Math.ceil(duration / 1000));
       return;
     }
 
@@ -47,31 +49,39 @@ export function CheckinGifAnimation({
       setShowGif(true);
     }, 50);
 
-    // Auto-hide after duration - MANDATORY 5 seconds
-    // Timer starts immediately when component becomes visible, ensuring full duration
+    // Countdown interval
+    setSecondsLeft(Math.ceil(duration / 1000));
+    const interval = setInterval(() => {
+      setSecondsLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    // Auto-hide after duration - strict
     const hideTimer = setTimeout(() => {
+      // Ensure at least `duration` ms have passed from visibility start
       const elapsed = Date.now() - startTime;
-      // Ensure we've waited at least the full duration
       const remaining = Math.max(0, duration - elapsed);
-      
-      if (remaining > 0) {
-        // If we haven't waited the full duration yet, wait the remaining time
-        setTimeout(() => {
-          setShowGif(false);
-          setShouldRender(false);
-          onComplete?.();
-        }, remaining);
-      } else {
-        // Full duration has elapsed, hide immediately
+      const finalize = () => {
         setShowGif(false);
         setShouldRender(false);
         onComplete?.();
+      };
+      if (remaining > 0) {
+        setTimeout(finalize, remaining);
+      } else {
+        finalize();
       }
     }, duration);
 
     return () => {
       clearTimeout(showTimer);
       clearTimeout(hideTimer);
+      clearInterval(interval);
     };
   }, [isVisible, duration, onComplete]);
 
@@ -188,6 +198,24 @@ export function CheckinGifAnimation({
             background: "radial-gradient(circle at center, transparent 0%, rgba(0, 0, 0, 0.1) 100%)",
           }}
         />
+        {/* Countdown - bottom right */}
+        <div
+          style={{
+            position: "absolute",
+            right: 12,
+            bottom: 10,
+            background: "rgba(0,0,0,0.6)",
+            color: "#c1b400",
+            border: "1px solid #c1b400",
+            borderRadius: 8,
+            padding: "4px 8px",
+            fontSize: 12,
+            fontWeight: 700,
+            pointerEvents: "none",
+          }}
+        >
+          {secondsLeft}s
+        </div>
         
         {/* Prevent any clicks or interactions during mandatory viewing */}
         <div

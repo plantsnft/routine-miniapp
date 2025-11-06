@@ -29,6 +29,7 @@ export interface LeaderboardEntry {
   total_checkins?: number; // All-time total check-in count
   username?: string;
   displayName?: string;
+  pfp_url?: string;
   rank: number;
   tokenBalance?: number; // $CATWALK token holdings
 }

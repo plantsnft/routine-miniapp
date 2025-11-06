@@ -275,48 +275,56 @@ export function LeaderboardTab() {
         {/* Leaderboard entries */}
         {!loading && !error && entries.length > 0 && (
           <>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {entries.map((entry) => (
               <div
                 key={`${entry.fid}-${sortBy}`}
                 style={{
-                  padding: "8px 12px",
+                  padding: "4px 8px",
                   background: "#000000",
                   border: "2px solid #c1b400",
-                  borderRadius: 12,
+                  borderRadius: 8,
                   display: "flex",
                   alignItems: "center",
-                  gap: 8,
+                  gap: 6,
                 }}
               >
-                {/* Rank with trending up emoji */}
+                {/* Rank */}
                 <div
                   style={{
-                    minWidth: "40px",
+                    minWidth: "24px",
                     textAlign: "center",
                     color: "#c1b400",
-                    fontSize: entry.rank <= 3 ? 18 : 14,
+                    fontSize: entry.rank <= 3 ? 12 : 10,
                     fontWeight: 700,
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: 2,
+                    lineHeight: 1,
                   }}
                 >
-                  <span style={{ fontSize: entry.rank <= 3 ? 16 : 12 }}>📈</span>
-                  <span style={{ fontSize: entry.rank <= 3 ? 18 : 14 }}>
-                    {getRankEmoji(entry.rank)}
-                  </span>
+                  {getRankEmoji(entry.rank)}
                 </div>
 
-                {/* User info */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p
+                {/* Profile Picture */}
+                {entry.pfp_url && (
+                  <img
+                    src={entry.pfp_url}
+                    alt={entry.displayName || entry.username || "User"}
                     style={{
-                      margin: 0,
-                      marginBottom: 2,
+                      width: 20,
+                      height: 20,
+                      borderRadius: "50%",
+                      border: "1px solid #c1b400",
+                      objectFit: "cover",
+                      flexShrink: 0,
+                    }}
+                  />
+                )}
+
+                {/* Name and badge in one line */}
+                <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}>
+                  <span
+                    style={{
                       color: "#ffffff",
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: 600,
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -325,72 +333,56 @@ export function LeaderboardTab() {
                     }}
                   >
                     {entry.displayName || entry.username || `FID: ${entry.fid}`}
-                  </p>
-                  {entry.username && (
-                    <p
+                  </span>
+                  {/* Yellow badge inline */}
+                  {sortBy === "holdings" ? (
+                    <span
                       style={{
-                        margin: 0,
-                        color: "#c1b400",
-                        fontSize: 10,
-                        opacity: 0.8,
-                        lineHeight: 1.2,
+                        color: "#000000",
+                        fontSize: 9,
+                        background: "#c1b400",
+                        padding: "2px 6px",
+                        borderRadius: 4,
+                        fontWeight: 700,
+                        whiteSpace: "nowrap",
+                        flexShrink: 0,
                       }}
                     >
-                      @{entry.username}
-                    </p>
-                  )}
-                  <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
-                    {/* Show primary metric prominently */}
-                    {sortBy === "holdings" ? (
-                      <>
-                        <span
-                          style={{
-                            color: "#000000",
-                            fontSize: 13,
-                            background: "#c1b400",
-                            padding: "4px 10px",
-                            borderRadius: 6,
-                            fontWeight: 700,
-                          }}
-                        >
-                          💰 {formatTokenBalance(entry.tokenBalance)} $CATWALK
-                        </span>
-                        {/* Don't show streak/days for Top Holders as requested */}
-                      </>
+                      💰 {formatTokenBalance(entry.tokenBalance)} $CATWALK
+                    </span>
+                  ) : (
+                    walkSortMode === "current_streak" ? (
+                      <span
+                        style={{
+                          color: "#000000",
+                          fontSize: 9,
+                          background: "#c1b400",
+                          padding: "2px 6px",
+                          borderRadius: 4,
+                          fontWeight: 700,
+                          whiteSpace: "nowrap",
+                          flexShrink: 0,
+                        }}
+                      >
+                        🔥 {entry.streak} day{entry.streak === 1 ? "" : "s"}
+                      </span>
                     ) : (
-                      <>
-                        {/* Show the appropriate metric based on walk sort mode */}
-                        {walkSortMode === "current_streak" ? (
-                          <span
-                            style={{
-                              color: "#000000",
-                              fontSize: 13,
-                              background: "#c1b400",
-                              padding: "4px 10px",
-                              borderRadius: 6,
-                              fontWeight: 700,
-                            }}
-                          >
-                            🔥 {entry.streak} day{entry.streak === 1 ? "" : "s"}
-                          </span>
-                        ) : (
-                          <span
-                            style={{
-                              color: "#000000",
-                              fontSize: 13,
-                              background: "#c1b400",
-                              padding: "4px 10px",
-                              borderRadius: 6,
-                              fontWeight: 700,
-                            }}
-                          >
-                            🐱 {entry.total_checkins || 0} walk{entry.total_checkins === 1 ? "" : "s"}
-                          </span>
-                        )}
-                        {/* Don't show token holdings in Most Walks tab */}
-                      </>
-                    )}
-                  </div>
+                      <span
+                        style={{
+                          color: "#000000",
+                          fontSize: 9,
+                          background: "#c1b400",
+                          padding: "2px 6px",
+                          borderRadius: 4,
+                          fontWeight: 700,
+                          whiteSpace: "nowrap",
+                          flexShrink: 0,
+                        }}
+                      >
+                        🐱 {entry.total_checkins || 0} walk{entry.total_checkins === 1 ? "" : "s"}
+                      </span>
+                    )
+                  )}
                 </div>
               </div>
               ))}

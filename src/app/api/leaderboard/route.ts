@@ -200,6 +200,7 @@ export async function GET(req: NextRequest) {
           {
             username: u.username,
             displayName: u.display_name,
+            pfp_url: u.pfp_url || u.pfp?.url || undefined,
             allAddresses: allAddresses,
           },
         ];
@@ -277,6 +278,7 @@ export async function GET(req: NextRequest) {
             total_checkins: checkinData?.total_checkins || 0,
             username,
             displayName,
+            pfp_url: userData?.pfp_url,
             rank: 0, // Will be set after sorting
             tokenBalance: tokenBalance,
           });
@@ -291,6 +293,7 @@ export async function GET(req: NextRequest) {
             total_checkins: checkinData.total_checkins || 0,
             username,
             displayName,
+            pfp_url: userData?.pfp_url,
             rank: 0, // Will be set after sorting
             tokenBalance: tokenBalance,
           });

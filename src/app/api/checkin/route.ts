@@ -242,10 +242,19 @@ export async function POST(req: NextRequest) {
     }
 
     // Increment total check-ins count
-    const currentTotalCheckins = typeof existing.total_checkins === "number" && !isNaN(existing.total_checkins)
+    // IMPORTANT: This should ALWAYS increment, never decrease or reset
+    // This represents the total number of check-ins the user has ever made, all-time
+    const currentTotalCheckins = typeof existing.total_checkins === "number" && !isNaN(existing.total_checkins) && existing.total_checkins > 0
       ? existing.total_checkins
       : 0;
     const newTotalCheckins = currentTotalCheckins + 1;
+    
+    // Safety check: ensure we never decrease total_checkins
+    if (newTotalCheckins <= currentTotalCheckins) {
+      console.error(`[API] /api/checkin POST - Error: newTotalCheckins (${newTotalCheckins}) should be greater than currentTotalCheckins (${currentTotalCheckins})`);
+      // This should never happen, but if it does, ensure we at least maintain the current value
+      // In practice, we always increment, so this is just a safety check
+    }
 
     // Update the check-in record
     let updated;

@@ -19,7 +19,7 @@ export async function GET() {
     // Fetch casts from the Catwalk channel using Neynar API
     // Strategy: First lookup the channel, then fetch casts using proper channel identifier
     let casts: any[] = [];
-    let lastError: any = null;
+    const lastError: any = null;
     const debugInfo: string[] = [];
     let channelInfo: any = null;
 

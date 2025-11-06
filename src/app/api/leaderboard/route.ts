@@ -257,18 +257,42 @@ export async function GET(req: NextRequest) {
     const checkinMap = new Map<number, { streak: number; last_checkin: string | null; total_checkins: number }>();
 
     if (sortBy === "holdings") {
-      // For holdings mode: Get ALL users who have checked in (up to 500 for broader coverage)
-      // This ensures we include as many potential holders as possible
-      const allCheckins = await getTopUsersByStreak(500);
-      fids = allCheckins.map((c) => c.fid);
-      // Create map for quick lookup but we won't require check-in for ranking
+      // For holdings mode: Get users from multiple sources to find ALL potential holders
+      const allFidsSet = new Set<number>();
+      
+      // 1. Get all users who have checked in
+      const allCheckins = await getTopUsersByStreak(1000); // Increased limit
       allCheckins.forEach((c) => {
+        allFidsSet.add(c.fid);
         checkinMap.set(c.fid, {
           streak: c.streak || 0,
           last_checkin: c.last_checkin || null,
           total_checkins: c.total_checkins || 0,
         });
       });
+      
+      // 2. Get users from channel feed (people who have posted in /catwalk)
+      try {
+        console.log("[Leaderboard] Fetching channel participants for holdings mode...");
+        const channelResponse = await fetch(`${new URL(req.url).origin}/api/channel-feed?limit=500`);
+        if (channelResponse.ok) {
+          const channelData = await channelResponse.json();
+          if (channelData.casts && Array.isArray(channelData.casts)) {
+            channelData.casts.forEach((cast: any) => {
+              if (cast.author?.fid) {
+                allFidsSet.add(cast.author.fid);
+              }
+            });
+            console.log(`[Leaderboard] Added ${channelData.casts.length} channel participants`);
+          }
+        }
+      } catch (channelError) {
+        console.error("[Leaderboard] Error fetching channel participants:", channelError);
+        // Continue even if channel fetch fails
+      }
+      
+      fids = Array.from(allFidsSet);
+      console.log(`[Leaderboard] Total unique FIDs for holdings mode: ${fids.length} (${allCheckins.length} from check-ins, ${fids.length - allCheckins.length} from channel)`);
     } else {
       // For streak mode: Only get users who have checked in (for streak ranking)
       const topCheckins = await getTopUsersByStreak(200);

@@ -275,6 +275,32 @@ export function LeaderboardTab() {
           </div>
         )}
 
+        {/* Coming Soon placeholder for Top Holders */}
+        {!loading && !error && sortBy === "holdings" && entries.length === 0 && (
+          <div
+            style={{
+              padding: "60px 20px",
+              background: "#000000",
+              border: "2px solid #c1b400",
+              borderRadius: 12,
+              textAlign: "center",
+            }}
+          >
+            <p style={{ color: "#c1b400", fontSize: 48, margin: "0 0 16px 0" }}>
+              🚧
+            </p>
+            <p style={{ color: "#c1b400", fontSize: 16, margin: "0 0 8px 0", fontWeight: 700 }}>
+              Coming Soon
+            </p>
+            <p style={{ color: "#ffffff", fontSize: 12, margin: "0 0 16px 0", opacity: 0.8 }}>
+              The Top Holders leaderboard is being built.
+            </p>
+            <p style={{ color: "#666666", fontSize: 11, margin: 0, opacity: 0.7 }}>
+              Check back soon to see who holds the most $CATWALK tokens!
+            </p>
+          </div>
+        )}
+
         {/* Leaderboard entries */}
         {!loading && !error && entries.length > 0 && (
           <>

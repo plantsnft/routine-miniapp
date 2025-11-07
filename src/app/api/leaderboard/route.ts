@@ -293,6 +293,14 @@ export async function GET(req: NextRequest) {
     let totalTokenHolders = 0; // Total holders from blockchain
 
     if (sortBy === "holdings") {
+      // TEMPORARY: Return empty entries for "Coming Soon" placeholder
+      // TODO: Implement proper token holder fetching once API/data source is ready
+      return NextResponse.json({
+        ok: true,
+        entries: [],
+        totalHolders: 0,
+      });
+      
       // FLOW: Get ALL token holders from blockchain → Match to Farcaster FIDs → Show only Farcaster users
       console.log("[Leaderboard] Step 1: Fetching ALL token holders from blockchain...");
       

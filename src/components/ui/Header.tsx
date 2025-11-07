@@ -3,6 +3,7 @@
 import { useState } from "react";
 import sdk from "@farcaster/miniapp-sdk";
 import { useMiniApp } from "@neynar/react";
+import { useHapticFeedback } from "~/hooks/useHapticFeedback";
 
 type HeaderProps = {
   neynarUser?: {
@@ -13,19 +14,21 @@ type HeaderProps = {
 
 export function Header({ neynarUser }: HeaderProps) {
   const { context } = useMiniApp();
+  const { triggerHaptic } = useHapticFeedback();
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
 
   return (
-    <div className="relative">
+    <div className="relative" style={{ marginBottom: 8 }}>
       <div 
-        className="mt-4 mb-0 mx-4 px-4 py-2 bg-black rounded-lg flex items-center justify-between border-2 border-[#c1b400]"
-        style={{ background: "#000000", borderColor: "#c1b400" }}
+        className="mt-4 mb-0 mx-4 px-4 py-2 bg-black rounded-lg flex items-center justify-center border-2 border-[#c1b400]"
+        style={{ background: "#000000", borderColor: "#c1b400", position: "relative" }}
       >
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: 1 }}>
           <a
             href="https://farcaster.xyz/~/channel/catwalk"
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() => triggerHaptic("light")}
             className="text-lg font-bold"
             style={{ 
               color: "#c1b400", 
@@ -35,7 +38,7 @@ export function Header({ neynarUser }: HeaderProps) {
               fontSize: 16,
             }}
           >
-            Welcome to /Catwalk
+            Welcome to $Catwalk
           </a>
           <p style={{ 
             margin: 0, 
@@ -50,7 +53,12 @@ export function Header({ neynarUser }: HeaderProps) {
         {context?.user && (
           <div 
             className="cursor-pointer"
+            style={{
+              position: "absolute",
+              right: 16,
+            }}
             onClick={() => {
+              triggerHaptic("light");
               setIsUserDropdownOpen(!isUserDropdownOpen);
             }}
           >
@@ -77,7 +85,10 @@ export function Header({ neynarUser }: HeaderProps) {
                   <h3 
                     className="font-bold text-sm hover:underline cursor-pointer inline-block"
                     style={{ color: "#000000" }}
-                    onClick={() => sdk.actions.viewProfile({ fid: context.user.fid })}
+                    onClick={() => {
+                      triggerHaptic("light");
+                      sdk.actions.viewProfile({ fid: context.user.fid });
+                    }}
                   >
                     {context.user.displayName || context.user.username}
                   </h3>

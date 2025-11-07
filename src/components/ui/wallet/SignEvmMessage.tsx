@@ -7,6 +7,7 @@ import { Button } from "../Button";
 import { config } from "../../providers/WagmiProvider";
 import { APP_NAME } from "../../../lib/constants";
 import { renderError } from "../../../lib/errorUtils";
+import { useHapticFeedback } from "~/hooks/useHapticFeedback";
 
 /**
  * SignEvmMessage component handles signing messages on EVM-compatible chains.
@@ -28,6 +29,7 @@ import { renderError } from "../../../lib/errorUtils";
  */
 export function SignEvmMessage() {
   // --- Hooks ---
+  const { triggerHaptic } = useHapticFeedback();
   const { isConnected } = useAccount();
   const { connectAsync } = useConnect();
   const {
@@ -64,7 +66,10 @@ export function SignEvmMessage() {
   return (
     <>
       <Button
-        onClick={signEvmMessage}
+        onClick={() => {
+          triggerHaptic("light");
+          signEvmMessage();
+        }}
         disabled={isEvmSignMessagePending}
         isLoading={isEvmSignMessagePending}
       >

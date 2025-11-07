@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import { Button } from "../Button";
 import { renderError } from "../../../lib/errorUtils";
+import { useHapticFeedback } from "~/hooks/useHapticFeedback";
 
 interface SignSolanaMessageProps {
   signMessage?: (message: Uint8Array) => Promise<Uint8Array>;
@@ -30,6 +31,8 @@ interface SignSolanaMessageProps {
  * ```
  */
 export function SignSolanaMessage({ signMessage }: SignSolanaMessageProps) {
+  // --- Hooks ---
+  const { triggerHaptic } = useHapticFeedback();
   // --- State ---
   const [signature, setSignature] = useState<string | undefined>();
   const [signError, setSignError] = useState<Error | undefined>();
@@ -69,7 +72,10 @@ export function SignSolanaMessage({ signMessage }: SignSolanaMessageProps) {
   return (
     <>
       <Button
-        onClick={handleSignMessage}
+        onClick={() => {
+          triggerHaptic("light");
+          handleSignMessage();
+        }}
         disabled={signPending}
         isLoading={signPending}
         className="mb-4"

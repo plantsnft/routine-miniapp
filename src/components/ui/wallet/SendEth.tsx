@@ -6,6 +6,7 @@ import { base } from "wagmi/chains";
 import { Button } from "../Button";
 import { truncateAddress } from "../../../lib/truncateAddress";
 import { renderError } from "../../../lib/errorUtils";
+import { useHapticFeedback } from "~/hooks/useHapticFeedback";
 
 /**
  * SendEth component handles sending ETH transactions to protocol guild addresses.
@@ -27,6 +28,7 @@ import { renderError } from "../../../lib/errorUtils";
  */
 export function SendEth() {
   // --- Hooks ---
+  const { triggerHaptic } = useHapticFeedback();
   const { isConnected, chainId } = useAccount();
   const {
     sendTransaction,
@@ -77,7 +79,10 @@ export function SendEth() {
   return (
     <>
       <Button
-        onClick={sendEthTransaction}
+        onClick={() => {
+          triggerHaptic("medium");
+          sendEthTransaction();
+        }}
         disabled={!isConnected || isEthTransactionPending}
         isLoading={isEthTransactionPending}
       >

@@ -76,6 +76,7 @@ function CoinbaseWalletAutoConnect({ children }: { children: React.ReactNode }) 
 }
 
 export default function Provider({ children }: { children: React.ReactNode }) {
+  // Wrap in error boundary to prevent wallet provider errors from crashing the app
   return (
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>

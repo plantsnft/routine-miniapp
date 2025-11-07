@@ -116,7 +116,7 @@ export function WelcomePopup({ onClose }: WelcomePopupProps) {
             top: 0,
             left: 0,
             right: 0,
-            height: "90px", // 3x bigger: 30px * 3 = 90px
+            height: "45px", // Half the size: 90px / 2 = 45px
             overflow: "hidden",
             borderBottom: "1px solid rgba(193, 180, 0, 0.3)",
             display: "flex",
@@ -128,9 +128,10 @@ export function WelcomePopup({ onClose }: WelcomePopupProps) {
             style={{
               display: "inline-block",
               whiteSpace: "nowrap",
-              animation: "ticker 20s linear infinite",
+              animation: "ticker 15s linear infinite", // Faster: 20s -> 15s
               fontFamily: "cursive, 'Brush Script MT', 'Lucida Handwriting', serif",
-              fontSize: "33px", // 3x bigger: 11px * 3 = 33px
+              fontSize: "16.5px", // Half the size: 33px / 2 = 16.5px
+              fontWeight: 900, // Maximum boldness (CSS max is 900, which is bolder than 700)
               color: "#c1b400",
               opacity: 0.8,
               paddingLeft: "100%",
@@ -167,7 +168,7 @@ export function WelcomePopup({ onClose }: WelcomePopupProps) {
         </button>
 
         {/* Content */}
-        <div style={{ marginTop: "100px", padding: "0 8px" }}> {/* Increased to accommodate bigger ticker */}
+        <div style={{ marginTop: "55px", padding: "0 8px" }}> {/* Adjusted for smaller ticker: 45px + 10px padding */}
           <div
             style={{
               display: "flex",
@@ -185,7 +186,7 @@ export function WelcomePopup({ onClose }: WelcomePopupProps) {
                 textAlign: "left",
               }}
             >
-              <strong>Catwalk Entertainment Co</strong>: putting cat adventures on-chain.
+              <strong style={{ color: "#c1b400", fontWeight: 700, whiteSpace: "nowrap" }}>Catwalk Entertainment Co</strong>: putting cat adventures on-chain.
             </p>
 
             <p
@@ -232,31 +233,36 @@ export function WelcomePopup({ onClose }: WelcomePopupProps) {
           </div>
 
           {/* Welcome to Catwalk Button */}
-          <button
-            onClick={handleWelcomeClick}
-            style={{
-              width: "100%",
-              padding: "10px 20px", // Reduced from 16px 24px
-              background: "#c1b400",
-              color: "#000000",
-              border: "2px solid #000000",
-              borderRadius: 12,
-              fontSize: 18, // Reduced from 24px
-              fontWeight: 900,
-              cursor: "pointer",
-              transition: "all 0.2s",
-              textTransform: "uppercase",
-              letterSpacing: "1px",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "#d4c700";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "#c1b400";
-            }}
-          >
-            Welcome to Catwalk
-          </button>
+          <div style={{ display: "flex", justifyContent: "center", width: "100%" }}>
+            <button
+              onClick={handleWelcomeClick}
+              style={{
+                width: "100%",
+                padding: "10px 20px", // Reduced from 16px 24px
+                background: "#000000",
+                color: "#c1b400",
+                border: "2px solid #c1b400",
+                borderRadius: 12,
+                fontSize: 18, // Reduced from 24px
+                fontWeight: 700,
+                cursor: "pointer",
+                transition: "all 0.2s",
+                textTransform: "uppercase",
+                letterSpacing: "1px",
+                textAlign: "center",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "#1a1a1a";
+                e.currentTarget.style.borderColor = "#d4c700";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "#000000";
+                e.currentTarget.style.borderColor = "#c1b400";
+              }}
+            >
+              Welcome to Catwalk
+            </button>
+          </div>
         </div>
       </div>
     </div>

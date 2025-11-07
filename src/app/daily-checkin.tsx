@@ -117,16 +117,20 @@ export default function DailyCheckin() {
 
       <div
         style={{
-          marginTop: 0,
+          marginTop: 16,
+          marginBottom: 16,
           background: "#000000",
           border: "2px solid #c1b400",
           borderRadius: 16,
-          padding: 20,
+          padding: 22,
           position: "relative",
           overflow: "visible",
+          width: "calc(100% + 8px)",
+          marginLeft: "-4px",
+          marginRight: "-4px",
         }}
       >
-        <p style={{ margin: 0, marginBottom: 16, color: "#ffffff", fontSize: 14, lineHeight: 1.5 }}>
+        <p style={{ margin: 0, marginBottom: 16, color: "#ffffff", fontSize: 14, lineHeight: 1.5, textAlign: "center" }}>
           Walk your cat to earn{" "}
           <a
             href="https://dexscreener.com/base/0xa5eb1cAD0dFC1c4f8d4f84f995aeDA9a7A047B07"

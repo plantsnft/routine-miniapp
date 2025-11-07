@@ -5,6 +5,7 @@
 "use client";
 
 import { SleepingCat } from "./SleepingCat";
+import { useHapticFeedback } from "~/hooks/useHapticFeedback";
 
 interface CheckinButtonProps {
   checkedIn: boolean;
@@ -23,12 +24,20 @@ export function CheckinButton({
   totalCheckins,
   timeUntilNext,
 }: CheckinButtonProps) {
+  const { triggerHaptic } = useHapticFeedback();
   const basePadding = 8;
   const tallerPadding = Math.round(basePadding * 1.35); // 35% taller
 
+  const handleClick = () => {
+    if (!checkedIn && !saving) {
+      triggerHaptic("light");
+    }
+    onClick();
+  };
+
   return (
     <button
-      onClick={onClick}
+      onClick={handleClick}
       disabled={checkedIn || saving}
       style={{
         background: checkedIn || saving ? "#666666" : "#c1b400",
@@ -68,8 +77,9 @@ export function CheckinButton({
             justifyContent: "center",
             gap: 6,
             width: "100%",
+            marginTop: -8,
           }}>
-            <span style={{ display: "inline-block", lineHeight: 1 }}>
+            <span style={{ display: "inline-block", lineHeight: 1, color: "#c1b400", fontSize: 19.2 }}>
               Cat is Resting
             </span>
             <span style={{ display: "inline-flex", alignItems: "center", lineHeight: 1 }}>
@@ -82,6 +92,7 @@ export function CheckinButton({
             color: "#000000",
             textAlign: "center",
             width: "100%",
+            marginTop: -4,
           }}>
             {streak} Day{streak === 1 ? "" : "s"} Catwalking Straight
           </div>
@@ -93,7 +104,7 @@ export function CheckinButton({
             width: "100%",
             fontSize: 10,
             fontWeight: 400,
-            marginTop: 2,
+            marginTop: -2,
           }}>
             {timeUntilNext && (
               <span style={{ color: "#000000" }}>

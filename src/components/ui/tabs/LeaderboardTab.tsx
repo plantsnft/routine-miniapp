@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import type { LeaderboardEntry } from "~/lib/models";
+import { useHapticFeedback } from "~/hooks/useHapticFeedback";
 
 type SortBy = "holdings" | "streak" | "total_checkins";
 type WalkSortMode = "current_streak" | "all_time";
@@ -19,6 +20,7 @@ type WalkSortMode = "current_streak" | "all_time";
  * ```
  */
 export function LeaderboardTab() {
+  const { triggerHaptic } = useHapticFeedback();
   const [sortBy, setSortBy] = useState<SortBy>("streak");
   const [walkSortMode, setWalkSortMode] = useState<WalkSortMode>("current_streak");
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
@@ -123,7 +125,10 @@ export function LeaderboardTab() {
           }}
         >
           <button
-            onClick={() => setSortBy("streak")}
+            onClick={() => {
+              triggerHaptic("light");
+              setSortBy("streak");
+            }}
             style={{
               flex: 1,
               padding: "12px 16px",
@@ -140,7 +145,10 @@ export function LeaderboardTab() {
             🐱 Most Walks
           </button>
           <button
-            onClick={() => setSortBy("holdings")}
+            onClick={() => {
+              triggerHaptic("light");
+              setSortBy("holdings");
+            }}
             style={{
               flex: 1,
               padding: "12px 16px",
@@ -172,7 +180,10 @@ export function LeaderboardTab() {
             }}
           >
             <button
-              onClick={() => setWalkSortMode("current_streak")}
+              onClick={() => {
+                triggerHaptic("light");
+                setWalkSortMode("current_streak");
+              }}
               style={{
                 flex: 1,
                 padding: "8px 12px",
@@ -189,7 +200,10 @@ export function LeaderboardTab() {
               Current Streak
             </button>
             <button
-              onClick={() => setWalkSortMode("all_time")}
+              onClick={() => {
+                triggerHaptic("light");
+                setWalkSortMode("all_time");
+              }}
               style={{
                 flex: 1,
                 padding: "8px 12px",
@@ -234,6 +248,7 @@ export function LeaderboardTab() {
             </p>
             <button
               onClick={() => {
+                triggerHaptic("light");
                 setError(null);
                 const fetchLeaderboard = async () => {
                   try {
@@ -314,6 +329,7 @@ export function LeaderboardTab() {
               href="https://app.uniswap.org/swap?chain=base&outputCurrency=0xa5eb1cAD0dFC1c4f8d4f84f995aeDA9a7A047B07"
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => triggerHaptic("light")}
               style={{
                 display: "inline-block",
                 padding: "12px 24px",

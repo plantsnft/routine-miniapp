@@ -13,6 +13,7 @@ import { SignSolanaMessage } from "../wallet/SignSolanaMessage";
 import { SendSolana } from "../wallet/SendSolana";
 import { USE_WALLET, APP_NAME } from "../../../lib/constants";
 import { useMiniApp } from "@neynar/react";
+import { useHapticFeedback } from "~/hooks/useHapticFeedback";
 
 /**
  * WalletTab component manages wallet-related UI for both EVM and Solana chains.
@@ -79,10 +80,14 @@ function ConnectionControls({
   connect,
   connectors,
   disconnect,
-}: ConnectionControlsProps) {
+  triggerHaptic,
+}: ConnectionControlsProps & { triggerHaptic: (intensity?: "light" | "medium" | "heavy" | "soft" | "rigid") => void }) {
   if (isConnected) {
     return (
-      <Button onClick={() => disconnect()} className="w-full">
+      <Button onClick={() => {
+        triggerHaptic("light");
+        disconnect();
+      }} className="w-full">
         Disconnect
       </Button>
     );
@@ -90,11 +95,15 @@ function ConnectionControls({
   if (context) {
     return (
       <div className="space-y-2 w-full">
-        <Button onClick={() => connect({ connector: connectors[0] })} className="w-full">
+        <Button onClick={() => {
+          triggerHaptic("light");
+          connect({ connector: connectors[0] });
+        }} className="w-full">
           Connect (Auto)
         </Button>
         <Button
           onClick={() => {
+            triggerHaptic("light");
             console.log("Manual Farcaster connection attempt");
             console.log("Connectors:", connectors.map((c, i) => `${i}: ${c.name}`));
             connect({ connector: connectors[0] });
@@ -108,10 +117,16 @@ function ConnectionControls({
   }
   return (
     <div className="space-y-3 w-full">
-      <Button onClick={() => connect({ connector: connectors[1] })} className="w-full">
+      <Button onClick={() => {
+        triggerHaptic("light");
+        connect({ connector: connectors[1] });
+      }} className="w-full">
         Connect Coinbase Wallet
       </Button>
-      <Button onClick={() => connect({ connector: connectors[2] })} className="w-full">
+      <Button onClick={() => {
+        triggerHaptic("light");
+        connect({ connector: connectors[2] });
+      }} className="w-full">
         Connect MetaMask
       </Button>
     </div>
@@ -124,6 +139,7 @@ export function WalletTab() {
   
   // --- Hooks ---
   const { context } = useMiniApp();
+  const { triggerHaptic } = useHapticFeedback();
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const solanaWallet = useSolanaWallet();
@@ -287,6 +303,7 @@ export function WalletTab() {
         connect={connect}
         connectors={connectors}
         disconnect={disconnect}
+        triggerHaptic={triggerHaptic}
       />
 
       {/* EVM Wallet Components */}
@@ -296,7 +313,10 @@ export function WalletTab() {
         <>
           <SendEth />
           <Button
-            onClick={sendEvmContractTransaction}
+            onClick={() => {
+              triggerHaptic("light");
+              sendEvmContractTransaction();
+            }}
             disabled={!isConnected || isEvmTransactionPending}
             isLoading={isEvmTransactionPending}
             className="w-full"
@@ -318,7 +338,10 @@ export function WalletTab() {
             </div>
           )}
           <Button
-            onClick={signTyped}
+            onClick={() => {
+              triggerHaptic("light");
+              signTyped();
+            }}
             disabled={!isConnected || isEvmSignTypedDataPending}
             isLoading={isEvmSignTypedDataPending}
             className="w-full"
@@ -327,7 +350,10 @@ export function WalletTab() {
           </Button>
           {isEvmSignTypedDataError && renderError(evmSignTypedDataError)}
           <Button
-            onClick={handleSwitchChain}
+            onClick={() => {
+              triggerHaptic("medium");
+              handleSwitchChain();
+            }}
             disabled={isChainSwitchPending}
             isLoading={isChainSwitchPending}
             className="w-full"

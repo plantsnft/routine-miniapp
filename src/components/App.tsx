@@ -137,13 +137,13 @@ export default function App(
       )}
 
       {/* Main content and footer should be centered */}
-      <div className="container py-2" style={{ paddingBottom: "100px" }}>
+      <div className="container py-2" style={{ paddingBottom: "80px" }}>
         {/* Main title - hidden for cleaner look */}
         {/* <h1 className="text-2xl font-bold text-center mb-4">{title}</h1> */}
 
         {/* Tab content rendering with error boundaries */}
         <ErrorBoundary>
-          {currentTab === Tab.Home && <HomeTab />}
+          {currentTab === Tab.Home && <HomeTab setActiveTab={setActiveTab} />}
           {currentTab === Tab.Leaderboard && <LeaderboardTab />}
           {currentTab === Tab.Feed && <FeedTab />}
           {currentTab === Tab.Actions && <ActionsTab />}

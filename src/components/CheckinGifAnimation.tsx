@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 interface CheckinGifAnimationProps {
   isVisible: boolean;
@@ -29,14 +29,39 @@ export function CheckinGifAnimation({
   const [gifError, setGifError] = useState(false);
   const [showGif, setShowGif] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState<number>(Math.ceil(duration / 1000));
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownRef = useRef<number>(Math.ceil(duration / 1000));
+  const onCompleteRef = useRef(onComplete);
+  
+  // Keep onComplete ref updated
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
 
   useEffect(() => {
     if (!isVisible) {
+      // Clean up timers when not visible
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      if (hideTimerRef.current) {
+        clearTimeout(hideTimerRef.current);
+        hideTimerRef.current = null;
+      }
       setShouldRender(false);
       setShowGif(false);
       setGifLoaded(false);
       setGifError(false);
-      setSecondsLeft(Math.ceil(duration / 1000));
+      const totalSeconds = Math.ceil(duration / 1000);
+      setSecondsLeft(totalSeconds);
+      countdownRef.current = totalSeconds;
+      return;
+    }
+
+    // Prevent multiple intervals from running
+    if (intervalRef.current || hideTimerRef.current) {
       return;
     }
 
@@ -48,35 +73,55 @@ export function CheckinGifAnimation({
       setShowGif(true);
     }, 50);
 
-    // Initialize countdown
-    const initialSeconds = Math.ceil(duration / 1000);
-    setSecondsLeft(initialSeconds);
+    // Initialize countdown with exact seconds
+    const totalSeconds = Math.ceil(duration / 1000);
+    countdownRef.current = totalSeconds;
+    setSecondsLeft(totalSeconds);
 
-    // Countdown interval - update every second
-    const interval = setInterval(() => {
-      setSecondsLeft((prev) => {
-        const next = prev <= 1 ? 0 : prev - 1;
-        return next;
-      });
+    // Countdown interval - update every second, counting down from totalSeconds to 0
+    intervalRef.current = setInterval(() => {
+      countdownRef.current -= 1;
+      if (countdownRef.current >= 0) {
+        setSecondsLeft(countdownRef.current);
+      } else {
+        // Ensure interval is cleared when countdown completes
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+      }
     }, 1000);
 
-    // Auto-hide after exact duration - guaranteed to close
-    // Add 50ms to account for the showTimer delay
-    const hideTimer = setTimeout(() => {
+    // Auto-hide after exact duration - guaranteed to close after 5 seconds
+    hideTimerRef.current = setTimeout(() => {
       console.log("[CheckinGifAnimation] Auto-dismissing after", duration, "ms");
+      setSecondsLeft(0);
       setShowGif(false);
       setShouldRender(false);
-      if (onComplete) {
-        onComplete();
+      // Clean up interval
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
-    }, duration + 50);
+      hideTimerRef.current = null;
+      if (onCompleteRef.current) {
+        onCompleteRef.current();
+      }
+    }, duration);
 
     return () => {
       clearTimeout(showTimer);
-      clearTimeout(hideTimer);
-      clearInterval(interval);
+      if (hideTimerRef.current) {
+        clearTimeout(hideTimerRef.current);
+        hideTimerRef.current = null;
+      }
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     };
-  }, [isVisible, duration, onComplete]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isVisible, duration]); // Remove onComplete from dependencies to prevent re-runs
 
   // Handle GIF load
   const handleGifLoad = () => {
@@ -99,7 +144,18 @@ export function CheckinGifAnimation({
     if (e.target === e.currentTarget) {
       setShowGif(false);
       setShouldRender(false);
-      onComplete?.();
+      // Clean up timers
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      if (hideTimerRef.current) {
+        clearTimeout(hideTimerRef.current);
+        hideTimerRef.current = null;
+      }
+      if (onCompleteRef.current) {
+        onCompleteRef.current();
+      }
     }
   };
 
@@ -193,24 +249,26 @@ export function CheckinGifAnimation({
           />
         )}
 
-        {/* Countdown - bottom right */}
-        <div
-          style={{
-            position: "absolute",
-            right: 12,
-            bottom: 10,
-            background: "rgba(0,0,0,0.8)",
-            color: "#c1b400",
-            border: "1px solid #c1b400",
-            borderRadius: 8,
-            padding: "4px 8px",
-            fontSize: 12,
-            fontWeight: 700,
-            pointerEvents: "none",
-          }}
-        >
-          {secondsLeft}s
-        </div>
+        {/* Countdown - bottom right - only show if > 0 */}
+        {secondsLeft > 0 && (
+          <div
+            style={{
+              position: "absolute",
+              right: 12,
+              bottom: 10,
+              background: "rgba(0,0,0,0.8)",
+              color: "#c1b400",
+              border: "1px solid #c1b400",
+              borderRadius: 8,
+              padding: "4px 8px",
+              fontSize: 12,
+              fontWeight: 700,
+              pointerEvents: "none",
+            }}
+          >
+            {secondsLeft}s
+          </div>
+        )}
       </div>
     </div>
   );

@@ -3,6 +3,7 @@
 import React from "react";
 import { useMiniApp } from "@neynar/react";
 import { Tab } from "~/components/App";
+import { useHapticFeedback } from "~/hooks/useHapticFeedback";
 
 const CATWALK_CHANNEL_URL = "https://farcaster.xyz/~/channel/Catwalk";
 
@@ -13,9 +14,11 @@ interface FooterProps {
 
 export const Footer: React.FC<FooterProps> = ({ activeTab, setActiveTab }) => {
   const { actions } = useMiniApp();
+  const { triggerHaptic } = useHapticFeedback();
   const [isLoading, setIsLoading] = React.useState(false);
 
   const handleVisitChannel = async () => {
+    triggerHaptic("light");
     try {
       setIsLoading(true);
       await actions.openUrl(CATWALK_CHANNEL_URL);
@@ -51,7 +54,10 @@ export const Footer: React.FC<FooterProps> = ({ activeTab, setActiveTab }) => {
         }}
       >
       <button
-        onClick={() => setActiveTab(Tab.Home)}
+        onClick={() => {
+          triggerHaptic("light");
+          setActiveTab(Tab.Home);
+        }}
         style={{
           display: "flex",
           flexDirection: "column",
@@ -95,7 +101,10 @@ export const Footer: React.FC<FooterProps> = ({ activeTab, setActiveTab }) => {
         </span>
       </button>
       <button
-        onClick={() => setActiveTab(Tab.Leaderboard)}
+        onClick={() => {
+          triggerHaptic("light");
+          setActiveTab(Tab.Leaderboard);
+        }}
         style={{
           display: "flex",
           flexDirection: "column",
@@ -115,7 +124,10 @@ export const Footer: React.FC<FooterProps> = ({ activeTab, setActiveTab }) => {
         </span>
       </button>
       <button
-        onClick={() => setActiveTab(Tab.Feed)}
+        onClick={() => {
+          triggerHaptic("light");
+          setActiveTab(Tab.Feed);
+        }}
         style={{
           display: "flex",
           flexDirection: "column",

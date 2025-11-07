@@ -121,7 +121,7 @@ export async function GET(request: Request) {
       try {
         console.log("[Channel Feed] Strategy 2: Using feed_type=filter with filter_type=parent_url");
         const response = await fetch(
-          `https://api.neynar.com/v2/farcaster/feed?feed_type=filter&filter_type=parent_url&parent_url=${encodeURIComponent(CATWALK_CHANNEL_PARENT_URL)}&limit=10`,
+          `https://api.neynar.com/v2/farcaster/feed?feed_type=filter&filter_type=parent_url&parent_url=${encodeURIComponent(CATWALK_CHANNEL_PARENT_URL)}&limit=10&with_parent_cast=true`,
           {
             headers: {
               "x-api-key": apiKey,
@@ -169,11 +169,11 @@ export async function GET(request: Request) {
         // Or try without fid parameter
         const testEndpoints = [
           // Try with parent_url and no fid (some APIs allow public channel access)
-          `https://api.neynar.com/v2/farcaster/feed?feed_type=channel&parent_url=${encodeURIComponent(channelParentUrl)}&limit=10`,
+          `https://api.neynar.com/v2/farcaster/feed?feed_type=channel&parent_url=${encodeURIComponent(channelParentUrl)}&limit=10&with_parent_cast=true`,
           // Try with channel_id (if it's numeric)
-          typeof channelId === 'number' ? `https://api.neynar.com/v2/farcaster/feed?feed_type=channel&channel_id=${channelId}&limit=10` : null,
+          typeof channelId === 'number' ? `https://api.neynar.com/v2/farcaster/feed?feed_type=channel&channel_id=${channelId}&limit=10&with_parent_cast=true` : null,
           // Try with channel ID as string
-          `https://api.neynar.com/v2/farcaster/feed?feed_type=channel&channel_id=${encodeURIComponent(channelId)}&limit=10`,
+          `https://api.neynar.com/v2/farcaster/feed?feed_type=channel&channel_id=${encodeURIComponent(channelId)}&limit=10&with_parent_cast=true`,
         ].filter(Boolean) as string[];
         
         for (const endpoint of testEndpoints) {
@@ -276,16 +276,26 @@ export async function GET(request: Request) {
     }
 
     // Format the casts for the feed
-    const formattedCasts = casts.map((cast: any, index: number) => {
+    const formattedCasts = await Promise.all(casts.map(async (cast: any, index: number) => {
         // Extract images/embeds from the cast - comprehensive extraction
         const images: string[] = [];
+        
+        // Log cast structure for debugging quote casts
+        console.log(`[Channel Feed] Cast ${index + 1} (${cast.hash?.substring(0, 10)}...):`, {
+          hasParentCast: !!cast.parent_cast,
+          hasParent: !!cast.parent,
+          hasParentHash: !!cast.parent_hash,
+          embedsCount: cast.embeds?.length || 0,
+          embedsTypes: cast.embeds?.map((e: any) => e.type || e.cast_id ? 'cast/quote' : 'other') || [],
+        });
         
         // Log embeds for debugging
         if (cast.embeds && cast.embeds.length > 0) {
           console.log(`[Channel Feed] Cast ${index + 1} (${cast.hash?.substring(0, 10)}...) has ${cast.embeds.length} embed(s)`);
           cast.embeds.forEach((embed: any, embedIdx: number) => {
             const isVideo = embed.url && embed.url.includes('.m3u8');
-            console.log(`[Channel Feed]   Embed ${embedIdx + 1}: type=${embed.type || 'none'}, url=${embed.url?.substring(0, 80) || 'none'}, hasMetadata=${!!embed.metadata}, hasOpenGraph=${!!embed.open_graph}, isVideo=${isVideo}`);
+            const isCastEmbed = embed.type === 'cast' || embed.cast_id || embed.cast_hash;
+            console.log(`[Channel Feed]   Embed ${embedIdx + 1}: type=${embed.type || 'none'}, cast_id=${embed.cast_id || 'none'}, cast_hash=${embed.cast_hash || 'none'}, isCastEmbed=${isCastEmbed}, url=${embed.url?.substring(0, 80) || 'none'}, hasMetadata=${!!embed.metadata}, hasOpenGraph=${!!embed.open_graph}, isVideo=${isVideo}`);
             // Log video metadata if it's a video
             if (isVideo && embed.metadata && embed.metadata.video) {
               console.log(`[Channel Feed]     Video metadata keys: ${Object.keys(embed.metadata.video).join(', ')}`);
@@ -507,6 +517,197 @@ export async function GET(request: Request) {
         
         console.log(`[Channel Feed] Cast ${cast.hash} has ${uniqueImages.length} images extracted, hasVideo=${hasVideo}, videoUrl=${videoUrl ? videoUrl.substring(0, 80) + '...' : 'null'}`);
 
+        // Extract parent cast (quote cast) data if this is a quote
+        // Neynar API may use parent_cast, parent, parent_hash, or cast embeds
+        let parentCast: any = null;
+        
+        // First, try to find parent cast in embeds (quote casts are often embedded)
+        if (!parentCast && cast.embeds && Array.isArray(cast.embeds)) {
+          for (const embed of cast.embeds) {
+            // Check if this embed is a cast (quote cast)
+            if (embed.type === 'cast' || embed.cast_id || embed.cast_hash || embed.cast) {
+              const quotedCast = embed.cast || embed;
+              if (quotedCast.hash || quotedCast.cast_hash || quotedCast.cast_id) {
+                console.log(`[Channel Feed] Found quote cast embed: hash=${quotedCast.hash || quotedCast.cast_hash || quotedCast.cast_id}`);
+                
+                // Extract images from quoted cast
+                const parentImages: string[] = [];
+                
+                // Extract images using same logic as main cast
+                if (quotedCast.embeds && Array.isArray(quotedCast.embeds)) {
+                  quotedCast.embeds.forEach((parentEmbed: any) => {
+                    if (parentEmbed.url) {
+                      if (parentEmbed.url.match(/\.(jpg|jpeg|png|gif|webp|avif|svg)$/i) || 
+                          parentEmbed.url.includes('imagedelivery.net') ||
+                          parentEmbed.url.includes('image/') ||
+                          parentEmbed.url.includes('photos')) {
+                        parentImages.push(parentEmbed.url);
+                      }
+                    }
+                    if (parentEmbed.images && Array.isArray(parentEmbed.images)) {
+                      parentEmbed.images.forEach((img: any) => {
+                        if (typeof img === 'string') {
+                          parentImages.push(img);
+                        } else if (img?.url) {
+                          parentImages.push(img.url);
+                        }
+                      });
+                    }
+                    if (parentEmbed.image_url) parentImages.push(parentEmbed.image_url);
+                    if (parentEmbed.open_graph?.image) {
+                      const ogImage = parentEmbed.open_graph.image;
+                      if (typeof ogImage === 'string') {
+                        parentImages.push(ogImage);
+                      } else if (ogImage?.url) {
+                        parentImages.push(ogImage.url);
+                      }
+                    }
+                  });
+                }
+                
+                const uniqueParentImages = Array.from(new Set(parentImages.filter((url: string) => url && url.startsWith('http'))));
+                
+                parentCast = {
+                  hash: quotedCast.hash || quotedCast.cast_hash || quotedCast.cast_id,
+                  text: quotedCast.text || "",
+                  author: {
+                    fid: quotedCast.author?.fid || 0,
+                    username: quotedCast.author?.username || "unknown",
+                    displayName: quotedCast.author?.display_name || quotedCast.author?.username || "Unknown",
+                    pfp: quotedCast.author?.pfp?.url || quotedCast.author?.pfp_url || null,
+                  },
+                  images: uniqueParentImages,
+                  url: (quotedCast.hash || quotedCast.cast_hash) ? `https://warpcast.com/${quotedCast.author?.username || "unknown"}/${quotedCast.hash || quotedCast.cast_hash}` : null,
+                };
+                console.log(`[Channel Feed] Extracted quote cast from embed: ${uniqueParentImages.length} images`);
+                break;
+              }
+            }
+          }
+        }
+        
+        // Fallback: Try parent_cast, parent, or parent_hash fields
+        if (!parentCast) {
+          const parent = cast.parent_cast || cast.parent || (cast.parent_hash ? { hash: cast.parent_hash } : null);
+          
+          if (parent && (parent.hash || parent.text || parent.author)) {
+            if (parent.hash && !parent.author) {
+              // Only hash available - try to fetch the cast
+              console.log(`[Channel Feed] Cast ${cast.hash} has parent hash ${parent.hash}, attempting to fetch...`);
+              try {
+                // Fetch cast by hash using Neynar API
+                const castResponse = await fetch(
+                  `https://api.neynar.com/v2/farcaster/cast?identifier=${parent.hash}&type=hash`,
+                  {
+                    headers: {
+                      "x-api-key": apiKey,
+                      "Content-Type": "application/json",
+                    },
+                  }
+                );
+                
+                if (castResponse.ok) {
+                  const castData = await castResponse.json();
+                  const fetchedParent = castData.cast || castData.result?.cast;
+                  
+                  if (fetchedParent) {
+                  
+                  // Extract images from fetched parent cast
+                  const parentImages: string[] = [];
+                  if (fetchedParent.embeds && Array.isArray(fetchedParent.embeds)) {
+                    fetchedParent.embeds.forEach((embed: any) => {
+                      if (embed.url && (embed.url.match(/\.(jpg|jpeg|png|gif|webp|avif|svg)$/i) || 
+                          embed.url.includes('imagedelivery.net') ||
+                          embed.url.includes('image/') ||
+                          embed.url.includes('photos'))) {
+                        parentImages.push(embed.url);
+                      }
+                      if (embed.images && Array.isArray(embed.images)) {
+                        embed.images.forEach((img: any) => {
+                          if (typeof img === 'string') {
+                            parentImages.push(img);
+                          } else if (img?.url) {
+                            parentImages.push(img.url);
+                          }
+                        });
+                      }
+                    });
+                  }
+                  
+                  const uniqueParentImages = Array.from(new Set(parentImages.filter((url: string) => url && url.startsWith('http'))));
+                  
+                  parentCast = {
+                    hash: fetchedParent.hash,
+                    text: fetchedParent.text || "",
+                    author: {
+                      fid: fetchedParent.author?.fid || 0,
+                      username: fetchedParent.author?.username || "unknown",
+                      displayName: fetchedParent.author?.display_name || fetchedParent.author?.username || "Unknown",
+                      pfp: fetchedParent.author?.pfp?.url || fetchedParent.author?.pfp_url || null,
+                    },
+                    images: uniqueParentImages,
+                    url: `https://warpcast.com/${fetchedParent.author?.username || "unknown"}/${fetchedParent.hash}`,
+                  };
+                  console.log(`[Channel Feed] Fetched parent cast: ${uniqueParentImages.length} images`);
+                  }
+                } else {
+                  console.log(`[Channel Feed] Failed to fetch parent cast ${parent.hash}: HTTP ${castResponse.status}`);
+                }
+              } catch (fetchError: any) {
+                console.log(`[Channel Feed] Failed to fetch parent cast ${parent.hash}:`, fetchError?.message);
+              }
+            } else if (parent.author) {
+              // We have parent cast data directly
+              const parentImages: string[] = [];
+              
+              if (parent.embeds && Array.isArray(parent.embeds)) {
+                parent.embeds.forEach((embed: any) => {
+                  if (embed.url && (embed.url.match(/\.(jpg|jpeg|png|gif|webp|avif|svg)$/i) || 
+                      embed.url.includes('imagedelivery.net') ||
+                      embed.url.includes('image/') ||
+                      embed.url.includes('photos'))) {
+                    parentImages.push(embed.url);
+                  }
+                  if (embed.images && Array.isArray(embed.images)) {
+                    embed.images.forEach((img: any) => {
+                      if (typeof img === 'string') {
+                        parentImages.push(img);
+                      } else if (img?.url) {
+                        parentImages.push(img.url);
+                      }
+                    });
+                  }
+                  if (embed.image_url) parentImages.push(embed.image_url);
+                  if (embed.open_graph?.image) {
+                    const ogImage = embed.open_graph.image;
+                    if (typeof ogImage === 'string') {
+                      parentImages.push(ogImage);
+                    } else if (ogImage?.url) {
+                      parentImages.push(ogImage.url);
+                    }
+                  }
+                });
+              }
+              
+              const uniqueParentImages = Array.from(new Set(parentImages.filter((url: string) => url && url.startsWith('http'))));
+              
+              parentCast = {
+                hash: parent.hash,
+                text: parent.text || "",
+                author: {
+                  fid: parent.author?.fid || 0,
+                  username: parent.author?.username || "unknown",
+                  displayName: parent.author?.display_name || parent.author?.username || "Unknown",
+                  pfp: parent.author?.pfp?.url || parent.author?.pfp_url || null,
+                },
+                images: uniqueParentImages,
+                url: parent.hash ? `https://warpcast.com/${parent.author?.username || "unknown"}/${parent.hash}` : null,
+              };
+              console.log(`[Channel Feed] Cast ${cast.hash} is a quote cast with ${uniqueParentImages.length} parent images`);
+            }
+          }
+        }
+
         return {
           hash: cast.hash,
           text: cast.text || "",
@@ -524,8 +725,9 @@ export async function GET(request: Request) {
           recasts: cast.reactions?.recasts?.length || cast.reactions?.recasts_count || 0,
           replies: cast.replies?.count || 0,
           url: `https://warpcast.com/${cast.author?.username || "unknown"}/${cast.hash || ""}`,
+          parentCast, // Include parent cast if this is a quote
         };
-      });
+      }));
 
       // Check if viewer follows the channel (if viewerFid is provided)
       const isFollowingChannel = false; // TODO: Implement proper channel following check

@@ -6,6 +6,7 @@ import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
 import { Button } from "../Button";
 import { truncateAddress } from "../../../lib/truncateAddress";
 import { renderError } from "../../../lib/errorUtils";
+import { useHapticFeedback } from "~/hooks/useHapticFeedback";
 
 /**
  * SendSolana component handles sending SOL transactions on Solana.
@@ -30,6 +31,7 @@ import { renderError } from "../../../lib/errorUtils";
  * ```
  */
 export function SendSolana() {
+  const { triggerHaptic } = useHapticFeedback();
   const [solanaTransactionState, setSolanaTransactionState] = useState<
     | { status: 'none' }
     | { status: 'pending' }
@@ -93,7 +95,10 @@ export function SendSolana() {
   return (
     <>
       <Button
-        onClick={sendSolanaTransaction}
+        onClick={() => {
+          triggerHaptic("medium");
+          sendSolanaTransaction();
+        }}
         disabled={solanaTransactionState.status === 'pending'}
         isLoading={solanaTransactionState.status === 'pending'}
         className="mb-4"

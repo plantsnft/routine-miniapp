@@ -3,8 +3,11 @@
 import { useState, useEffect } from "react";
 import { useMiniApp } from "@neynar/react";
 import { VideoPlayer } from "~/components/ui/VideoPlayer";
+import { ImageCarousel } from "~/components/ui/ImageCarousel";
 import { CATWALK_CREATOR_FIDS } from "~/lib/constants";
 import { ConfettiCelebration } from "~/components/ConfettiCelebration";
+import { useHapticFeedback } from "~/hooks/useHapticFeedback";
+import { CreatorCard } from "~/components/CreatorCard";
 
 interface Cast {
   hash: string;
@@ -23,19 +26,37 @@ interface Cast {
   recasts: number;
   replies: number;
   url: string;
+  parentCast?: {
+    hash: string;
+    text: string;
+    author: {
+      fid: number;
+      username: string;
+      displayName: string;
+      pfp?: string | null;
+    };
+    images: string[];
+    url: string | null;
+  } | null;
 }
 
 const CATWALK_CHANNEL_URL = "https://farcaster.xyz/~/channel/Catwalk";
 
 export function FeedTab() {
   const { context, actions } = useMiniApp();
+  const { triggerHaptic } = useHapticFeedback();
   const [casts, setCasts] = useState<Cast[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | { message: string; debug?: any } | null>(null);
   const [_isFollowingChannel, setIsFollowingChannel] = useState<boolean>(false);
   const [showCreatorsModal, setShowCreatorsModal] = useState(false);
-  const [creators, setCreators] = useState<Array<{ fid: number; username?: string; displayName?: string; castCount?: number; pfp_url?: string }>>([]);
-  const [loadingCastCounts, setLoadingCastCounts] = useState(false);
+  const [creators, setCreators] = useState<Array<{ fid: number; username?: string; displayName?: string; pfp_url?: string }>>([]);
+  const [creatorStats, setCreatorStats] = useState<Record<number, { cast_count: number; location?: string | null; labels?: string[]; cat_names?: string[]; last_cast_date?: string | null }>>({});
+  const [catProfiles, setCatProfiles] = useState<Record<number, Array<{ cat_name: string; photos?: string[]; ai_writeup?: string | null }>>>({});
+  const [loadingCreatorStats, setLoadingCreatorStats] = useState(false);
+  const [activeFids, setActiveFids] = useState<number[]>([]);
+  const [inactiveFids, setInactiveFids] = useState<number[]>([]);
+  const [sortBy, setSortBy] = useState<"recent" | "overall">("recent");
   
   // Engagement state
   const [likingCast, setLikingCast] = useState<string | null>(null);
@@ -72,6 +93,103 @@ export function FeedTab() {
     fetchFeed();
   }, [context?.user?.fid]);
 
+  // Fetch creator details and stats when modal opens (same as HomeTab)
+  useEffect(() => {
+    if (showCreatorsModal && CATWALK_CREATOR_FIDS.length > 0) {
+      const fetchCreatorsAndStats = async () => {
+        setLoadingCreatorStats(true);
+        try {
+          // Fetch creator user info
+          const fidsString = CATWALK_CREATOR_FIDS.join(",");
+          const usersRes = await fetch(`/api/users?fids=${fidsString}`);
+          const usersData = await usersRes.json();
+          
+          if (usersData.users) {
+            setCreators(
+              usersData.users.map((u: any) => ({
+                fid: u.fid,
+                username: u.username,
+                displayName: u.display_name,
+                pfp_url: u.pfp_url || u.pfp?.url || undefined,
+              }))
+            );
+          } else {
+            // Fallback: just show FIDs if user fetch fails
+            setCreators(CATWALK_CREATOR_FIDS.map((fid) => ({ fid })));
+          }
+
+          // Fetch creator stats
+          const statsRes = await fetch("/api/creator-stats");
+          const statsData = await statsRes.json();
+          
+          console.log("[FeedTab] Creator stats data:", statsData);
+          
+          if (statsData.active || statsData.inactive || statsData.missing) {
+            const active = statsData.active || [];
+            const inactive = statsData.inactive || [];
+            const missing = statsData.missing || [];
+            
+            setActiveFids(active.map((c: any) => c.fid));
+            setInactiveFids(inactive.map((c: any) => c.fid));
+            
+            // Combine all creators (active, inactive, and missing)
+            const allCreators = [...active, ...inactive, ...missing];
+            const statsMap: Record<number, any> = {};
+            allCreators.forEach((creator: any) => {
+              // Ensure arrays are properly parsed (Supabase might return them as strings)
+              const stats = {
+                ...creator,
+                cat_names: Array.isArray(creator.cat_names) 
+                  ? creator.cat_names 
+                  : typeof creator.cat_names === 'string' 
+                    ? JSON.parse(creator.cat_names || '[]') 
+                    : [],
+                labels: Array.isArray(creator.labels) 
+                  ? creator.labels 
+                  : typeof creator.labels === 'string' 
+                    ? JSON.parse(creator.labels || '[]') 
+                    : [],
+              };
+              statsMap[creator.fid] = stats;
+              console.log(`[FeedTab] FID ${creator.fid} stats:`, stats);
+            });
+            setCreatorStats(statsMap);
+
+            // Fetch cat profiles for each creator
+            const profilesMap: Record<number, any[]> = {};
+            await Promise.all(
+              allCreators.map(async (creator: any) => {
+                if (creator.cat_names && creator.cat_names.length > 0) {
+                  try {
+                    const profileRes = await fetch(`/api/creator-stats?fid=${creator.fid}`);
+                    const profileData = await profileRes.json();
+                    if (profileData.catProfiles) {
+                      profilesMap[creator.fid] = profileData.catProfiles;
+                    }
+                  } catch (error) {
+                    console.error(`Error fetching cat profiles for FID ${creator.fid}:`, error);
+                  }
+                }
+              })
+            );
+            setCatProfiles(profilesMap);
+          }
+        } catch (error) {
+          console.error("Error fetching creators/stats:", error);
+          // Fallback: just show FIDs
+          setCreators(CATWALK_CREATOR_FIDS.map((fid) => ({ fid })));
+        } finally {
+          setLoadingCreatorStats(false);
+        }
+      };
+      fetchCreatorsAndStats();
+    } else if (showCreatorsModal && CATWALK_CREATOR_FIDS.length === 0) {
+      // If no FIDs, set empty array
+      setCreators([]);
+      setLoadingCreatorStats(false);
+    }
+  }, [showCreatorsModal]);
+
   const formatTime = (timestamp: string) => {
     const date = new Date(timestamp);
     const now = new Date();
@@ -89,6 +207,7 @@ export function FeedTab() {
 
   // Handle like action
   const handleLike = async (cast: Cast) => {
+    triggerHaptic("light");
     if (!context?.user?.fid) {
       alert("Please sign in to like casts");
       return;
@@ -107,6 +226,7 @@ export function FeedTab() {
 
   // Handle recast action
   const handleRecast = async (cast: Cast) => {
+    triggerHaptic("light");
     if (!context?.user?.fid) {
       alert("Please sign in to recast");
       return;
@@ -125,6 +245,7 @@ export function FeedTab() {
 
   // Handle comment button click - open compose modal with reply
   const handleCommentClick = async (cast: Cast) => {
+    triggerHaptic("light");
     if (!context?.user?.fid) {
       alert("Please sign in to comment");
       return;
@@ -378,6 +499,7 @@ export function FeedTab() {
                 href={cast.url}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() => triggerHaptic("light")}
                 style={{
                   color: "#c1b400",
                   textDecoration: "none",
@@ -403,27 +525,7 @@ export function FeedTab() {
 
           {/* Post Images or Video */}
           {cast.images.length > 0 ? (
-            <div
-              style={{
-                width: "100%",
-                aspectRatio: "1",
-                background: "#000000",
-                position: "relative",
-              }}
-            >
-              <img
-                src={cast.images[0]}
-                alt="Cast image"
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
-                }}
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = "none";
-                }}
-              />
-            </div>
+            <ImageCarousel images={cast.images} alt="Cast image" />
           ) : cast.hasVideo && cast.videoUrl ? (
             <VideoPlayer
               videoUrl={cast.videoUrl}
@@ -435,10 +537,109 @@ export function FeedTab() {
             />
           ) : null}
 
+          {/* Quote Cast Text (from Catwalk account) - Show above quoted cast */}
+          {cast.parentCast && cast.text && (
+            <div style={{ padding: "0 12px", marginTop: 8 }}>
+              <p
+                style={{
+                  color: "#ffffff",
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                  margin: "0 0 8px 0",
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {cast.text}
+              </p>
+            </div>
+          )}
+
+          {/* Quote Cast (Parent Cast) */}
+          {cast.parentCast && (cast.parentCast.images.length > 0 || cast.parentCast.text) && (
+            <div
+              style={{
+                marginTop: cast.text ? 0 : 8,
+                marginLeft: 12,
+                marginRight: 12,
+                padding: "12px",
+                background: "#1a1a1a",
+                border: "1px solid rgba(193, 180, 0, 0.4)",
+                borderRadius: 8,
+                borderLeft: "3px solid #c1b400",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  marginBottom: cast.parentCast.text ? 8 : 0,
+                  paddingBottom: cast.parentCast.text ? 8 : 0,
+                  borderBottom: cast.parentCast.text ? "1px solid rgba(193, 180, 0, 0.2)" : "none",
+                }}
+              >
+                {cast.parentCast.author.pfp && (
+                  <img
+                    src={cast.parentCast.author.pfp}
+                    alt={cast.parentCast.author.displayName}
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: "50%",
+                      border: "1px solid #c1b400",
+                    }}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                )}
+                <div style={{ flex: 1 }}>
+                  <p
+                    style={{
+                      margin: 0,
+                      color: "#c1b400",
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {cast.parentCast.author.displayName}
+                  </p>
+                  <p
+                    style={{
+                      margin: 0,
+                      color: "#ffffff",
+                      fontSize: 10,
+                      opacity: 0.7,
+                    }}
+                  >
+                    @{cast.parentCast.author.username}
+                  </p>
+                </div>
+              </div>
+              {cast.parentCast.text && (
+                <p
+                  style={{
+                    margin: 0,
+                    marginBottom: cast.parentCast.images.length > 0 ? 10 : 0,
+                    color: "#ffffff",
+                    fontSize: 12,
+                    lineHeight: 1.5,
+                    opacity: 0.9,
+                  }}
+                >
+                  {cast.parentCast.text}
+                </p>
+              )}
+              {cast.parentCast.images.length > 0 && (
+                <ImageCarousel images={cast.parentCast.images} alt="Quoted cast image" />
+              )}
+            </div>
+          )}
+
           {/* Post Content */}
           <div style={{ padding: "12px" }}>
-            {/* Text Content */}
-            {cast.text && (
+            {/* Text Content - Only show if not a quote cast (quote cast text is shown above) */}
+            {cast.text && !cast.parentCast && (
               <p
                 style={{
                   color: "#ffffff",
@@ -547,6 +748,7 @@ export function FeedTab() {
                 href={cast.url}
                 onClick={async (e) => {
                   e.preventDefault();
+                  triggerHaptic("light");
                   // Use actions.openUrl to open in Farcaster with full functionality
                   try {
                     await actions.openUrl(cast.url);
@@ -585,6 +787,7 @@ export function FeedTab() {
           {/* More Cats Button */}
           <button
             onClick={async () => {
+              triggerHaptic("light");
               // Open the /catwalk channel within the app
               try {
                 await actions.openUrl(CATWALK_CHANNEL_URL);
@@ -618,68 +821,8 @@ export function FeedTab() {
           {/* View Official Catwalk Creators Button */}
           <button
             onClick={() => {
+              triggerHaptic("light");
               setShowCreatorsModal(true);
-              // Fetch creators when modal opens
-              if (CATWALK_CREATOR_FIDS.length > 0) {
-                const fetchCreators = async () => {
-                  try {
-                    setLoadingCastCounts(true);
-                    const fidsString = CATWALK_CREATOR_FIDS.join(",");
-                    
-                    // Fetch user data and cast counts in parallel
-                    const [usersRes, castCountsRes] = await Promise.all([
-                      fetch(`/api/users?fids=${fidsString}`),
-                      fetch(`/api/creator-cast-counts?fids=${fidsString}`).catch(() => null), // Don't fail if cast counts fail
-                    ]);
-                    
-                    const usersData = await usersRes.json();
-                    let castCountsData: any = null;
-                    
-                    if (castCountsRes && castCountsRes.ok) {
-                      try {
-                        castCountsData = await castCountsRes.json();
-                      } catch (e) {
-                        console.error("Error parsing cast counts:", e);
-                      }
-                    }
-                    
-                    if (usersData.users) {
-                      setCreators(
-                        usersData.users.map((u: any) => ({
-                          fid: u.fid,
-                          username: u.username,
-                          displayName: u.display_name,
-                          pfp_url: u.pfp_url || u.pfp?.url || undefined,
-                          castCount: castCountsData?.castCounts?.[u.fid], // undefined means unknown/loading
-                        }))
-                      );
-                    } else {
-                      // Fallback: just show FIDs if user fetch fails
-                      setCreators(CATWALK_CREATOR_FIDS.map((fid) => ({ 
-                        fid,
-                        castCount: castCountsData?.castCounts?.[fid],
-                      })));
-                    }
-                  } catch (error) {
-                    console.error("Error fetching creators:", error);
-                    // Fallback: just show FIDs
-                    setCreators(CATWALK_CREATOR_FIDS.map((fid) => ({ fid })));
-                  } finally {
-                    setLoadingCastCounts(false);
-                  }
-                };
-                fetchCreators();
-              } else {
-                // Placeholder: show placeholder creators if no FIDs are available
-                const placeholderCount = CATWALK_CREATOR_FIDS.length > 0 ? CATWALK_CREATOR_FIDS.length : 31;
-                setCreators(
-                  Array.from({ length: placeholderCount }, (_, i) => ({
-                    fid: 0,
-                    username: undefined,
-                    displayName: `Creator ${i + 1}`,
-                  }))
-                );
-              }
             }}
             style={{
               width: "100%",
@@ -722,7 +865,12 @@ export function FeedTab() {
             justifyContent: "center",
             padding: "20px",
           }}
-          onClick={() => setShowCreatorsModal(false)}
+          onClick={() => {
+            triggerHaptic("light");
+            setShowCreatorsModal(false);
+            setCreators([]); // Reset creators when modal closes
+            setLoadingCreatorStats(false);
+          }}
         >
           <div
             style={{
@@ -730,118 +878,195 @@ export function FeedTab() {
               border: "3px solid #c1b400",
               borderRadius: 16,
               padding: "24px",
+              maxWidth: "400px",
               width: "100%",
-              maxWidth: "500px",
               maxHeight: "80vh",
               overflowY: "auto",
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h3 style={{ margin: 0, color: "#c1b400", fontSize: 20, fontWeight: 700 }}>
-                Official Catwalk Creators
-                <p style={{ margin: 0, marginTop: 8, color: "#ffffff", fontSize: 12, opacity: 0.8 }}>
-                  Thank you for sharing your cats !
-                </p>
-              </h3>
-              <button
-                onClick={() => setShowCreatorsModal(false)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: "#c1b400",
-                  fontSize: 24,
-                  cursor: "pointer",
-                  fontWeight: 700,
-                  padding: 0,
-                  width: "30px",
-                  height: "30px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                ×
-              </button>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <h3 style={{ margin: 0, color: "#c1b400", fontSize: 20, fontWeight: 700 }}>
+                  Official Catwalk Creators
+                  <p style={{ margin: 0, marginTop: 8, color: "#ffffff", fontSize: 12, opacity: 0.8 }}>
+                    Thank you for sharing your cats !
+                  </p>
+                </h3>
+                <button
+                  onClick={() => {
+                    triggerHaptic("light");
+                    setShowCreatorsModal(false);
+                    setCreators([]); // Reset creators when modal closes
+                    setLoadingCreatorStats(false);
+                  }}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: "#c1b400",
+                    fontSize: 24,
+                    cursor: "pointer",
+                    fontWeight: 700,
+                    padding: 0,
+                    width: "30px",
+                    height: "30px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+              
+              {/* Sorting Buttons */}
+              <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                <button
+                  onClick={() => {
+                    triggerHaptic("light");
+                    setSortBy("recent");
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: "8px 16px",
+                    background: sortBy === "recent" ? "#c1b400" : "#333333",
+                    color: sortBy === "recent" ? "#000000" : "#ffffff",
+                    border: `1px solid ${sortBy === "recent" ? "#000000" : "#666666"}`,
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Most Recent
+                </button>
+                <button
+                  onClick={() => {
+                    triggerHaptic("light");
+                    setSortBy("overall");
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: "8px 16px",
+                    background: sortBy === "overall" ? "#c1b400" : "#333333",
+                    color: sortBy === "overall" ? "#000000" : "#ffffff",
+                    border: `1px solid ${sortBy === "overall" ? "#000000" : "#666666"}`,
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Most Overall
+                </button>
+              </div>
             </div>
             
-            {creators.length > 0 ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {creators.map((creator, index) => (
-                  <div
-                    key={creator.fid || index}
-                    style={{
-                      padding: "12px",
-                      background: "#c1b400",
-                      borderRadius: 8,
-                      border: "1px solid #000000",
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-                      {/* Profile Picture */}
-                      {creator.pfp_url && (
-                        <img
-                          src={creator.pfp_url}
-                          alt={creator.displayName || creator.username || "Creator"}
-                          style={{
-                            width: 40,
-                            height: 40,
-                            borderRadius: "50%",
-                            border: "2px solid #000000",
-                            objectFit: "cover",
-                            flexShrink: 0,
-                          }}
+            {loadingCreatorStats ? (
+              <div style={{ textAlign: "center", padding: "20px" }}>
+                <p style={{ color: "#ffffff", fontSize: 14 }}>Loading creator stats...</p>
+              </div>
+            ) : CATWALK_CREATOR_FIDS.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {sortBy === "recent" ? (
+                  // Most Recent: Show active first, then inactive
+                  <>
+                    {/* Active Creators */}
+                    {activeFids.length > 0 && (
+                      <>
+                        <h4 style={{ margin: 0, color: "#c1b400", fontSize: 16, fontWeight: 700 }}>
+                          Active Creators
+                        </h4>
+                        {creators
+                          .filter(c => activeFids.includes(c.fid))
+                          .sort((a, b) => {
+                            const aStats = creatorStats[a.fid];
+                            const bStats = creatorStats[b.fid];
+                            // Sort by most recent cast date
+                            const aDate = aStats?.last_cast_date ? new Date(aStats.last_cast_date).getTime() : 0;
+                            const bDate = bStats?.last_cast_date ? new Date(bStats.last_cast_date).getTime() : 0;
+                            return bDate - aDate;
+                          })
+                          .map((creator) => (
+                            <CreatorCard
+                              key={creator.fid}
+                              creator={creator}
+                              stats={creatorStats[creator.fid]}
+                              catProfiles={catProfiles[creator.fid] || []}
+                              isInactive={false}
+                            />
+                          ))}
+                      </>
+                    )}
+
+                    {/* Inactive Creators */}
+                    {inactiveFids.length > 0 && (
+                      <>
+                        {activeFids.length > 0 && (
+                          <div style={{ marginTop: 8, marginBottom: 8 }}>
+                            <hr style={{ borderColor: "#333333", borderWidth: 1, margin: 0 }} />
+                          </div>
+                        )}
+                        <h4 style={{ margin: 0, color: "#999999", fontSize: 16, fontWeight: 700 }}>
+                          Inactive Creators
+                        </h4>
+                        {creators
+                          .filter(c => inactiveFids.includes(c.fid))
+                          .sort((a, b) => {
+                            const aStats = creatorStats[a.fid];
+                            const bStats = creatorStats[b.fid];
+                            // Sort by most recent cast date
+                            const aDate = aStats?.last_cast_date ? new Date(aStats.last_cast_date).getTime() : 0;
+                            const bDate = bStats?.last_cast_date ? new Date(bStats.last_cast_date).getTime() : 0;
+                            return bDate - aDate;
+                          })
+                          .map((creator) => (
+                            <CreatorCard
+                              key={creator.fid}
+                              creator={creator}
+                              stats={creatorStats[creator.fid]}
+                              catProfiles={catProfiles[creator.fid] || []}
+                              isInactive={true}
+                            />
+                          ))}
+                      </>
+                    )}
+
+                    {/* Creators without stats */}
+                    {creators
+                      .filter(c => !activeFids.includes(c.fid) && !inactiveFids.includes(c.fid))
+                      .map((creator) => (
+                        <CreatorCard
+                          key={creator.fid}
+                          creator={creator}
+                          stats={creatorStats[creator.fid]}
+                          catProfiles={catProfiles[creator.fid] || []}
+                          isInactive={true}
                         />
-                      )}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <a
-                          href={creator.username ? `https://warpcast.com/${creator.username}` : `https://warpcast.com/~/profile/${creator.fid}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            color: "#000000",
-                            textDecoration: "none",
-                            fontWeight: 600,
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.textDecoration = "underline";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.textDecoration = "none";
-                          }}
-                        >
-                          <p style={{ margin: 0, color: "#000000", fontSize: 14, fontWeight: 600 }}>
-                            {creator.displayName || creator.username || `FID: ${creator.fid}`}
-                          </p>
-                        </a>
-                        {creator.username && (
-                          <p style={{ margin: 0, marginTop: 4, color: "#000000", fontSize: 12, opacity: 0.7 }}>
-                            @{creator.username}
-                          </p>
-                        )}
-                        {!creator.username && creator.fid === 0 && (
-                          <p style={{ margin: 0, marginTop: 4, color: "#000000", fontSize: 12, opacity: 0.7 }}>
-                            Placeholder - Creator list coming soon
-                          </p>
-                        )}
-                      </div>
-                      <div style={{ marginLeft: 12, textAlign: "right" }}>
-                        <p style={{ margin: 0, color: "#000000", fontSize: 12, fontWeight: 600 }}>
-                          {loadingCastCounts && creator.castCount === undefined ? (
-                            <span style={{ opacity: 0.5 }}>...</span>
-                          ) : creator.castCount !== undefined ? (
-                            `${creator.castCount} ${creator.castCount === 1 ? 'post' : 'posts'}`
-                          ) : (
-                            <span style={{ opacity: 0.5 }}>—</span>
-                          )}
-                        </p>
-                        <p style={{ margin: 0, marginTop: 2, color: "#000000", fontSize: 10, opacity: 0.6 }}>
-                          in channel
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                      ))}
+                  </>
+                ) : (
+                  // Most Overall: Show ALL creators ranked by cast count (active/inactive mixed together)
+                  creators
+                    .sort((a, b) => {
+                      const aStats = creatorStats[a.fid];
+                      const bStats = creatorStats[b.fid];
+                      // Sort by total cast count (highest first)
+                      return (bStats?.cast_count || 0) - (aStats?.cast_count || 0);
+                    })
+                    .map((creator) => {
+                      const isInactive = !activeFids.includes(creator.fid);
+                      return (
+                        <CreatorCard
+                          key={creator.fid}
+                          creator={creator}
+                          stats={creatorStats[creator.fid]}
+                          catProfiles={catProfiles[creator.fid] || []}
+                          isInactive={isInactive}
+                        />
+                      );
+                    })
+                )}
               </div>
             ) : (
               <p style={{ color: "#ffffff", fontSize: 14, textAlign: "center" }}>

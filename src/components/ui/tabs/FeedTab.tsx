@@ -103,35 +103,11 @@ export function FeedTab() {
     setShowConfetti({ message: "Like Successful" });
 
     try {
-      // Call API to actually like the cast
-      const res = await fetch("/api/cast-react", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          castHash: cast.hash, 
-          reactionType: "like",
-          fid: context.user.fid,
-        }),
-      });
-
-      const data = await res.json();
-      
-      if (!res.ok || !data.success) {
-        // Revert optimistic update if API call failed
-        setCasts(prevCasts =>
-          prevCasts.map(c => c.hash === cast.hash ? { ...c, likes: Math.max(0, c.likes - 1) } : c)
-        );
-        console.error("Failed to like cast:", data.error);
-        if (!data.optimistic) {
-          alert("Failed to like cast. Please try again.");
-        }
-      }
+      // Open the cast in Farcaster so user can actually like it on the protocol
+      // This ensures the like is recorded on the Farcaster protocol level
+      await actions.openUrl(cast.url);
     } catch (err) {
-      console.error("Error liking cast:", err);
-      // Revert optimistic update on error
-      setCasts(prevCasts =>
-        prevCasts.map(c => c.hash === cast.hash ? { ...c, likes: Math.max(0, c.likes - 1) } : c)
-      );
+      console.error("Error opening cast:", err);
     } finally {
       setLikingCast(null);
     }
@@ -153,35 +129,11 @@ export function FeedTab() {
     setShowConfetti({ message: "Recast Successful" });
 
     try {
-      // Call API to actually recast
-      const res = await fetch("/api/cast-react", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          castHash: cast.hash, 
-          reactionType: "recast",
-          fid: context.user.fid,
-        }),
-      });
-
-      const data = await res.json();
-      
-      if (!res.ok || !data.success) {
-        // Revert optimistic update if API call failed
-        setCasts(prevCasts =>
-          prevCasts.map(c => c.hash === cast.hash ? { ...c, recasts: Math.max(0, c.recasts - 1) } : c)
-        );
-        console.error("Failed to recast:", data.error);
-        if (!data.optimistic) {
-          alert("Failed to recast. Please try again.");
-        }
-      }
+      // Open the cast in Farcaster so user can actually recast it on the protocol
+      // This ensures the recast is recorded on the Farcaster protocol level
+      await actions.openUrl(cast.url);
     } catch (err) {
-      console.error("Error recasting:", err);
-      // Revert optimistic update on error
-      setCasts(prevCasts =>
-        prevCasts.map(c => c.hash === cast.hash ? { ...c, recasts: Math.max(0, c.recasts - 1) } : c)
-      );
+      console.error("Error opening cast:", err);
     } finally {
       setRecastingCast(null);
     }

@@ -35,6 +35,18 @@ export function FeedTab() {
   const [showCreatorsModal, setShowCreatorsModal] = useState(false);
   const [creators, setCreators] = useState<Array<{ fid: number; username?: string; displayName?: string; castCount?: number; pfp_url?: string }>>([]);
   const [loadingCastCounts, setLoadingCastCounts] = useState(false);
+  
+  // Comment/engagement modals
+  const [selectedCast, setSelectedCast] = useState<Cast | null>(null);
+  const [showCommentModal, setShowCommentModal] = useState(false);
+  const [showViewCommentsModal, setShowViewCommentsModal] = useState(false);
+  const [showCommentOptions, setShowCommentOptions] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  const [commenting, setCommenting] = useState(false);
+  const [viewingComments, setViewingComments] = useState(false);
+  const [comments, setComments] = useState<any[]>([]);
+  const [likingCast, setLikingCast] = useState<string | null>(null);
+  const [recastingCast, setRecastingCast] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchFeed = async () => {
@@ -79,6 +91,111 @@ export function FeedTab() {
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
     return date.toLocaleDateString();
+  };
+
+  // Handle like action
+  const handleLike = async (cast: Cast) => {
+    if (!context?.user?.fid) {
+      alert("Please sign in to like casts");
+      return;
+    }
+
+    setLikingCast(cast.hash);
+    try {
+      // Open the cast in Farcaster to like it
+      // This ensures the like is properly recorded with the user's account
+      await actions.openUrl(cast.url);
+      // Update local state optimistically
+      setCasts(prevCasts =>
+        prevCasts.map(c => c.hash === cast.hash ? { ...c, likes: c.likes + 1 } : c)
+      );
+    } catch (err) {
+      console.error("Error liking cast:", err);
+    } finally {
+      setLikingCast(null);
+    }
+  };
+
+  // Handle recast action
+  const handleRecast = async (cast: Cast) => {
+    if (!context?.user?.fid) {
+      alert("Please sign in to recast");
+      return;
+    }
+
+    setRecastingCast(cast.hash);
+    try {
+      // Open the cast in Farcaster to recast it
+      await actions.openUrl(cast.url);
+      // Update local state optimistically
+      setCasts(prevCasts =>
+        prevCasts.map(c => c.hash === cast.hash ? { ...c, recasts: c.recasts + 1 } : c)
+      );
+    } catch (err) {
+      console.error("Error recasting:", err);
+    } finally {
+      setRecastingCast(null);
+    }
+  };
+
+  // Handle comment button click - show options
+  const handleCommentClick = (cast: Cast) => {
+    setSelectedCast(cast);
+    setShowCommentOptions(true);
+  };
+
+  // Handle view comments
+  const handleViewComments = async (cast: Cast) => {
+    setSelectedCast(cast);
+    setViewingComments(true);
+    setShowViewCommentsModal(true);
+    
+    try {
+      // Fetch comments for this cast
+      const res = await fetch(`/api/cast-comments?castHash=${cast.hash}`);
+      const data = await res.json();
+      if (data.comments) {
+        setComments(data.comments);
+      }
+    } catch (err) {
+      console.error("Error fetching comments:", err);
+      setComments([]);
+    } finally {
+      setViewingComments(false);
+    }
+  };
+
+  // Handle submit comment
+  const handleSubmitComment = async () => {
+    if (!selectedCast || !commentText.trim() || !context?.user?.fid) {
+      return;
+    }
+
+    setCommenting(true);
+    try {
+      // Use composeCast to post a comment
+      await actions.composeCast({
+        text: commentText.trim(),
+        parent: {
+          hash: selectedCast.hash,
+        },
+      });
+      
+      // Clear comment and close modal
+      setCommentText("");
+      setShowCommentModal(false);
+      setSelectedCast(null);
+      
+      // Update local state optimistically
+      setCasts(prevCasts =>
+        prevCasts.map(c => c.hash === selectedCast.hash ? { ...c, replies: c.replies + 1 } : c)
+      );
+    } catch (err) {
+      console.error("Error posting comment:", err);
+      alert("Failed to post comment. Please try again.");
+    } finally {
+      setCommenting(false);
+    }
   };
 
   if (loading) {
@@ -389,24 +506,87 @@ export function FeedTab() {
                 borderTop: "1px solid rgba(193, 180, 0, 0.2)",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <button
+                onClick={() => handleLike(cast)}
+                disabled={likingCast === cast.hash}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  background: "transparent",
+                  border: "none",
+                  cursor: likingCast === cast.hash ? "wait" : "pointer",
+                  padding: "4px 8px",
+                  borderRadius: 8,
+                  transition: "background 0.2s",
+                }}
+                onMouseEnter={(e) => {
+                  if (likingCast !== cast.hash) {
+                    e.currentTarget.style.background = "rgba(193, 180, 0, 0.1)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                }}
+              >
                 <span style={{ color: "#c1b400", fontSize: 16 }}>❤️</span>
                 <span style={{ color: "#ffffff", fontSize: 14 }}>
                   {cast.likes}
                 </span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              </button>
+              <button
+                onClick={() => handleRecast(cast)}
+                disabled={recastingCast === cast.hash}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  background: "transparent",
+                  border: "none",
+                  cursor: recastingCast === cast.hash ? "wait" : "pointer",
+                  padding: "4px 8px",
+                  borderRadius: 8,
+                  transition: "background 0.2s",
+                }}
+                onMouseEnter={(e) => {
+                  if (recastingCast !== cast.hash) {
+                    e.currentTarget.style.background = "rgba(193, 180, 0, 0.1)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                }}
+              >
                 <span style={{ color: "#c1b400", fontSize: 16 }}>🔁</span>
                 <span style={{ color: "#ffffff", fontSize: 14 }}>
                   {cast.recasts}
                 </span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              </button>
+              <button
+                onClick={() => handleCommentClick(cast)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: "4px 8px",
+                  borderRadius: 8,
+                  transition: "background 0.2s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "rgba(193, 180, 0, 0.1)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                }}
+              >
                 <span style={{ color: "#c1b400", fontSize: 16 }}>💬</span>
                 <span style={{ color: "#ffffff", fontSize: 14 }}>
                   {cast.replies}
                 </span>
-              </div>
+              </button>
               <a
                 href={cast.url}
                 onClick={async (e) => {
@@ -710,6 +890,315 @@ export function FeedTab() {
             ) : (
               <p style={{ color: "#ffffff", fontSize: 14, textAlign: "center" }}>
                 Creator list will be updated soon. Check back later!
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Comment Options Modal */}
+      {showCommentOptions && selectedCast && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0, 0, 0, 0.8)",
+            zIndex: 10001,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+          }}
+          onClick={() => {
+            setShowCommentOptions(false);
+            setSelectedCast(null);
+          }}
+        >
+          <div
+            style={{
+              background: "#000000",
+              border: "3px solid #c1b400",
+              borderRadius: 16,
+              padding: "24px",
+              width: "100%",
+              maxWidth: "400px",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: "0 0 20px 0", color: "#c1b400", fontSize: 20, fontWeight: 700 }}>
+              Comment Options
+            </h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <button
+                onClick={() => {
+                  setShowCommentOptions(false);
+                  handleViewComments(selectedCast);
+                }}
+                style={{
+                  padding: "14px 20px",
+                  background: "#c1b400",
+                  color: "#000000",
+                  border: "2px solid #000000",
+                  borderRadius: 12,
+                  fontSize: 16,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  textAlign: "center",
+                }}
+              >
+                View Comments
+              </button>
+              <button
+                onClick={() => {
+                  setShowCommentOptions(false);
+                  setShowCommentModal(true);
+                }}
+                style={{
+                  padding: "14px 20px",
+                  background: "#000000",
+                  color: "#c1b400",
+                  border: "2px solid #c1b400",
+                  borderRadius: 12,
+                  fontSize: 16,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  textAlign: "center",
+                }}
+              >
+                New Comment
+              </button>
+              <button
+                onClick={() => {
+                  setShowCommentOptions(false);
+                  setSelectedCast(null);
+                }}
+                style={{
+                  padding: "10px 20px",
+                  background: "transparent",
+                  color: "#ffffff",
+                  border: "none",
+                  fontSize: 14,
+                  cursor: "pointer",
+                  textAlign: "center",
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Comment Modal */}
+      {showCommentModal && selectedCast && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0, 0, 0, 0.8)",
+            zIndex: 10002,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+          }}
+          onClick={() => {
+            setShowCommentModal(false);
+            setSelectedCast(null);
+            setCommentText("");
+          }}
+        >
+          <div
+            style={{
+              background: "#000000",
+              border: "3px solid #c1b400",
+              borderRadius: 16,
+              padding: "24px",
+              width: "100%",
+              maxWidth: "500px",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: "0 0 16px 0", color: "#c1b400", fontSize: 20, fontWeight: 700 }}>
+              New Comment
+            </h3>
+            <textarea
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
+              placeholder="Write your comment..."
+              style={{
+                width: "100%",
+                minHeight: "120px",
+                padding: "12px",
+                background: "#1a1a1a",
+                border: "2px solid #c1b400",
+                borderRadius: 8,
+                color: "#ffffff",
+                fontSize: 14,
+                fontFamily: "inherit",
+                resize: "vertical",
+                marginBottom: "16px",
+              }}
+            />
+            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => {
+                  setShowCommentModal(false);
+                  setSelectedCast(null);
+                  setCommentText("");
+                }}
+                style={{
+                  padding: "10px 20px",
+                  background: "transparent",
+                  color: "#ffffff",
+                  border: "1px solid #666",
+                  borderRadius: 8,
+                  fontSize: 14,
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmitComment}
+                disabled={!commentText.trim() || commenting}
+                style={{
+                  padding: "10px 20px",
+                  background: commentText.trim() && !commenting ? "#c1b400" : "#666",
+                  color: "#000000",
+                  border: "none",
+                  borderRadius: 8,
+                  fontSize: 14,
+                  fontWeight: 700,
+                  cursor: commentText.trim() && !commenting ? "pointer" : "not-allowed",
+                }}
+              >
+                {commenting ? "Posting..." : "Post Comment"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Comments Modal */}
+      {showViewCommentsModal && selectedCast && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0, 0, 0, 0.8)",
+            zIndex: 10003,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+          }}
+          onClick={() => {
+            setShowViewCommentsModal(false);
+            setSelectedCast(null);
+            setComments([]);
+          }}
+        >
+          <div
+            style={{
+              background: "#000000",
+              border: "3px solid #c1b400",
+              borderRadius: 16,
+              padding: "24px",
+              width: "100%",
+              maxWidth: "600px",
+              maxHeight: "80vh",
+              overflowY: "auto",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h3 style={{ margin: 0, color: "#c1b400", fontSize: 20, fontWeight: 700 }}>
+                Comments
+              </h3>
+              <button
+                onClick={() => {
+                  setShowViewCommentsModal(false);
+                  setSelectedCast(null);
+                  setComments([]);
+                }}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#c1b400",
+                  fontSize: 24,
+                  cursor: "pointer",
+                  fontWeight: 700,
+                  padding: 0,
+                  width: "30px",
+                  height: "30px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                ×
+              </button>
+            </div>
+            {viewingComments ? (
+              <p style={{ color: "#ffffff", fontSize: 14, textAlign: "center", padding: "20px" }}>
+                Loading comments...
+              </p>
+            ) : comments.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {comments.map((comment, index) => (
+                  <div
+                    key={comment.hash || index}
+                    style={{
+                      padding: "12px",
+                      background: "#1a1a1a",
+                      borderRadius: 8,
+                      border: "1px solid rgba(193, 180, 0, 0.3)",
+                    }}
+                  >
+                    <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                      {comment.author?.pfp && (
+                        <img
+                          src={comment.author.pfp}
+                          alt={comment.author.display_name || comment.author.username}
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: "50%",
+                            border: "1px solid #c1b400",
+                            flexShrink: 0,
+                          }}
+                        />
+                      )}
+                      <div style={{ flex: 1 }}>
+                        <p style={{ margin: 0, color: "#c1b400", fontSize: 14, fontWeight: 600 }}>
+                          {comment.author?.display_name || comment.author?.username || "Unknown"}
+                        </p>
+                        <p style={{ margin: "4px 0 0 0", color: "#ffffff", fontSize: 13, lineHeight: 1.5 }}>
+                          {comment.text}
+                        </p>
+                        {comment.timestamp && (
+                          <p style={{ margin: "4px 0 0 0", color: "#666", fontSize: 11 }}>
+                            {formatTime(comment.timestamp)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p style={{ color: "#ffffff", fontSize: 14, textAlign: "center", padding: "20px" }}>
+                No comments yet. Be the first to comment!
               </p>
             )}
           </div>

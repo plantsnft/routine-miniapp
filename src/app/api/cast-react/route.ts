@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getNeynarClient } from "~/lib/neynar";
 
 export async function POST(req: NextRequest) {
   try {
@@ -27,8 +26,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const client = getNeynarClient();
-
     // Try to get the user's signer if not provided
     let finalSignerUuid = signerUuid;
     
@@ -47,33 +44,29 @@ export async function POST(req: NextRequest) {
     // If we have a signer UUID, perform the actual like/recast
     if (finalSignerUuid) {
       try {
-        if (reactionType === "like") {
-          // Like the cast
-          await client.publishReaction({
-            signerUuid: finalSignerUuid,
-            reaction: {
-              type: "like",
-              target: {
-                type: "cast",
-                hash: castHash,
-              },
-            },
-          });
-          console.log("[Cast React] Successfully liked cast:", castHash);
-        } else if (reactionType === "recast") {
-          // Recast the cast
-          await client.publishReaction({
-            signerUuid: finalSignerUuid,
-            reaction: {
-              type: "recast",
-              target: {
-                type: "cast",
-                hash: castHash,
-              },
-            },
-          });
-          console.log("[Cast React] Successfully recast cast:", castHash);
+        // Use direct Neynar API call for reactions
+        const reactionEndpoint = reactionType === "like" 
+          ? "https://api.neynar.com/v2/farcaster/reaction"
+          : "https://api.neynar.com/v2/farcaster/recast";
+        
+        const response = await fetch(reactionEndpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": apiKey,
+          },
+          body: JSON.stringify({
+            signer_uuid: finalSignerUuid,
+            target: castHash,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || `Failed to ${reactionType} cast`);
         }
+
+        console.log(`[Cast React] Successfully ${reactionType}d cast:`, castHash);
         return NextResponse.json({ success: true });
       } catch (apiError: any) {
         console.error("[Cast React] Neynar API error:", apiError);

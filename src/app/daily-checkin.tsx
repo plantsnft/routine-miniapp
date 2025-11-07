@@ -307,24 +307,9 @@ export default function DailyCheckin() {
             >
               ✅ Saved successfully!
             </p>
-            <p style={{ margin: 0, marginBottom: 10, color: "#000000", fontSize: 14, opacity: 0.9 }}>
+            <p style={{ margin: 0, color: "#000000", fontSize: 14, opacity: 0.9 }}>
               Thank you for taking a virtual catwalk today
             </p>
-            {checkin.status.streak !== null && (
-              <p style={{ margin: 0, color: "#000000", fontWeight: 700, fontSize: 20 }}>
-                🔥 {checkin.status.streak} day{checkin.status.streak === 1 ? "" : "s"} streak
-              </p>
-            )}
-            {checkin.status.timeUntilNext && (
-              <p style={{ margin: 0, marginTop: 6, color: "#000000", fontSize: 13, opacity: 0.8 }}>
-                Next check-in: {checkin.status.timeUntilNext} (9 AM Pacific)
-              </p>
-            )}
-            {checkin.status.lastCheckIn && (
-              <p style={{ margin: 0, marginTop: 6, color: "#000000", fontSize: 13, opacity: 0.8 }}>
-                Checked in today: {new Date(checkin.status.lastCheckIn).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
-              </p>
-            )}
           </div>
         )}
 

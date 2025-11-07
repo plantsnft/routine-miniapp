@@ -44,8 +44,8 @@ export function SleepingCat() {
       >
         <div
           style={{
-            width: 54,
-            height: 54,
+            width: 70,
+            height: 70,
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
@@ -74,8 +74,8 @@ export function SleepingCat() {
     >
       <div
         style={{
-          width: 54,
-          height: 54,
+          width: 70,
+          height: 70,
           display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
@@ -87,8 +87,8 @@ export function SleepingCat() {
           src="/sleeping-cat.gif"
           alt="Sleeping cat"
           style={{
-            width: 54,
-            height: 54,
+            width: 70,
+            height: 70,
             objectFit: "contain",
             display: "block",
             verticalAlign: "middle",

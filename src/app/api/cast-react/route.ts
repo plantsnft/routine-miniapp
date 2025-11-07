@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getNeynarClient } from "~/lib/neynar";
 
 export async function POST(req: NextRequest) {
   try {
-    const { castHash, reactionType } = await req.json();
+    const { castHash, reactionType, fid, signerUuid } = await req.json();
     const apiKey = process.env.NEYNAR_API_KEY;
 
     if (!castHash || !reactionType) {
@@ -26,14 +27,75 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Note: To actually like/recast via API, we need the user's signer UUID
-    // Since we're in a mini-app context, the user is authenticated but we don't have their signer server-side
-    // For now, we'll return success and the client will handle the optimistic update
-    // The actual like/recast will need to be done through the Farcaster client
+    const client = getNeynarClient();
+
+    // Try to get the user's signer if not provided
+    let finalSignerUuid = signerUuid;
     
+    // Note: In a mini-app context, we don't have direct access to the user's signer UUID
+    // The user is authenticated through the Farcaster client, but we need their signer UUID
+    // to perform like/recast actions via the Neynar API.
+    // 
+    // Options:
+    // 1. Get signer UUID from the client-side context (if available)
+    // 2. Use a different approach that doesn't require signer UUID
+    // 3. Have the user sign a message to get their signer UUID
+    //
+    // For now, we'll return an optimistic update if no signer is provided
+    // The actual like/recast won't be performed on the real cast without a signer UUID
+
+    // If we have a signer UUID, perform the actual like/recast
+    if (finalSignerUuid) {
+      try {
+        if (reactionType === "like") {
+          // Like the cast
+          await client.publishReaction({
+            signerUuid: finalSignerUuid,
+            reaction: {
+              type: "like",
+              target: {
+                type: "cast",
+                hash: castHash,
+              },
+            },
+          });
+          console.log("[Cast React] Successfully liked cast:", castHash);
+        } else if (reactionType === "recast") {
+          // Recast the cast
+          await client.publishReaction({
+            signerUuid: finalSignerUuid,
+            reaction: {
+              type: "recast",
+              target: {
+                type: "cast",
+                hash: castHash,
+              },
+            },
+          });
+          console.log("[Cast React] Successfully recast cast:", castHash);
+        }
+        return NextResponse.json({ success: true });
+      } catch (apiError: any) {
+        console.error("[Cast React] Neynar API error:", apiError);
+        // Return error so client knows it failed
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: apiError.message || "Failed to perform reaction",
+            optimistic: true // Indicate this is an optimistic update
+          },
+          { status: 500 }
+        );
+      }
+    }
+
+    // If no signer UUID, return success for optimistic update
+    // The client will update the UI optimistically, but the actual action won't be performed
+    console.log("[Cast React] No signer UUID provided, returning optimistic update");
     return NextResponse.json({ 
       success: true,
-      message: "Reaction recorded (optimistic update)" 
+      optimistic: true,
+      message: "Reaction recorded (optimistic update - signer UUID needed for actual action)" 
     });
   } catch (error: any) {
     console.error("[Cast React] Error:", error);

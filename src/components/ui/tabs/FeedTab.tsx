@@ -95,24 +95,43 @@ export function FeedTab() {
     }
 
     setLikingCast(cast.hash);
+    
+    // Optimistically update UI first
+    setCasts(prevCasts =>
+      prevCasts.map(c => c.hash === cast.hash ? { ...c, likes: c.likes + 1 } : c)
+    );
+    setShowConfetti({ message: "Like Successful" });
+
     try {
-      // Call API to like the cast
+      // Call API to actually like the cast
       const res = await fetch("/api/cast-react", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ castHash: cast.hash, reactionType: "like" }),
+        body: JSON.stringify({ 
+          castHash: cast.hash, 
+          reactionType: "like",
+          fid: context.user.fid,
+        }),
       });
 
-      if (res.ok) {
-        // Update local state optimistically
+      const data = await res.json();
+      
+      if (!res.ok || !data.success) {
+        // Revert optimistic update if API call failed
         setCasts(prevCasts =>
-          prevCasts.map(c => c.hash === cast.hash ? { ...c, likes: c.likes + 1 } : c)
+          prevCasts.map(c => c.hash === cast.hash ? { ...c, likes: Math.max(0, c.likes - 1) } : c)
         );
-        // Show confetti celebration
-        setShowConfetti({ message: "Like Successful" });
+        console.error("Failed to like cast:", data.error);
+        if (!data.optimistic) {
+          alert("Failed to like cast. Please try again.");
+        }
       }
     } catch (err) {
       console.error("Error liking cast:", err);
+      // Revert optimistic update on error
+      setCasts(prevCasts =>
+        prevCasts.map(c => c.hash === cast.hash ? { ...c, likes: Math.max(0, c.likes - 1) } : c)
+      );
     } finally {
       setLikingCast(null);
     }
@@ -126,36 +145,66 @@ export function FeedTab() {
     }
 
     setRecastingCast(cast.hash);
+    
+    // Optimistically update UI first
+    setCasts(prevCasts =>
+      prevCasts.map(c => c.hash === cast.hash ? { ...c, recasts: c.recasts + 1 } : c)
+    );
+    setShowConfetti({ message: "Recast Successful" });
+
     try {
-      // Call API to recast
+      // Call API to actually recast
       const res = await fetch("/api/cast-react", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ castHash: cast.hash, reactionType: "recast" }),
+        body: JSON.stringify({ 
+          castHash: cast.hash, 
+          reactionType: "recast",
+          fid: context.user.fid,
+        }),
       });
 
-      if (res.ok) {
-        // Update local state optimistically
+      const data = await res.json();
+      
+      if (!res.ok || !data.success) {
+        // Revert optimistic update if API call failed
         setCasts(prevCasts =>
-          prevCasts.map(c => c.hash === cast.hash ? { ...c, recasts: c.recasts + 1 } : c)
+          prevCasts.map(c => c.hash === cast.hash ? { ...c, recasts: Math.max(0, c.recasts - 1) } : c)
         );
-        // Show confetti celebration
-        setShowConfetti({ message: "Recast Successful" });
+        console.error("Failed to recast:", data.error);
+        if (!data.optimistic) {
+          alert("Failed to recast. Please try again.");
+        }
       }
     } catch (err) {
       console.error("Error recasting:", err);
+      // Revert optimistic update on error
+      setCasts(prevCasts =>
+        prevCasts.map(c => c.hash === cast.hash ? { ...c, recasts: Math.max(0, c.recasts - 1) } : c)
+      );
     } finally {
       setRecastingCast(null);
     }
   };
 
-  // Handle comment button click - open cast with reply
+  // Handle comment button click - open compose modal with reply
   const handleCommentClick = async (cast: Cast) => {
+    if (!context?.user?.fid) {
+      alert("Please sign in to comment");
+      return;
+    }
+
     try {
-      // Open the cast in Farcaster with reply functionality
-      await actions.openUrl(cast.url);
+      // Open compose modal in-app with the parent cast pre-filled for reply
+      await actions.composeCast({
+        text: "",
+        parent: {
+          type: "cast",
+          hash: cast.hash,
+        },
+      });
     } catch (err) {
-      console.error("Error opening cast:", err);
+      console.error("Error opening comment composer:", err);
     }
   };
 

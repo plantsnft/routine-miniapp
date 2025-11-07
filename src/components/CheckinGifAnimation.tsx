@@ -48,23 +48,28 @@ export function CheckinGifAnimation({
       setShowGif(true);
     }, 50);
 
+    // Initialize countdown
+    const initialSeconds = Math.ceil(duration / 1000);
+    setSecondsLeft(initialSeconds);
+
     // Countdown interval - update every second
-    setSecondsLeft(Math.ceil(duration / 1000));
     const interval = setInterval(() => {
       setSecondsLeft((prev) => {
-        if (prev <= 1) {
-          return 0;
-        }
-        return prev - 1;
+        const next = prev <= 1 ? 0 : prev - 1;
+        return next;
       });
     }, 1000);
 
     // Auto-hide after exact duration - guaranteed to close
+    // Add 50ms to account for the showTimer delay
     const hideTimer = setTimeout(() => {
+      console.log("[CheckinGifAnimation] Auto-dismissing after", duration, "ms");
       setShowGif(false);
       setShouldRender(false);
-      onComplete?.();
-    }, duration);
+      if (onComplete) {
+        onComplete();
+      }
+    }, duration + 50);
 
     return () => {
       clearTimeout(showTimer);
@@ -88,6 +93,16 @@ export function CheckinGifAnimation({
 
   if (!shouldRender) return null;
 
+  // Handle click outside to dismiss
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Only dismiss if clicking the backdrop, not the GIF itself
+    if (e.target === e.currentTarget) {
+      setShowGif(false);
+      setShouldRender(false);
+      onComplete?.();
+    }
+  };
+
   return (
     <div
       style={{
@@ -97,28 +112,32 @@ export function CheckinGifAnimation({
         right: 0,
         bottom: 0,
         zIndex: 99999,
-        backgroundColor: "#000000",
+        backgroundColor: "rgba(0, 0, 0, 0.7)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         overflow: "hidden",
-        pointerEvents: "all", // Block all interactions - mandatory viewing
+        pointerEvents: "all",
         opacity: showGif ? 1 : 0,
         transition: "opacity 0.3s ease-in-out",
-        userSelect: "none", // Prevent text selection
+        userSelect: "none",
         WebkitUserSelect: "none",
       }}
+      onClick={handleBackdropClick}
     >
-      {/* GIF container - full screen, centered */}
+      {/* GIF container - smaller, centered */}
       <div
         style={{
-          width: "100%",
-          height: "100%",
+          width: "70%",
+          maxWidth: "500px",
+          maxHeight: "70vh",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           position: "relative",
+          pointerEvents: "none", // Allow clicks to pass through to backdrop
         }}
+        onClick={(e) => e.stopPropagation()} // Prevent backdrop click when clicking GIF
       >
         {/* Loading state - show while GIF loads */}
         {!gifLoaded && (
@@ -156,7 +175,7 @@ export function CheckinGifAnimation({
           </div>
         )}
 
-        {/* GIF image - full screen */}
+        {/* GIF image - smaller, centered */}
         {!gifError && (
           <img
             src={gifUrl}
@@ -166,33 +185,21 @@ export function CheckinGifAnimation({
             style={{
               width: "100%",
               height: "100%",
-              objectFit: "contain", // Maintain aspect ratio, fit within screen
+              objectFit: "contain",
               objectPosition: "center",
               display: gifLoaded ? "block" : "none",
+              pointerEvents: "none",
             }}
           />
         )}
 
-        {/* Optional: Add a subtle overlay or effects */}
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            pointerEvents: "none",
-            // Subtle gradient overlay for better visibility
-            background: "radial-gradient(circle at center, transparent 0%, rgba(0, 0, 0, 0.1) 100%)",
-          }}
-        />
         {/* Countdown - bottom right */}
         <div
           style={{
             position: "absolute",
             right: 12,
             bottom: 10,
-            background: "rgba(0,0,0,0.6)",
+            background: "rgba(0,0,0,0.8)",
             color: "#c1b400",
             border: "1px solid #c1b400",
             borderRadius: 8,
@@ -204,22 +211,6 @@ export function CheckinGifAnimation({
         >
           {secondsLeft}s
         </div>
-        
-        {/* Prevent any clicks or interactions during mandatory viewing */}
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            pointerEvents: "all",
-            cursor: "default",
-          }}
-          onClick={(e) => e.preventDefault()}
-          onTouchStart={(e) => e.preventDefault()}
-          aria-hidden="true"
-        />
       </div>
     </div>
   );

@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useMiniApp } from "@neynar/react";
 
 interface VideoPlayerProps {
   videoUrl: string;
+  castUrl?: string; // Optional cast URL for "View on Farcaster" link
   autoplay?: boolean;
   loop?: boolean;
   muted?: boolean;
@@ -16,11 +18,13 @@ interface VideoPlayerProps {
  */
 export function VideoPlayer({
   videoUrl,
+  castUrl,
   autoplay = true,
   loop = true,
   muted = true,
   playsInline = true,
 }: VideoPlayerProps) {
+  const { actions } = useMiniApp();
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const hlsInstanceRef = useRef<any>(null);
@@ -214,12 +218,27 @@ export function VideoPlayer({
           </p>
           <p style={{ color: "#ffffff", fontSize: 12, opacity: 0.7, margin: "4px 0 0 0" }}>
             <a
-              href={videoUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: "#c1b400", textDecoration: "none" }}
+              href={castUrl || videoUrl}
+              onClick={async (e) => {
+                e.preventDefault();
+                const urlToOpen = castUrl || videoUrl;
+                // Use actions.openUrl to open in Farcaster with full functionality
+                if (actions && castUrl) {
+                  try {
+                    await actions.openUrl(castUrl);
+                  } catch (err) {
+                    console.error("Error opening cast URL:", err);
+                    // Fallback to regular link
+                    window.open(urlToOpen, "_blank", "noopener,noreferrer");
+                  }
+                } else {
+                  // Fallback to regular link
+                  window.open(urlToOpen, "_blank", "noopener,noreferrer");
+                }
+              }}
+              style={{ color: "#c1b400", textDecoration: "none", cursor: "pointer" }}
             >
-              View on Warpcast →
+              View on Farcaster →
             </a>
           </p>
         </div>

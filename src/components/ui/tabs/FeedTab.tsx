@@ -355,6 +355,7 @@ export function FeedTab() {
           ) : cast.hasVideo && cast.videoUrl ? (
             <VideoPlayer
               videoUrl={cast.videoUrl}
+              castUrl={cast.url}
               autoplay={true}
               loop={true}
               muted={true}
@@ -408,17 +409,27 @@ export function FeedTab() {
               </div>
               <a
                 href={cast.url}
-                target="_blank"
-                rel="noopener noreferrer"
+                onClick={async (e) => {
+                  e.preventDefault();
+                  // Use actions.openUrl to open in Farcaster with full functionality
+                  try {
+                    await actions.openUrl(cast.url);
+                  } catch (err) {
+                    console.error("Error opening cast URL:", err);
+                    // Fallback to regular link
+                    window.open(cast.url, "_blank", "noopener,noreferrer");
+                  }
+                }}
                 style={{
                   marginLeft: "auto",
                   color: "#c1b400",
                   fontSize: 14,
                   textDecoration: "none",
                   fontWeight: 600,
+                  cursor: "pointer",
                 }}
               >
-                View on Warpcast →
+                View on Farcaster →
               </a>
             </div>
           </div>

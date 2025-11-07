@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getNeynarClient } from "~/lib/neynar";
 
 export async function POST(req: NextRequest) {
   try {

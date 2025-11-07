@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getNeynarClient } from "~/lib/neynar";
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const castHash = searchParams.get("castHash");
+    const apiKey = process.env.NEYNAR_API_KEY;
 
     if (!castHash) {
       return NextResponse.json(
@@ -13,16 +13,32 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const client = getNeynarClient();
-    
-    // Fetch cast with replies (comments)
-    const cast = await client.lookUpCastByHash({
-      hash: castHash,
-      type: "hash",
-    });
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: "Neynar API key not configured", comments: [] },
+        { status: 500 }
+      );
+    }
+
+    // Fetch cast with replies (comments) using direct API call
+    const response = await fetch(
+      `https://api.neynar.com/v2/farcaster/cast?identifier=${castHash}&type=hash`,
+      {
+        headers: {
+          "x-api-key": apiKey,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Neynar API error: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const cast = data.cast;
 
     // Extract replies from the cast
-    const replies = cast.cast?.replies?.casts || [];
+    const replies = cast?.replies?.casts || [];
     
     // Format comments for the frontend
     const comments = replies.map((reply: any) => ({

@@ -177,6 +177,7 @@ export function FeedTab() {
       await actions.composeCast({
         text: commentText.trim(),
         parent: {
+          type: "cast",
           hash: selectedCast.hash,
         },
       });

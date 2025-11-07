@@ -96,21 +96,13 @@ export function FeedTab() {
 
     setLikingCast(cast.hash);
     
-    // Optimistically update UI first
+    // Optimistically update UI
+    // TODO: Future release - implement protocol-level like with signer UUID
     setCasts(prevCasts =>
       prevCasts.map(c => c.hash === cast.hash ? { ...c, likes: c.likes + 1 } : c)
     );
     setShowConfetti({ message: "Like Successful" });
-
-    try {
-      // Open the cast in Farcaster so user can actually like it on the protocol
-      // This ensures the like is recorded on the Farcaster protocol level
-      await actions.openUrl(cast.url);
-    } catch (err) {
-      console.error("Error opening cast:", err);
-    } finally {
-      setLikingCast(null);
-    }
+    setLikingCast(null);
   };
 
   // Handle recast action
@@ -122,21 +114,13 @@ export function FeedTab() {
 
     setRecastingCast(cast.hash);
     
-    // Optimistically update UI first
+    // Optimistically update UI
+    // TODO: Future release - implement protocol-level recast with signer UUID
     setCasts(prevCasts =>
       prevCasts.map(c => c.hash === cast.hash ? { ...c, recasts: c.recasts + 1 } : c)
     );
     setShowConfetti({ message: "Recast Successful" });
-
-    try {
-      // Open the cast in Farcaster so user can actually recast it on the protocol
-      // This ensures the recast is recorded on the Farcaster protocol level
-      await actions.openUrl(cast.url);
-    } catch (err) {
-      console.error("Error opening cast:", err);
-    } finally {
-      setRecastingCast(null);
-    }
+    setRecastingCast(null);
   };
 
   // Handle comment button click - open compose modal with reply
@@ -331,15 +315,15 @@ export function FeedTab() {
         </p>
       </div>
 
-      {/* Feed Posts - Show first 5 */}
-      {casts.slice(0, 5).map((cast) => (
+      {/* Feed Posts - Show first 10 */}
+      {casts.slice(0, 10).map((cast) => (
         <div
           key={cast.hash}
           style={{
             background: "#000000",
             border: "2px solid #c1b400",
-            borderRadius: 12,
-            marginBottom: 24,
+            borderRadius: 10,
+            marginBottom: 16,
             overflow: "hidden",
           }}
         >
@@ -348,7 +332,7 @@ export function FeedTab() {
             style={{
               display: "flex",
               alignItems: "center",
-              padding: "12px 16px",
+              padding: "8px 12px",
               borderBottom: "1px solid rgba(193, 180, 0, 0.2)",
             }}
           >
@@ -358,10 +342,10 @@ export function FeedTab() {
                 src={cast.author.pfp}
                 alt={cast.author.displayName}
                 style={{
-                  width: 40,
-                  height: 40,
+                  width: 32,
+                  height: 32,
                   borderRadius: "50%",
-                  marginRight: 12,
+                  marginRight: 10,
                   border: "2px solid #c1b400",
                 }}
                 onError={(e) => {
@@ -371,17 +355,17 @@ export function FeedTab() {
             ) : (
               <div
                 style={{
-                  width: 40,
-                  height: 40,
+                  width: 32,
+                  height: 32,
                   borderRadius: "50%",
-                  marginRight: 12,
+                  marginRight: 10,
                   background: "#c1b400",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   color: "#000000",
                   fontWeight: 700,
-                  fontSize: 16,
+                  fontSize: 13,
                 }}
               >
                 {cast.author.displayName.charAt(0).toUpperCase()}
@@ -398,7 +382,7 @@ export function FeedTab() {
                   color: "#c1b400",
                   textDecoration: "none",
                   fontWeight: 600,
-                  fontSize: 14,
+                  fontSize: 13,
                   display: "block",
                 }}
               >
@@ -407,7 +391,7 @@ export function FeedTab() {
               <p
                 style={{
                   color: "#ffffff",
-                  fontSize: 12,
+                  fontSize: 11,
                   opacity: 0.6,
                   margin: 0,
                 }}
@@ -452,15 +436,15 @@ export function FeedTab() {
           ) : null}
 
           {/* Post Content */}
-          <div style={{ padding: "16px" }}>
+          <div style={{ padding: "12px" }}>
             {/* Text Content */}
             {cast.text && (
               <p
                 style={{
                   color: "#ffffff",
-                  fontSize: 14,
-                  lineHeight: 1.6,
-                  margin: "0 0 12px 0",
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                  margin: "0 0 10px 0",
                   whiteSpace: "pre-wrap",
                 }}
               >
@@ -472,9 +456,10 @@ export function FeedTab() {
             <div
               style={{
                 display: "flex",
-                gap: 16,
-                paddingTop: 12,
+                gap: 12,
+                paddingTop: 8,
                 borderTop: "1px solid rgba(193, 180, 0, 0.2)",
+                alignItems: "center",
               }}
             >
               <button
@@ -483,12 +468,12 @@ export function FeedTab() {
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 6,
+                  gap: 4,
                   background: "transparent",
                   border: "none",
                   cursor: likingCast === cast.hash ? "wait" : "pointer",
-                  padding: "4px 8px",
-                  borderRadius: 8,
+                  padding: "2px 6px",
+                  borderRadius: 6,
                   transition: "background 0.2s",
                 }}
                 onMouseEnter={(e) => {
@@ -500,8 +485,8 @@ export function FeedTab() {
                   e.currentTarget.style.background = "transparent";
                 }}
               >
-                <span style={{ color: "#c1b400", fontSize: 16 }}>❤️</span>
-                <span style={{ color: "#ffffff", fontSize: 14 }}>
+                <span style={{ color: "#c1b400", fontSize: 14 }}>❤️</span>
+                <span style={{ color: "#ffffff", fontSize: 12 }}>
                   {cast.likes}
                 </span>
               </button>
@@ -511,12 +496,12 @@ export function FeedTab() {
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 6,
+                  gap: 4,
                   background: "transparent",
                   border: "none",
                   cursor: recastingCast === cast.hash ? "wait" : "pointer",
-                  padding: "4px 8px",
-                  borderRadius: 8,
+                  padding: "2px 6px",
+                  borderRadius: 6,
                   transition: "background 0.2s",
                 }}
                 onMouseEnter={(e) => {
@@ -528,8 +513,8 @@ export function FeedTab() {
                   e.currentTarget.style.background = "transparent";
                 }}
               >
-                <span style={{ color: "#c1b400", fontSize: 16 }}>🔁</span>
-                <span style={{ color: "#ffffff", fontSize: 14 }}>
+                <span style={{ color: "#c1b400", fontSize: 14 }}>🔁</span>
+                <span style={{ color: "#ffffff", fontSize: 12 }}>
                   {cast.recasts}
                 </span>
               </button>
@@ -538,12 +523,12 @@ export function FeedTab() {
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 6,
+                  gap: 4,
                   background: "transparent",
                   border: "none",
                   cursor: "pointer",
-                  padding: "4px 8px",
-                  borderRadius: 8,
+                  padding: "2px 6px",
+                  borderRadius: 6,
                   transition: "background 0.2s",
                 }}
                 onMouseEnter={(e) => {
@@ -553,8 +538,8 @@ export function FeedTab() {
                   e.currentTarget.style.background = "transparent";
                 }}
               >
-                <span style={{ color: "#c1b400", fontSize: 16 }}>💬</span>
-                <span style={{ color: "#ffffff", fontSize: 14 }}>
+                <span style={{ color: "#c1b400", fontSize: 14 }}>💬</span>
+                <span style={{ color: "#ffffff", fontSize: 12 }}>
                   {cast.replies}
                 </span>
               </button>
@@ -574,7 +559,7 @@ export function FeedTab() {
                 style={{
                   marginLeft: "auto",
                   color: "#c1b400",
-                  fontSize: 14,
+                  fontSize: 12,
                   textDecoration: "none",
                   fontWeight: 600,
                   cursor: "pointer",
@@ -587,7 +572,7 @@ export function FeedTab() {
         </div>
       ))}
 
-      {/* Action Buttons - After first 5 posts */}
+      {/* Action Buttons - After first 10 posts */}
       {casts.length > 0 && (
         <div
           style={{

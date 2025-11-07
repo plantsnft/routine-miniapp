@@ -279,25 +279,65 @@ export function LeaderboardTab() {
         {!loading && !error && sortBy === "holdings" && entries.length === 0 && (
           <div
             style={{
-              padding: "60px 20px",
+              padding: "40px 20px",
               background: "#000000",
               border: "2px solid #c1b400",
               borderRadius: 12,
               textAlign: "center",
+              overflow: "hidden",
+              position: "relative",
             }}
           >
-            <p style={{ color: "#c1b400", fontSize: 48, margin: "0 0 16px 0" }}>
-              🚧
-            </p>
-            <p style={{ color: "#c1b400", fontSize: 16, margin: "0 0 8px 0", fontWeight: 700 }}>
-              Coming Soon
-            </p>
-            <p style={{ color: "#ffffff", fontSize: 12, margin: "0 0 16px 0", opacity: 0.8 }}>
-              The Top Holders leaderboard is being built.
-            </p>
-            <p style={{ color: "#666666", fontSize: 11, margin: 0, opacity: 0.7 }}>
-              Check back soon to see who holds the most $CATWALK tokens!
-            </p>
+            {/* Scrolling ticker text */}
+            <div
+              style={{
+                overflow: "hidden",
+                whiteSpace: "nowrap",
+                marginBottom: "20px",
+              }}
+            >
+              <div
+                style={{
+                  display: "inline-block",
+                  animation: "ticker 20s linear infinite",
+                  color: "#c1b400",
+                  fontSize: 14,
+                  fontWeight: 700,
+                }}
+              >
+                🚧 Coming Soon • The Top Holders leaderboard is being built • Check back soon to see who holds the most $CATWALK tokens! • 🚧 Coming Soon • The Top Holders leaderboard is being built • Check back soon to see who holds the most $CATWALK tokens! •
+              </div>
+            </div>
+            
+            {/* Buy Button */}
+            <a
+              href="https://app.uniswap.org/swap?chain=base&outputCurrency=0xa5eb1cAD0dFC1c4f8d4f84f995aeDA9a7A047B07"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "inline-block",
+                padding: "12px 24px",
+                background: "#c1b400",
+                color: "#000000",
+                border: "2px solid #c1b400",
+                borderRadius: 8,
+                fontSize: 14,
+                fontWeight: 700,
+                textDecoration: "none",
+                cursor: "pointer",
+                transition: "all 0.2s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "#d4c500";
+                e.currentTarget.style.borderColor = "#d4c500";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "#c1b400";
+                e.currentTarget.style.borderColor = "#c1b400";
+              }}
+            >
+              Buy $CATWALK Here
+            </a>
           </div>
         )}
 
@@ -466,8 +506,8 @@ export function LeaderboardTab() {
           </>
         )}
 
-        {/* Empty state */}
-        {!loading && !error && entries.length === 0 && (
+        {/* Empty state - only show for streak mode, not holdings */}
+        {!loading && !error && entries.length === 0 && sortBy !== "holdings" && (
           <div
             style={{
               padding: "40px 20px",

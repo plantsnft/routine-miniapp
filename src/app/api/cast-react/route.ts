@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   try {
-    const { castHash, reactionType, fid, signerUuid } = await req.json();
+    const { castHash, reactionType, fid: _fid, signerUuid } = await req.json();
     const apiKey = process.env.NEYNAR_API_KEY;
 
     if (!castHash || !reactionType) {
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Try to get the user's signer if not provided
-    let finalSignerUuid = signerUuid;
+    const finalSignerUuid = signerUuid;
     
     // Note: In a mini-app context, we don't have direct access to the user's signer UUID
     // The user is authenticated through the Farcaster client, but we need their signer UUID

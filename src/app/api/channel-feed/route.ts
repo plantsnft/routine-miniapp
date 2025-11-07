@@ -97,7 +97,7 @@ export async function GET(request: Request) {
             const feedResponse = await (client as any).fetchFeedCasts({
               feedType: 'channel',
               parentUrl: CATWALK_CHANNEL_PARENT_URL,
-              limit: 5,
+              limit: 10,
             });
             
             casts = feedResponse?.casts || feedResponse?.result?.casts || [];
@@ -121,7 +121,7 @@ export async function GET(request: Request) {
       try {
         console.log("[Channel Feed] Strategy 2: Using feed_type=filter with filter_type=parent_url");
         const response = await fetch(
-          `https://api.neynar.com/v2/farcaster/feed?feed_type=filter&filter_type=parent_url&parent_url=${encodeURIComponent(CATWALK_CHANNEL_PARENT_URL)}&limit=5`,
+          `https://api.neynar.com/v2/farcaster/feed?feed_type=filter&filter_type=parent_url&parent_url=${encodeURIComponent(CATWALK_CHANNEL_PARENT_URL)}&limit=10`,
           {
             headers: {
               "x-api-key": apiKey,
@@ -169,11 +169,11 @@ export async function GET(request: Request) {
         // Or try without fid parameter
         const testEndpoints = [
           // Try with parent_url and no fid (some APIs allow public channel access)
-          `https://api.neynar.com/v2/farcaster/feed?feed_type=channel&parent_url=${encodeURIComponent(channelParentUrl)}&limit=5`,
+          `https://api.neynar.com/v2/farcaster/feed?feed_type=channel&parent_url=${encodeURIComponent(channelParentUrl)}&limit=10`,
           // Try with channel_id (if it's numeric)
-          typeof channelId === 'number' ? `https://api.neynar.com/v2/farcaster/feed?feed_type=channel&channel_id=${channelId}&limit=5` : null,
+          typeof channelId === 'number' ? `https://api.neynar.com/v2/farcaster/feed?feed_type=channel&channel_id=${channelId}&limit=10` : null,
           // Try with channel ID as string
-          `https://api.neynar.com/v2/farcaster/feed?feed_type=channel&channel_id=${encodeURIComponent(channelId)}&limit=5`,
+          `https://api.neynar.com/v2/farcaster/feed?feed_type=channel&channel_id=${encodeURIComponent(channelId)}&limit=10`,
         ].filter(Boolean) as string[];
         
         for (const endpoint of testEndpoints) {
@@ -242,7 +242,7 @@ export async function GET(request: Request) {
             cast.parent_url === channelUrl || 
             cast.parent_url?.includes(CATWALK_CHANNEL_ID) ||
             cast.channel?.id === CATWALK_CHANNEL_ID
-          ).slice(0, 5);
+          ).slice(0, 10);
           
           if (casts.length > 0) {
             debugInfo.push(`Strategy 4: Success - found ${casts.length} casts by filtering`);
@@ -464,12 +464,48 @@ export async function GET(request: Request) {
         // Remove duplicates and filter valid image URLs
         const uniqueImages = Array.from(new Set(images.filter((url: string) => url && url.startsWith('http'))));
         
-        // Check if this cast has video embeds
-        const hasVideo = cast.embeds && cast.embeds.some((embed: any) => 
-          embed.url && embed.url.includes('.m3u8')
-        );
+        // Check if this cast has video embeds - check multiple locations
+        let videoUrl: string | null = null;
+        let hasVideo = false;
         
-        console.log(`[Channel Feed] Cast ${cast.hash} has ${uniqueImages.length} images extracted, hasVideo=${hasVideo}`);
+        if (cast.embeds && Array.isArray(cast.embeds)) {
+          for (const embed of cast.embeds) {
+            // Check direct URL for .m3u8
+            if (embed.url && embed.url.includes('.m3u8')) {
+              videoUrl = embed.url;
+              hasVideo = true;
+              break;
+            }
+            
+            // Check metadata.video for video URLs
+            if (embed.metadata && embed.metadata.video) {
+              const video = embed.metadata.video;
+              // Check various video URL properties
+              if (video.url && video.url.includes('.m3u8')) {
+                videoUrl = video.url;
+                hasVideo = true;
+                break;
+              }
+              if (video.video_url && video.video_url.includes('.m3u8')) {
+                videoUrl = video.video_url;
+                hasVideo = true;
+                break;
+              }
+              if (video.hls_url && video.hls_url.includes('.m3u8')) {
+                videoUrl = video.hls_url;
+                hasVideo = true;
+                break;
+              }
+              if (video.stream_url && video.stream_url.includes('.m3u8')) {
+                videoUrl = video.stream_url;
+                hasVideo = true;
+                break;
+              }
+            }
+          }
+        }
+        
+        console.log(`[Channel Feed] Cast ${cast.hash} has ${uniqueImages.length} images extracted, hasVideo=${hasVideo}, videoUrl=${videoUrl ? videoUrl.substring(0, 80) + '...' : 'null'}`);
 
         return {
           hash: cast.hash,
@@ -483,7 +519,7 @@ export async function GET(request: Request) {
           timestamp: cast.timestamp || new Date().toISOString(),
           images: uniqueImages,
           hasVideo,
-          videoUrl: hasVideo ? cast.embeds.find((e: any) => e.url && e.url.includes('.m3u8'))?.url : null,
+          videoUrl,
           likes: cast.reactions?.likes?.length || cast.reactions?.likes_count || 0,
           recasts: cast.reactions?.recasts?.length || cast.reactions?.recasts_count || 0,
           replies: cast.replies?.count || 0,

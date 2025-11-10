@@ -3,14 +3,14 @@ import { getCheckinByFid, updateCheckin } from "~/lib/supabase";
 import { getCheckInDayId } from "~/lib/dateUtils";
 import { getNeynarClient } from "~/lib/neynar";
 
-// CATWALK token contract address on Base
-const CATWALK_TOKEN_ADDRESS = "0xa5eb1cAD0dFC1c4f8d4f84f995aeDA9a7A047B07";
+// CATWALK token contract address on Base (kept for reference, not used in this route)
+// const CATWALK_TOKEN_ADDRESS = "0xa5eb1cAD0dFC1c4f8d4f84f995aeDA9a7A047B07";
 // Reward claim contract address (deploy and set this)
 const REWARD_CLAIM_CONTRACT_ADDRESS = process.env.REWARD_CLAIM_CONTRACT_ADDRESS || "";
 const REWARD_AMOUNT_USD = 0.03; // 3 cents
 // SERVER_WALLET_ADDRESS is now set in the smart contract during deployment
 // It's not needed in the API route since users sign their own transactions
-const BASE_RPC_URL = process.env.BASE_RPC_URL || "https://mainnet.base.org";
+// const BASE_RPC_URL = process.env.BASE_RPC_URL || "https://mainnet.base.org";
 
 /**
  * Validate Ethereum address format
@@ -43,9 +43,9 @@ async function getUserWalletAddress(fid: number): Promise<string | null> {
     
     // Priority 1: Custodial address (every Farcaster user has this)
     // This is Farcaster's integrated wallet - works for 100% of users
-    if (user.custodial_address) {
-      console.log(`[Reward Claim] FID ${fid}: Using custodial address ${user.custodial_address}`);
-      return user.custodial_address;
+    if (user.custody_address) {
+      console.log(`[Reward Claim] FID ${fid}: Using custodial address ${user.custody_address}`);
+      return user.custody_address;
     }
     
     // Priority 2: Verified addresses (user's external wallets - MetaMask, etc.)
@@ -135,7 +135,6 @@ async function prepareClaimTransaction(
   try {
     // Dynamically import viem to avoid bundling issues
     const { encodeFunctionData } = await import("viem");
-    const { base } = await import("viem/chains");
     
     // RewardClaim contract ABI - claim function
     const rewardClaimAbi = [

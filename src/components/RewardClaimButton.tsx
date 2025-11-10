@@ -177,6 +177,21 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
       if (!res.ok || !data.ok) {
         const errorMsg = data.error || "Failed to prepare claim transaction";
         console.error("[RewardClaimButton] API error:", errorMsg);
+
+        const alreadyClaimed =
+          res.status === 409 ||
+          (typeof errorMsg === "string" && errorMsg.toLowerCase().includes("already claimed"));
+
+        if (alreadyClaimed) {
+          setRewardClaimedToday(true);
+          setCanClaim(false);
+          setHasApiError(false);
+          setError(null);
+          setClaiming(false);
+          setSuccess(false);
+          return;
+        }
+
         setError(errorMsg);
         setClaiming(false);
         return;

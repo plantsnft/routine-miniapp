@@ -268,6 +268,8 @@ export async function POST(req: NextRequest) {
         last_checkin: now,
         streak: newStreak,
         total_checkins: newTotalCheckins,
+      }, {
+        recordId: existing.id ?? null,
       });
     } catch (updateError: any) {
       console.error("[API] /api/checkin POST - Error updating checkin:", updateError);

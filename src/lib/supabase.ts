@@ -120,7 +120,8 @@ export async function createCheckin(
  */
 export async function updateCheckin(
   fid: number,
-  updates: { last_checkin: string; streak: number; total_checkins?: number; reward_claimed_at?: string | null }
+  updates: { last_checkin: string; streak: number; total_checkins?: number; reward_claimed_at?: string | null },
+  options?: { recordId?: string | null }
 ): Promise<CheckinRecord> {
   // Build update object, only including fields that are provided
   const updateData: Record<string, any> = {
@@ -136,8 +137,17 @@ export async function updateCheckin(
     updateData.reward_claimed_at = updates.reward_claimed_at;
   }
   
+  let filterParam: string;
+
+  if (options?.recordId) {
+    filterParam = `id=eq.${options.recordId}`;
+  } else {
+    const existing = await getCheckinByFid(fid);
+    filterParam = existing?.id ? `id=eq.${existing.id}` : `fid=eq.${fid}`;
+  }
+
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/checkins?fid=eq.${fid}`,
+    `${SUPABASE_URL}/rest/v1/checkins?${filterParam}`,
     {
       method: "PATCH",
       headers: {
@@ -183,6 +193,73 @@ export async function updateCheckin(
     const updated = await getCheckinByFid(fid);
     if (!updated) {
       throw new Error(`Failed to update check-in: ${parseError.message}`);
+    }
+    return updated;
+  }
+}
+
+/**
+ * Mark a check-in record's reward as claimed without modifying other fields.
+ */
+export async function markRewardClaimed(
+  fid: number,
+  rewardClaimedAt: string,
+  options?: { recordId?: string | null }
+): Promise<CheckinRecord> {
+  let filterParam: string;
+
+  if (options?.recordId) {
+    filterParam = `id=eq.${options.recordId}`;
+  } else {
+    const existing = await getCheckinByFid(fid);
+    if (!existing) {
+      throw new Error(`Check-in record not found for fid ${fid}`);
+    }
+    filterParam = existing.id ? `id=eq.${existing.id}` : `fid=eq.${fid}`;
+  }
+
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/checkins?${filterParam}`,
+    {
+      method: "PATCH",
+      headers: {
+        ...SUPABASE_HEADERS,
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({ reward_claimed_at: rewardClaimedAt }),
+    }
+  );
+
+  const text = await res.text();
+
+  if (!res.ok) {
+    console.error("[Supabase] markRewardClaimed error:", res.status, text);
+    throw new Error(`Failed to mark reward as claimed: ${text || `HTTP ${res.status}`}`);
+  }
+
+  if (!text || text.trim() === "") {
+    const updated = await getCheckinByFid(fid);
+    if (!updated) {
+      throw new Error("Failed to mark reward as claimed: Record not found after update");
+    }
+    return updated;
+  }
+
+  try {
+    const data = JSON.parse(text);
+    if (data && Array.isArray(data) && data.length > 0) {
+      return data[0];
+    }
+    const updated = await getCheckinByFid(fid);
+    if (!updated) {
+      throw new Error("Failed to mark reward as claimed: Record not found after update");
+    }
+    return updated;
+  } catch (parseError: any) {
+    console.error("[Supabase] JSON parse error in markRewardClaimed:", parseError, "Response text:", text.substring(0, 200));
+    const updated = await getCheckinByFid(fid);
+    if (!updated) {
+      throw new Error(`Failed to mark reward as claimed: ${parseError.message}`);
     }
     return updated;
   }

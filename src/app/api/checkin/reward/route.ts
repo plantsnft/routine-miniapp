@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCheckinByFid, updateCheckin } from "~/lib/supabase";
+import { getCheckinByFid, markRewardClaimed } from "~/lib/supabase";
 import { getCheckInDayId } from "~/lib/dateUtils";
 import { getNeynarClient } from "~/lib/neynar";
 
@@ -340,13 +340,11 @@ export async function PUT(req: NextRequest) {
       );
     }
     
-    // Update check-in record to mark reward as claimed
-    await updateCheckin(fid, {
-      last_checkin: checkin.last_checkin!,
-      streak: checkin.streak,
-      total_checkins: checkin.total_checkins || 0,
-      reward_claimed_at: new Date().toISOString(),
-    });
+    await markRewardClaimed(
+      fid,
+      new Date().toISOString(),
+      { recordId: checkin.id ?? null }
+    );
     
     console.log(`[Reward Claim] FID ${fid}: Reward marked as claimed, tx: ${txHash}`);
     

@@ -381,6 +381,21 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
           </a>
         </div>
       )}
+
+      {(rewardClaimedToday && !hasApiError) && (
+        <p
+          style={{
+            margin: "12px 0 0 0",
+            color: "#333333",
+            fontSize: 12,
+            textAlign: "center",
+            fontWeight: 600,
+            lineHeight: 1.5,
+          }}
+        >
+          Thank you for walking your cat today. The $CATWALK you earned was sponsored by $REKT Energy Drinks.
+        </p>
+      )}
     </div>
   );
 }

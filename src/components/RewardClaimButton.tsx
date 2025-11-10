@@ -17,7 +17,7 @@ interface RewardClaimButtonProps {
  */
 export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
   const { triggerHaptic } = useHapticFeedback();
-  const { address, isConnected, chainId } = useAccount();
+  const { isConnected, chainId } = useAccount();
   const { connectAsync } = useConnect();
   const { switchChainAsync } = useSwitchChain();
   
@@ -93,7 +93,7 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
             chainId: base.id,
             connector: config.connectors[0], // Farcaster Frame connector
           });
-        } catch (connectError: any) {
+        } catch (_connectError: any) {
           setError("Please connect your wallet to claim rewards");
           setClaiming(false);
           return;
@@ -104,7 +104,7 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
       if (chainId !== base.id) {
         try {
           await switchChainAsync({ chainId: base.id });
-        } catch (switchError: any) {
+        } catch (_switchError: any) {
           setError("Please switch to Base network to claim rewards");
           setClaiming(false);
           return;

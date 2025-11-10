@@ -89,7 +89,7 @@ export async function GET() {
     
     // Fetch all casts from channel with pagination (no date limit - all time)
     // Strategy: Paginate through all historical casts, then filter by creator FID
-    let fetchedCasts: any[] = [];
+    const fetchedCasts: any[] = [];
     let cursor: string | null = null;
     let hasMore = true;
     let pageCount = 0;

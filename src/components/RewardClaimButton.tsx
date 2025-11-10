@@ -22,9 +22,11 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
   const { switchChainAsync } = useSwitchChain();
   
   const [canClaim, setCanClaim] = useState<boolean | null>(null); // null = checking, true = can claim, false = cannot claim
+  const [rewardClaimedToday, setRewardClaimedToday] = useState<boolean>(false); // Track if reward was actually claimed
   const [loading, setLoading] = useState(true); // Start as true to show loading state
   const [claiming, setClaiming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasApiError, setHasApiError] = useState<boolean>(false); // Track if API call failed
   const [success, setSuccess] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
   
@@ -52,29 +54,42 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
       try {
         setLoading(true);
         setError(null);
+        setHasApiError(false);
         const res = await fetch(`/api/checkin/reward?fid=${fid}`);
-        if (res.ok) {
-          const data = await res.json();
+        const data = await res.json();
+        
+        if (res.ok && data.ok !== false) {
+          // API call succeeded
+          setHasApiError(false);
           setCanClaim(data.canClaim || false);
+          setRewardClaimedToday(data.rewardClaimedToday || false);
+          
           // Reset success state if reward becomes available again (new day)
           if (data.canClaim) {
             setSuccess(false);
             setTxHash(null);
             setError(null);
-          } else if (data.error) {
-            // Show error message if available
+            setRewardClaimedToday(false);
+          }
+          
+          // Only show error if API explicitly returns an error (not just canClaim: false)
+          if (data.error && data.ok === false) {
             setError(data.error);
+            setHasApiError(true);
           }
         } else {
-          // If API call fails, still show button but with error state
-          setCanClaim(false);
-          const errorData = await res.json().catch(() => ({ error: "Failed to check reward status" }));
-          setError(errorData.error || "Failed to check reward status");
+          // API call failed (non-200 status or ok: false)
+          setHasApiError(true);
+          setCanClaim(null); // Don't assume can't claim on error
+          setRewardClaimedToday(false); // Don't assume claimed on error
+          setError(data.error || "Failed to check reward status. Please try again.");
         }
       } catch (error) {
         console.error("[RewardClaimButton] Error checking reward status:", error);
-        // On error, still show button but indicate error
-        setCanClaim(false);
+        // On network error, don't assume anything about claim status
+        setHasApiError(true);
+        setCanClaim(null);
+        setRewardClaimedToday(false);
         setError("Failed to check reward status. Please try again.");
       } finally {
         setLoading(false);
@@ -90,12 +105,23 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
   }, [fid, checkedIn]);
   
   const handleClaim = useCallback(async () => {
-    if (canClaim === false || claiming) return;
+    // Don't allow claiming if we know for sure it was already claimed
+    if (rewardClaimedToday && !hasApiError) {
+      return;
+    }
+    
+    if (claiming) return;
     
     // If still checking, wait a bit and try again
-    if (canClaim === null || loading) {
+    if (loading && canClaim === null) {
       setError("Please wait while we check your reward status...");
       return;
+    }
+    
+    // Clear any previous errors when user tries to claim
+    if (hasApiError) {
+      setError(null);
+      setHasApiError(false);
     }
     
     setClaiming(true);
@@ -170,7 +196,7 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
       setError(error.message || "Network error. Please try again.");
       setClaiming(false);
     }
-  }, [canClaim, claiming, loading, isConnected, chainId, connectAsync, switchChainAsync, sendTransaction, fid, triggerHaptic]);
+  }, [canClaim, rewardClaimedToday, hasApiError, claiming, loading, isConnected, chainId, connectAsync, switchChainAsync, sendTransaction, fid, triggerHaptic]);
   
   // Watch for transaction confirmation
   useEffect(() => {
@@ -226,7 +252,10 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
   }
   
   // Determine button state and styling
-  const isDisabled = claiming || loading || success || isTxPending || isTxConfirming || canClaim === false;
+  // Only disable if we know for sure reward was claimed, or if we're processing
+  // Don't disable on API errors - allow user to try claiming anyway
+  const isDisabled = claiming || loading || success || isTxPending || isTxConfirming || (rewardClaimedToday && !hasApiError);
+  
   const buttonText = isTxPending || isTxConfirming
     ? "Confirming..."
     : claiming
@@ -235,9 +264,15 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
     ? "Reward Claimed! ✓"
     : loading
     ? "Checking..."
-    : canClaim === false
+    : rewardClaimedToday && !hasApiError
     ? "Reward Already Claimed"
-    : "Claim Reward";
+    : hasApiError
+    ? "Claim Reward" // Show claim button even on error, let API handle it
+    : canClaim === true
+    ? "Claim Reward"
+    : canClaim === false && !hasApiError
+    ? "Reward Not Available"
+    : "Claim Reward"; // Default to showing claim button
   
   return (
     <div style={{ marginTop: 12 }}>
@@ -246,8 +281,8 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
         disabled={isDisabled}
         style={{
           width: "100%",
-          background: canClaim === false || success ? "#666666" : "#c1b400",
-          color: canClaim === false || success ? "#999999" : "#000000",
+          background: (rewardClaimedToday && !hasApiError) || success ? "#666666" : "#c1b400",
+          color: (rewardClaimedToday && !hasApiError) || success ? "#999999" : "#000000",
           border: "2px solid #000000",
           borderRadius: 8,
           padding: "10px 16px",

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCheckinByFid, markRewardClaimed } from "~/lib/supabase";
 import { getCheckInDayId } from "~/lib/dateUtils";
 import { getNeynarClient } from "~/lib/neynar";
+import { createPublicClient, encodeFunctionData, http } from "viem";
+import { base } from "viem/chains";
 
 // CATWALK token contract address on Base (kept for reference, not used in this route)
 // const CATWALK_TOKEN_ADDRESS = "0xa5eb1cAD0dFC1c4f8d4f84f995aeDA9a7A047B07";
@@ -10,7 +12,43 @@ const REWARD_CLAIM_CONTRACT_ADDRESS = process.env.REWARD_CLAIM_CONTRACT_ADDRESS 
 const REWARD_AMOUNT_USD = 0.03; // 3 cents
 // SERVER_WALLET_ADDRESS is now set in the smart contract during deployment
 // It's not needed in the API route since users sign their own transactions
-// const BASE_RPC_URL = process.env.BASE_RPC_URL || "https://mainnet.base.org";
+const BASE_RPC_URL = process.env.BASE_RPC_URL || "https://mainnet.base.org";
+
+const rewardClaimAbi = [
+  {
+    name: "claim",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "fid", type: "uint256" },
+      { name: "dayId", type: "uint256" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "hasClaimed",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "fid", type: "uint256" },
+      { name: "dayId", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+] as const;
+
+// lazy public client
+let publicClient: any = null;
+function getPublicClient() {
+  if (!publicClient) {
+    publicClient = createPublicClient({
+      chain: base,
+      transport: http(BASE_RPC_URL),
+    });
+  }
+  return publicClient as ReturnType<typeof createPublicClient>;
+}
 
 /**
  * Validate Ethereum address format
@@ -107,8 +145,8 @@ function getDayId(timestamp: Date): bigint {
  */
 async function prepareClaimTransaction(
   fid: number,
-  userAddress: string,
-  tokenAmount: bigint
+  tokenAmount: bigint,
+  dayId: bigint
 ): Promise<{
   to: string;
   data: string;
@@ -126,27 +164,6 @@ async function prepareClaimTransaction(
   }
   
   try {
-    // Dynamically import viem to avoid bundling issues
-    const { encodeFunctionData } = await import("viem");
-    
-    // RewardClaim contract ABI - claim function
-    const rewardClaimAbi = [
-      {
-        name: "claim",
-        type: "function",
-        stateMutability: "nonpayable",
-        inputs: [
-          { name: "fid", type: "uint256" },
-          { name: "dayId", type: "uint256" },
-          { name: "amount", type: "uint256" },
-        ],
-        outputs: [],
-      },
-    ] as const;
-    
-    // Calculate dayId (current day)
-    const dayId = getDayId(new Date());
-    
     // Encode function call
     const data = encodeFunctionData({
       abi: rewardClaimAbi,
@@ -265,10 +282,32 @@ export async function POST(req: NextRequest) {
       );
     }
     
+    // Check if already claimed on-chain and sync Supabase if needed
+    const dayId = getDayId(today);
+    const alreadyClaimedOnChain = await hasUserClaimedOnChain(fid, dayId);
+    if (alreadyClaimedOnChain) {
+      if (!checkin.reward_claimed_at) {
+        try {
+          await markRewardClaimed(
+            fid,
+            today.toISOString(),
+            { recordId: checkin.id ?? null }
+          );
+        } catch (syncError: any) {
+          console.error("[Reward Claim] Failed to sync reward_claimed_at after on-chain check:", syncError?.message || syncError);
+        }
+      }
+
+      return NextResponse.json(
+        { ok: false, error: "Reward already claimed today." },
+        { status: 409 }
+      );
+    }
+
     // Prepare transaction data for user to sign
     let txData;
     try {
-      txData = await prepareClaimTransaction(fid, walletAddress, tokenAmount);
+      txData = await prepareClaimTransaction(fid, tokenAmount, dayId);
     } catch (error: any) {
       console.error("[Reward Claim] Error preparing transaction:", error);
       return NextResponse.json(
@@ -296,7 +335,7 @@ export async function POST(req: NextRequest) {
       tokenAmount: tokenAmount.toString(),
       tokenPrice,
       fid,
-      dayId: getDayId(new Date()).toString(),
+      dayId: dayId.toString(),
     });
   } catch (error: any) {
     console.error("[Reward Claim] Error:", error);
@@ -405,8 +444,9 @@ export async function GET(req: NextRequest) {
     
     const lastCheckinDate = new Date(checkin.last_checkin);
     const today = new Date();
+    const dayId = getDayId(today);
     const hasCheckedInToday = getCheckInDayId(lastCheckinDate) === getCheckInDayId(today);
-    
+
     if (!hasCheckedInToday) {
       return NextResponse.json({
         ok: true,
@@ -414,14 +454,33 @@ export async function GET(req: NextRequest) {
         reason: "Not checked in today",
       });
     }
-    
-    // Check if reward already claimed today
+
+    // Check if reward already claimed today (Supabase)
     let rewardClaimedToday = false;
     if (checkin.reward_claimed_at) {
       const claimedDate = new Date(checkin.reward_claimed_at);
       rewardClaimedToday = getCheckInDayId(claimedDate) === getCheckInDayId(today);
     }
-    
+
+    // Double-check on-chain state in case Supabase is out-of-sync
+    if (!rewardClaimedToday) {
+      const claimedOnChain = await hasUserClaimedOnChain(fid, dayId);
+      if (claimedOnChain) {
+        rewardClaimedToday = true;
+        if (!checkin.reward_claimed_at) {
+          try {
+            await markRewardClaimed(
+              fid,
+              today.toISOString(),
+              { recordId: checkin.id ?? null }
+            );
+          } catch (syncError: any) {
+            console.error("[Reward Claim] Failed to backfill reward_claimed_at from on-chain state:", syncError?.message || syncError);
+          }
+        }
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       canClaim: !rewardClaimedToday,
@@ -433,6 +492,26 @@ export async function GET(req: NextRequest) {
       { ok: false, error: error.message || "Failed to check reward status" },
       { status: 500 }
     );
+  }
+}
+
+async function hasUserClaimedOnChain(fid: number, dayId: bigint): Promise<boolean> {
+  if (!REWARD_CLAIM_CONTRACT_ADDRESS || !isValidAddress(REWARD_CLAIM_CONTRACT_ADDRESS)) {
+    return false;
+  }
+
+  try {
+    const client = getPublicClient();
+    const claimedOnChain = await client.readContract({
+      address: REWARD_CLAIM_CONTRACT_ADDRESS as `0x${string}`,
+      abi: rewardClaimAbi,
+      functionName: "hasClaimed",
+      args: [BigInt(fid), dayId],
+    });
+    return Boolean(claimedOnChain);
+  } catch (error: any) {
+    console.error(`[Reward Claim] hasUserClaimedOnChain error for fid ${fid}:`, error?.message || error);
+    return false;
   }
 }
 

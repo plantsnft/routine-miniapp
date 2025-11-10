@@ -5,6 +5,7 @@ import { useAuth } from "~/hooks/useAuth";
 import { useCheckin } from "~/hooks/useCheckin";
 import { CheckinGifAnimation } from "~/components/CheckinGifAnimation";
 import { CheckinButton } from "~/components/CheckinButton";
+import { RewardClaimButton } from "~/components/RewardClaimButton";
 import { isInWarpcast } from "~/lib/auth";
 import { useMiniApp } from "@neynar/react";
 
@@ -288,6 +289,11 @@ export default function DailyCheckin() {
             timeUntilNext={checkin.status.timeUntilNext}
           />
         </div>
+        
+        {/* Reward claim button - shows below check-in button when checked in */}
+        {fid && checkin.status.checkedIn && (
+          <RewardClaimButton fid={fid} checkedIn={checkin.status.checkedIn} />
+        )}
 
         {/* Success message */}
         {showSuccessMessage && (

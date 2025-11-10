@@ -56,13 +56,6 @@ async function getUserWalletAddress(fid: number): Promise<string | null> {
       return verifiedAddr;
     }
     
-    // Additional fallback: Try eth_addresses field (some API versions use this)
-    if (user.eth_addresses && Array.isArray(user.eth_addresses) && user.eth_addresses.length > 0) {
-      const ethAddr = user.eth_addresses[0];
-      console.log(`[Reward Claim] FID ${fid}: Using eth_addresses field ${ethAddr}`);
-      return ethAddr;
-    }
-    
     // No wallet address found - user will be skipped from reward flow
     console.log(`[Reward Claim] FID ${fid}: No wallet address found (no custodial or verified address)`);
     return null;

@@ -164,33 +164,73 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
         body: JSON.stringify({ fid }),
       });
       
-      const data = await res.json();
+      let data;
+      try {
+        data = await res.json();
+      } catch (jsonError) {
+        console.error("[RewardClaimButton] Failed to parse API response:", jsonError);
+        setError("Invalid response from server. Please try again.");
+        setClaiming(false);
+        return;
+      }
       
       if (!res.ok || !data.ok) {
-        setError(data.error || "Failed to prepare claim transaction");
+        const errorMsg = data.error || "Failed to prepare claim transaction";
+        console.error("[RewardClaimButton] API error:", errorMsg);
+        setError(errorMsg);
+        setClaiming(false);
+        return;
+      }
+      
+      // Validate transaction data before sending
+      if (!data.transaction || !data.transaction.to || !data.transaction.data) {
+        console.error("[RewardClaimButton] Invalid transaction data:", data);
+        setError("Invalid transaction data received from server. Please contact support.");
+        setClaiming(false);
+        return;
+      }
+      
+      // Validate address format (must be 0x followed by 40 hex characters)
+      const addressPattern = /^0x[a-fA-F0-9]{40}$/;
+      if (!addressPattern.test(data.transaction.to)) {
+        console.error("[RewardClaimButton] Invalid contract address format:", data.transaction.to);
+        setError("Invalid contract address. Please ensure REWARD_CLAIM_CONTRACT_ADDRESS is set correctly in Vercel.");
         setClaiming(false);
         return;
       }
       
       // Send transaction using Wagmi (user signs and pays gas)
-      sendTransaction(
-        {
-          to: data.transaction.to as `0x${string}`,
-          data: data.transaction.data as `0x${string}`,
-          value: BigInt(data.transaction.value || "0"),
-        },
-        {
-          onSuccess: (hash) => {
-            setTxHash(hash);
-            console.log("[RewardClaimButton] Transaction sent:", hash);
+      try {
+        sendTransaction(
+          {
+            to: data.transaction.to as `0x${string}`,
+            data: data.transaction.data as `0x${string}`,
+            value: BigInt(data.transaction.value || "0"),
           },
-          onError: (error: any) => {
-            console.error("[RewardClaimButton] Transaction error:", error);
-            setError(error.message || "Transaction failed. Please try again.");
-            setClaiming(false);
-          },
-        }
-      );
+          {
+            onSuccess: (hash) => {
+              setTxHash(hash);
+              console.log("[RewardClaimButton] Transaction sent:", hash);
+            },
+            onError: (error: any) => {
+              console.error("[RewardClaimButton] Transaction error:", error);
+              // Provide more helpful error messages
+              let errorMessage = error.message || "Transaction failed. Please try again.";
+              if (error.message && error.message.includes("pattern")) {
+                errorMessage = "Invalid contract address format. Please check REWARD_CLAIM_CONTRACT_ADDRESS in Vercel environment variables.";
+              } else if (error.message && error.message.includes("user rejected")) {
+                errorMessage = "Transaction cancelled by user.";
+              }
+              setError(errorMessage);
+              setClaiming(false);
+            },
+          }
+        );
+      } catch (txError: any) {
+        console.error("[RewardClaimButton] Error sending transaction:", txError);
+        setError(txError.message || "Failed to send transaction. Please try again.");
+        setClaiming(false);
+      }
     } catch (error: any) {
       console.error("[RewardClaimButton] Error:", error);
       setError(error.message || "Network error. Please try again.");

@@ -217,6 +217,9 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
           if (res.ok && data.ok) {
             setSuccess(true);
             setCanClaim(false);
+            setRewardClaimedToday(true);
+            setHasApiError(false);
+            setError(null);
             triggerHaptic("medium");
             
             // Clear success message after 5 seconds
@@ -225,6 +228,7 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
             }, 5000);
           } else {
             setError(data.error || "Failed to update claim status");
+            setHasApiError(true);
           }
         } catch (error: any) {
           console.error("[RewardClaimButton] Error updating claim status:", error);

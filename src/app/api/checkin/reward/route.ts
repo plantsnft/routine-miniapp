@@ -50,8 +50,8 @@ async function getUserWalletAddress(fid: number): Promise<string | null> {
     
     // Priority 2: Verified addresses (user's external wallets - MetaMask, etc.)
     // Fallback if custodial address is not available
-    if (user.verified_addresses?.ethAddresses && user.verified_addresses.ethAddresses.length > 0) {
-      const verifiedAddr = user.verified_addresses.ethAddresses[0];
+    if (user.verified_addresses?.eth_addresses && user.verified_addresses.eth_addresses.length > 0) {
+      const verifiedAddr = user.verified_addresses.eth_addresses[0];
       console.log(`[Reward Claim] FID ${fid}: Using verified address ${verifiedAddr}`);
       return verifiedAddr;
     }

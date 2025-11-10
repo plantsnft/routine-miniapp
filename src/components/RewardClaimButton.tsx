@@ -298,8 +298,9 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
   // Determine button state and styling
   // Only disable if we know for sure reward was claimed, or if we're processing
   // Don't disable on API errors - allow user to try claiming anyway
-  const isDisabled = claiming || loading || success || isTxPending || isTxConfirming || (rewardClaimedToday && !hasApiError);
-  
+  const hasClaimed = rewardClaimedToday && !hasApiError;
+  const isDisabled = claiming || loading || success || isTxPending || isTxConfirming;
+
   const buttonText = isTxPending || isTxConfirming
     ? "Confirming..."
     : claiming
@@ -308,62 +309,80 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
     ? "Reward Claimed! ✓"
     : loading
     ? "Checking..."
-    : rewardClaimedToday && !hasApiError
-    ? "Reward Already Claimed"
     : hasApiError
-    ? "Claim Reward" // Show claim button even on error, let API handle it
+    ? "Claim Reward"
     : canClaim === true
     ? "Claim Reward"
-    : canClaim === false && !hasApiError
+    : canClaim === false
     ? "Reward Not Available"
-    : "Claim Reward"; // Default to showing claim button
-  
+    : "Claim Reward";
+
   return (
     <div style={{ marginTop: 12 }}>
-      <button
-        onClick={handleClaim}
-        disabled={isDisabled}
-        style={{
-          width: "100%",
-          background: (rewardClaimedToday && !hasApiError) || success ? "#666666" : "#c1b400",
-          color: (rewardClaimedToday && !hasApiError) || success ? "#999999" : "#000000",
-          border: "2px solid #000000",
-          borderRadius: 8,
-          padding: "10px 16px",
-          fontSize: 14,
-          fontWeight: 700,
-          cursor: isDisabled ? "not-allowed" : "pointer",
-          opacity: isDisabled && !success ? 0.6 : success ? 0.8 : 1,
-          transition: "all 0.2s",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
-        }}
-        onMouseEnter={(e) => {
-          if (!isDisabled) {
-            e.currentTarget.style.background = "#d4c700";
-            e.currentTarget.style.transform = "translateY(-1px)";
-            e.currentTarget.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.3)";
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (!isDisabled) {
-            e.currentTarget.style.background = "#c1b400";
-            e.currentTarget.style.transform = "translateY(0)";
-            e.currentTarget.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.2)";
-          }
-        }}
-      >
-        {buttonText}
-      </button>
-      
+      {hasClaimed ? (
+        <div
+          style={{
+            width: "100%",
+            background: "#f4f2c2",
+            color: "#2a2616",
+            border: "2px solid #000000",
+            borderRadius: 8,
+            padding: "12px 16px",
+            fontSize: 13,
+            fontWeight: 700,
+            textAlign: "center",
+            lineHeight: 1.5,
+            boxShadow: "0 2px 4px rgba(0, 0, 0, 0.18)",
+          }}
+        >
+          Thank you for walking your cat today. Your $CATWALK reward was sponsored by $REKT Energy Drinks.
+        </div>
+      ) : (
+        <button
+          onClick={handleClaim}
+          disabled={isDisabled}
+          style={{
+            width: "100%",
+            background: success ? "#666666" : "#c1b400",
+            color: success ? "#999999" : "#000000",
+            border: "2px solid #000000",
+            borderRadius: 8,
+            padding: "10px 16px",
+            fontSize: 14,
+            fontWeight: 700,
+            cursor: isDisabled ? "not-allowed" : "pointer",
+            opacity: isDisabled && !success ? 0.6 : success ? 0.8 : 1,
+            transition: "all 0.2s",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
+          }}
+          onMouseEnter={(e) => {
+            if (!isDisabled) {
+              e.currentTarget.style.background = "#d4c700";
+              e.currentTarget.style.transform = "translateY(-1px)";
+              e.currentTarget.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.3)";
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!isDisabled) {
+              e.currentTarget.style.background = "#c1b400";
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.2)";
+            }
+          }}
+        >
+          {buttonText}
+        </button>
+      )}
+
       {error && (
         <p style={{ margin: "8px 0 0 0", color: "#ff4444", fontSize: 12, textAlign: "center", fontWeight: 600 }}>
           {error}
         </p>
       )}
-      
+
       {success && txHash && (
         <div style={{ marginTop: 8, textAlign: "center" }}>
           <a
@@ -380,21 +399,6 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
             View transaction on Basescan
           </a>
         </div>
-      )}
-
-      {(rewardClaimedToday && !hasApiError) && (
-        <p
-          style={{
-            margin: "12px 0 0 0",
-            color: "#333333",
-            fontSize: 12,
-            textAlign: "center",
-            fontWeight: 600,
-            lineHeight: 1.5,
-          }}
-        >
-          Thank you for walking your cat today. The $CATWALK you earned was sponsored by $REKT Energy Drinks.
-        </p>
       )}
     </div>
   );

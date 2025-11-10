@@ -24,6 +24,7 @@ export interface CheckinRecord {
   last_checkin: string | null;
   streak: number;
   total_checkins?: number; // All-time total check-in count
+  reward_claimed_at?: string | null; // When the daily reward was last claimed
   inserted_at?: string;
   updated_at?: string;
 }
@@ -119,25 +120,72 @@ export async function createCheckin(
  */
 export async function updateCheckin(
   fid: number,
-  updates: { last_checkin: string; streak: number; total_checkins?: number }
+  updates: { last_checkin: string; streak: number; total_checkins?: number; reward_claimed_at?: string | null }
 ): Promise<CheckinRecord> {
+  // Build update object, only including fields that are provided
+  const updateData: Record<string, any> = {
+    last_checkin: updates.last_checkin,
+    streak: updates.streak,
+  };
+  
+  if (updates.total_checkins !== undefined) {
+    updateData.total_checkins = updates.total_checkins;
+  }
+  
+  if (updates.reward_claimed_at !== undefined) {
+    updateData.reward_claimed_at = updates.reward_claimed_at;
+  }
+  
   const res = await fetch(
     `${SUPABASE_URL}/rest/v1/checkins?fid=eq.${fid}`,
     {
       method: "PATCH",
-      headers: SUPABASE_HEADERS,
-      body: JSON.stringify(updates),
+      headers: {
+        ...SUPABASE_HEADERS,
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify(updateData),
     }
   );
 
+  // Read response text once (can only be read once)
+  const text = await res.text();
+
   if (!res.ok) {
-    const text = await res.text();
-    console.error("[Supabase] Update error:", text);
-    throw new Error(`Failed to update check-in: ${text}`);
+    console.error("[Supabase] Update error:", res.status, text);
+    throw new Error(`Failed to update check-in: ${text || `HTTP ${res.status}`}`);
   }
 
-  const data = await res.json();
-  return data[0];
+  // If response is empty, fetch the updated record
+  if (!text || text.trim() === "") {
+    const updated = await getCheckinByFid(fid);
+    if (!updated) {
+      throw new Error("Failed to update check-in: Record not found after update");
+    }
+    return updated;
+  }
+
+  // Try to parse JSON response
+  try {
+    const data = JSON.parse(text);
+    if (data && Array.isArray(data) && data.length > 0) {
+      return data[0];
+    }
+    // If response is not an array or is empty, fetch the updated record
+    const updated = await getCheckinByFid(fid);
+    if (!updated) {
+      throw new Error("Failed to update check-in: Record not found after update");
+    }
+    return updated;
+  } catch (parseError: any) {
+    console.error("[Supabase] JSON parse error in updateCheckin:", parseError, "Response text:", text.substring(0, 200));
+    // Fallback: fetch the updated record
+    const updated = await getCheckinByFid(fid);
+    if (!updated) {
+      throw new Error(`Failed to update check-in: ${parseError.message}`);
+    }
+    return updated;
+  }
 }
 
 /**

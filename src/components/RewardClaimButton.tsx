@@ -21,8 +21,8 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
   const { connectAsync } = useConnect();
   const { switchChainAsync } = useSwitchChain();
   
-  const [canClaim, setCanClaim] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [canClaim, setCanClaim] = useState<boolean | null>(null); // null = checking, true = can claim, false = cannot claim
+  const [loading, setLoading] = useState(true); // Start as true to show loading state
   const [claiming, setClaiming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -51,6 +51,7 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
     const checkRewardStatus = async () => {
       try {
         setLoading(true);
+        setError(null);
         const res = await fetch(`/api/checkin/reward?fid=${fid}`);
         if (res.ok) {
           const data = await res.json();
@@ -60,10 +61,21 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
             setSuccess(false);
             setTxHash(null);
             setError(null);
+          } else if (data.error) {
+            // Show error message if available
+            setError(data.error);
           }
+        } else {
+          // If API call fails, still show button but with error state
+          setCanClaim(false);
+          const errorData = await res.json().catch(() => ({ error: "Failed to check reward status" }));
+          setError(errorData.error || "Failed to check reward status");
         }
       } catch (error) {
         console.error("[RewardClaimButton] Error checking reward status:", error);
+        // On error, still show button but indicate error
+        setCanClaim(false);
+        setError("Failed to check reward status. Please try again.");
       } finally {
         setLoading(false);
       }
@@ -78,7 +90,13 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
   }, [fid, checkedIn]);
   
   const handleClaim = useCallback(async () => {
-    if (!canClaim || claiming) return;
+    if (canClaim === false || claiming) return;
+    
+    // If still checking, wait a bit and try again
+    if (canClaim === null || loading) {
+      setError("Please wait while we check your reward status...");
+      return;
+    }
     
     setClaiming(true);
     setError(null);
@@ -152,7 +170,7 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
       setError(error.message || "Network error. Please try again.");
       setClaiming(false);
     }
-  }, [canClaim, claiming, isConnected, chainId, connectAsync, switchChainAsync, sendTransaction, fid, triggerHaptic]);
+  }, [canClaim, claiming, loading, isConnected, chainId, connectAsync, switchChainAsync, sendTransaction, fid, triggerHaptic]);
   
   // Watch for transaction confirmation
   useEffect(() => {
@@ -202,27 +220,41 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
     }
   }, [isTxError, txError]);
   
-  // Don't render if user hasn't checked in or can't claim
-  if (!checkedIn || !canClaim) {
+  // Don't render if user hasn't checked in
+  if (!checkedIn) {
     return null;
   }
+  
+  // Determine button state and styling
+  const isDisabled = claiming || loading || success || isTxPending || isTxConfirming || canClaim === false;
+  const buttonText = isTxPending || isTxConfirming
+    ? "Confirming..."
+    : claiming
+    ? "Preparing..."
+    : success
+    ? "Reward Claimed! ✓"
+    : loading
+    ? "Checking..."
+    : canClaim === false
+    ? "Reward Already Claimed"
+    : "Claim Reward";
   
   return (
     <div style={{ marginTop: 12 }}>
       <button
         onClick={handleClaim}
-        disabled={claiming || loading || success || isTxPending || isTxConfirming}
+        disabled={isDisabled}
         style={{
           width: "100%",
-          background: "#c1b400",
-          color: "#000000",
+          background: canClaim === false || success ? "#666666" : "#c1b400",
+          color: canClaim === false || success ? "#999999" : "#000000",
           border: "2px solid #000000",
           borderRadius: 8,
           padding: "10px 16px",
           fontSize: 14,
           fontWeight: 700,
-          cursor: claiming || loading || success ? "not-allowed" : "pointer",
-          opacity: claiming || loading || isTxPending || isTxConfirming ? 0.6 : success ? 0.8 : 1,
+          cursor: isDisabled ? "not-allowed" : "pointer",
+          opacity: isDisabled && !success ? 0.6 : success ? 0.8 : 1,
           transition: "all 0.2s",
           display: "flex",
           alignItems: "center",
@@ -230,27 +262,21 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
           boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
         }}
         onMouseEnter={(e) => {
-          if (!claiming && !loading && !success && !isTxPending && !isTxConfirming) {
+          if (!isDisabled) {
             e.currentTarget.style.background = "#d4c700";
             e.currentTarget.style.transform = "translateY(-1px)";
             e.currentTarget.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.3)";
           }
         }}
         onMouseLeave={(e) => {
-          if (!claiming && !loading && !success && !isTxPending && !isTxConfirming) {
+          if (!isDisabled) {
             e.currentTarget.style.background = "#c1b400";
             e.currentTarget.style.transform = "translateY(0)";
             e.currentTarget.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.2)";
           }
         }}
       >
-        {isTxPending || isTxConfirming
-          ? "Confirming..."
-          : claiming
-          ? "Preparing..."
-          : success
-          ? "Reward Claimed! ✓"
-          : "Claim Reward"}
+        {buttonText}
       </button>
       
       {error && (

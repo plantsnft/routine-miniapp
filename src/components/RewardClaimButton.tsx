@@ -387,7 +387,7 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
               Thank you for walking your cat today. Your $CATWALK reward was sponsored by the community of rektguy holders.
             </span>
             <Image
-              src="/images/rektguy-sponsor.png"
+              src="/rektguy-sponsor.png"
               alt="Rektguy celebratory illustration"
               width={72}
               height={72}

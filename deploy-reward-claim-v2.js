@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// Deploy the hardened RewardClaimV2 contract.
+// Requires PRIVATE_KEY, CATWALK_TOKEN_ADDRESS, SERVER_WALLET_ADDRESS, and REWARD_SIGNER_ADDRESS env vars.
 import { ethers } from "ethers";
 import fs from "fs/promises";
 import path from "path";
@@ -24,6 +26,10 @@ async function main() {
   console.log("Deploying RewardClaimV2...");
   const provider = new ethers.JsonRpcProvider(RPC_URL);
   const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
+
+  console.log(
+    `Using token=${CATWALK_TOKEN_ADDRESS}, reward wallet=${REWARD_WALLET_ADDRESS}, signer=${AUTH_SIGNER_ADDRESS}`
+  );
 
   const artifactPath = path.join(
     __dirname,

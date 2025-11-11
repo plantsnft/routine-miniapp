@@ -9,6 +9,8 @@ import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 contract RewardClaimV2 is Ownable {
     using ECDSA for bytes32;
 
+    // Reward tiers map directly to the indexes used by the backend signature payload:
+    // 0 -> Starter, 1 -> Growth, 2 -> Legend, 3 -> Creator
     enum RewardTier {
         Starter,
         Growth,
@@ -69,11 +71,11 @@ contract RewardClaimV2 is Ownable {
         _verifySignature(fid, dayId, tier, msg.sender, signature);
         claimed[fid][dayId] = true;
 
-        uint256 payout = _payoutForTier(tier);
-        require(token.allowance(rewardWallet, address(this)) >= payout, "Insufficient allowance");
-        require(token.transferFrom(rewardWallet, msg.sender, payout), "Transfer failed");
+        uint256 rewardAmount = _payoutForTier(tier);
+        require(token.allowance(rewardWallet, address(this)) >= rewardAmount, "Insufficient allowance");
+        require(token.transferFrom(rewardWallet, msg.sender, rewardAmount), "Transfer failed");
 
-        emit RewardClaimed(fid, msg.sender, tier, payout, dayId);
+        emit RewardClaimed(fid, msg.sender, tier, rewardAmount, dayId);
     }
 
     function hasClaimed(uint256 fid, uint256 dayId) external view returns (bool) {
@@ -87,6 +89,10 @@ contract RewardClaimV2 is Ownable {
         return TIER_CREATOR;
     }
 
+    /**
+     * Verify backend-issued authorization:
+     * keccak256(contract, fid, dayId, tier, claimant) signed by `signer`.
+     */
     function _verifySignature(
         uint256 fid,
         uint256 dayId,

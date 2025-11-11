@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAccount, useSendTransaction, useWaitForTransactionReceipt, useConnect, useSwitchChain } from "wagmi";
 import { base } from "wagmi/chains";
 import { useHapticFeedback } from "~/hooks/useHapticFeedback";
@@ -353,17 +353,10 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
     }
   }, [isTxError, txError]);
 
-  if (!checkedIn) {
-    return null;
-  }
+  const hasClaimedBanner = claimedToday && !hasApiError;
+  const isDisabled = isClaiming || isLoading || success || isTxPending || isTxConfirming;
 
-  const hasClaimedBanner = useMemo(() => claimedToday && !hasApiError, [claimedToday, hasApiError]);
-  const isDisabled = useMemo(
-    () => isClaiming || isLoading || success || isTxPending || isTxConfirming,
-    [isClaiming, isLoading, success, isTxPending, isTxConfirming]
-  );
-
-  const buttonText = useMemo(() => {
+  const buttonText = (() => {
     if (isTxPending || isTxConfirming) return "Confirming...";
     if (isClaiming) return "Preparing...";
     if (success) return "Reward Claimed! ✓";
@@ -372,14 +365,18 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
     if (canClaim === true) return "Claim Reward";
     if (canClaim === false) return "Reward Not Available";
     return "Claim Reward";
-  }, [isTxPending, isTxConfirming, isClaiming, success, isLoading, hasApiError, canClaim]);
+  })();
 
-  const buttonClassName = useMemo(() => {
+  const buttonClassName = (() => {
     let className = "reward-claim-button";
     if (success) className += " reward-claim-button--success";
     if (isDisabled) className += " reward-claim-button--disabled";
     return className;
-  }, [success, isDisabled]);
+  })();
+
+  if (!checkedIn) {
+    return null;
+  }
 
   return (
     <>

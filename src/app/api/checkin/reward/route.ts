@@ -16,13 +16,12 @@ const SIGNER_PRIVATE_KEY =
 
 const TOKEN_DECIMALS = 18n;
 const TOKEN_UNIT = 10n ** TOKEN_DECIMALS;
-const REWARD_LOW = 10000n * TOKEN_UNIT;
-const REWARD_MED = 20000n * TOKEN_UNIT;
-const REWARD_HIGH = 333333n * TOKEN_UNIT;
-const REWARD_CREATOR = 1000000n * TOKEN_UNIT;
+const REWARD_LOW = 10_000n * TOKEN_UNIT;
+const REWARD_MED = 20_000n * TOKEN_UNIT;
+const REWARD_HIGH = 333_333n * TOKEN_UNIT;
+const REWARD_CREATOR = 1_000_000n * TOKEN_UNIT;
 
 const signerWallet = SIGNER_PRIVATE_KEY ? new ethers.Wallet(SIGNER_PRIVATE_KEY) : null;
-
 if (signerWallet && REWARD_SIGNER_ADDRESS) {
   const signerAddr = signerWallet.address.toLowerCase();
   if (signerAddr !== REWARD_SIGNER_ADDRESS.toLowerCase()) {
@@ -30,6 +29,10 @@ if (signerWallet && REWARD_SIGNER_ADDRESS) {
       "[Reward Claim] Warning: REWARD_SIGNER_PRIVATE_KEY address does not match REWARD_SIGNER_ADDRESS env."
     );
   }
+} else if (!process.env.REWARD_SIGNER_PRIVATE_KEY) {
+  console.warn(
+    "[Reward Claim] Warning: REWARD_SIGNER_PRIVATE_KEY not set. Falling back to PRIVATE_KEY."
+  );
 }
 
 const rewardClaimAbi = [
@@ -57,8 +60,7 @@ const rewardClaimAbi = [
   },
 ] as const;
 
-// lazy public client
-let publicClient: any = null;
+let publicClient: ReturnType<typeof createPublicClient> | null = null;
 function getPublicClient() {
   if (!publicClient) {
     publicClient = createPublicClient({
@@ -66,24 +68,16 @@ function getPublicClient() {
       transport: http(BASE_RPC_URL),
     });
   }
-  return publicClient as ReturnType<typeof createPublicClient>;
+  return publicClient;
 }
 
-/**
- * Validate Ethereum address format
- */
 function isValidAddress(address: string): boolean {
   if (!address || typeof address !== "string") return false;
-  // Ethereum address: 0x followed by 40 hex characters
   return /^0x[a-fA-F0-9]{40}$/.test(address);
 }
 
 type NeynarUserData = WebhookUserCreated["data"] | null;
 
-/**
- * Fetch the Neynar user record for a given fid.
- * Returns null if the user is not found or the API call fails.
- */
 async function fetchNeynarUser(fid: number): Promise<NeynarUserData> {
   try {
     const user = await getNeynarUser(fid);
@@ -93,14 +87,14 @@ async function fetchNeynarUser(fid: number): Promise<NeynarUserData> {
     }
     return user;
   } catch (error: any) {
-    console.error(`[Reward Claim] Error fetching Neynar user for FID ${fid}:`, error?.message || error);
+    console.error(
+      `[Reward Claim] Error fetching Neynar user for FID ${fid}:`,
+      error?.message || error
+    );
     return null;
   }
 }
 
-/**
- * Choose the best wallet address for a user (custodial first, then verified wallets).
- */
 function deriveWalletAddress(fid: number, user: NeynarUserData): string | null {
   if (!user) {
     console.log(`[Reward Claim] FID ${fid}: No wallet address found (no Neynar user)`);
@@ -131,7 +125,6 @@ function parseNeynarScore(user: NeynarUserData): number {
 }
 
 type RewardTierLabel = "starter" | "growth" | "legend" | "creator";
-
 const TIER_INDEX: Record<RewardTierLabel, number> = {
   starter: 0,
   growth: 1,
@@ -139,7 +132,7 @@ const TIER_INDEX: Record<RewardTierLabel, number> = {
   creator: 3,
 };
 
-function determineReward(
+function getRewardAllocation(
   fid: number,
   user: NeynarUserData
 ): { amount: bigint; tierLabel: RewardTierLabel; tierIndex: number; score: number } {
@@ -202,84 +195,74 @@ async function generateClaimSignature(
   return signerWallet.signMessage(ethers.getBytes(digest));
 }
 
-/**
- * Calculate day ID from timestamp (timestamp / 86400)
- * Used to prevent double claims per day.
- */
 function getDayId(timestamp: Date): bigint {
   const timestampSeconds = Math.floor(timestamp.getTime() / 1000);
   return BigInt(Math.floor(timestampSeconds / 86400));
 }
 
-/**
- * Prepare transaction data for user to sign and send.
- * Returns transaction parameters that the client can use with Wagmi.
- */
 async function prepareClaimTransaction(
   fid: number,
   tierIndex: number,
   dayId: bigint,
   signature: string
-): Promise<{
-  to: string;
-  data: string;
-  value: bigint;
-} | null> {
-  // Validate contract address is set and valid
+): Promise<{ to: string; data: string; value: bigint } | null> {
   if (!REWARD_CLAIM_CONTRACT_ADDRESS) {
-    console.error("[Reward Claim] REWARD_CLAIM_CONTRACT_ADDRESS not configured in environment variables");
-    throw new Error("Reward contract address not configured. Please set REWARD_CLAIM_CONTRACT_ADDRESS in Vercel environment variables.");
+    console.error(
+      "[Reward Claim] REWARD_CLAIM_CONTRACT_ADDRESS not configured in environment variables"
+    );
+    throw new Error(
+      "Reward contract address not configured. Please set REWARD_CLAIM_CONTRACT_ADDRESS in Vercel environment variables."
+    );
   }
-  
+
   if (!isValidAddress(REWARD_CLAIM_CONTRACT_ADDRESS)) {
-    console.error("[Reward Claim] Invalid contract address format:", REWARD_CLAIM_CONTRACT_ADDRESS);
-    throw new Error(`Invalid contract address format. Expected 0x followed by 40 hex characters, got: ${REWARD_CLAIM_CONTRACT_ADDRESS.substring(0, 20)}...`);
+    console.error(
+      "[Reward Claim] Invalid contract address format:",
+      REWARD_CLAIM_CONTRACT_ADDRESS
+    );
+    throw new Error(
+      `Invalid contract address format. Expected 0x followed by 40 hex characters, got: ${REWARD_CLAIM_CONTRACT_ADDRESS.substring(
+        0,
+        20
+      )}...`
+    );
   }
-  
+
   try {
-    // Encode function call
     const data = encodeFunctionData({
       abi: rewardClaimAbi,
       functionName: "claim",
       args: [BigInt(fid), dayId, tierIndex, signature as `0x${string}`],
     });
-    
-    // Ensure address is lowercase for consistency
+
     const contractAddress = REWARD_CLAIM_CONTRACT_ADDRESS.toLowerCase() as `0x${string}`;
-    
+
     return {
       to: contractAddress,
       data: data as `0x${string}`,
-      value: 0n, // No ETH value, just contract call
+      value: 0n,
     };
   } catch (error: any) {
     console.error("[Reward Claim] Error preparing transaction:", error.message);
-    // Re-throw with more context
-    if (error.message.includes("not configured") || error.message.includes("Invalid contract address")) {
+    if (
+      error.message.includes("not configured") ||
+      error.message.includes("Invalid contract address")
+    ) {
       throw error;
     }
     throw new Error(`Failed to prepare transaction: ${error.message}`);
   }
 }
 
-// Removed transferTokens function - users now sign and send transactions themselves
-
-/**
- * POST endpoint to claim daily reward.
- */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const fid = Number(body.fid);
-    
+
     if (!fid || isNaN(fid)) {
-      return NextResponse.json(
-        { ok: false, error: "Invalid fid" },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, error: "Invalid fid" }, { status: 400 });
     }
-    
-    // Get user's check-in record
+
     const checkin = await getCheckinByFid(fid);
     if (!checkin) {
       return NextResponse.json(
@@ -287,8 +270,279 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    
-    // Check if user has checked in today
+
     if (!checkin.last_checkin) {
       return NextResponse.json(
-񰀀
+        { ok: false, error: "You must check in before claiming your reward." },
+        { status: 400 }
+      );
+    }
+
+    const lastCheckinDate = new Date(checkin.last_checkin);
+    const today = new Date();
+    const hasCheckedInToday = getCheckInDayId(lastCheckinDate) === getCheckInDayId(today);
+
+    if (!hasCheckedInToday) {
+      return NextResponse.json(
+        { ok: false, error: "You must check in today before claiming your reward." },
+        { status: 400 }
+      );
+    }
+
+    if (checkin.reward_claimed_at) {
+      const claimedDate = new Date(checkin.reward_claimed_at);
+      const claimedToday = getCheckInDayId(claimedDate) === getCheckInDayId(today);
+
+      if (claimedToday) {
+        return NextResponse.json(
+          { ok: false, error: "Reward already claimed today." },
+          { status: 409 }
+        );
+      }
+    }
+
+    const neynarUser = await fetchNeynarUser(fid);
+    const walletAddress = deriveWalletAddress(fid, neynarUser);
+    if (!walletAddress) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "No wallet address found. Please ensure you are logged in to Farcaster.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!REWARD_CLAIM_CONTRACT_ADDRESS || !isValidAddress(REWARD_CLAIM_CONTRACT_ADDRESS)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `Reward contract not configured. Please set REWARD_CLAIM_CONTRACT_ADDRESS in Vercel environment variables. Current value: ${
+            REWARD_CLAIM_CONTRACT_ADDRESS ? "Invalid format" : "Not set"
+          }`,
+        },
+        { status: 500 }
+      );
+    }
+
+    const dayId = getDayId(today);
+    const alreadyClaimedOnChain = await hasUserClaimedOnChain(fid, dayId);
+    if (alreadyClaimedOnChain) {
+      if (!checkin.reward_claimed_at) {
+        try {
+          await markRewardClaimed(fid, today.toISOString(), { recordId: checkin.id ?? null });
+        } catch (syncError: any) {
+          console.error(
+            "[Reward Claim] Failed to sync reward_claimed_at after on-chain check:",
+            syncError?.message || syncError
+          );
+        }
+      }
+
+      return NextResponse.json(
+        { ok: false, error: "Reward already claimed today." },
+        { status: 409 }
+      );
+    }
+
+    const { amount: tokenAmount, tierLabel, tierIndex, score } = getRewardAllocation(
+      fid,
+      neynarUser
+    );
+    const displayScore = Number.isFinite(score) ? score.toFixed(2) : "0.00";
+    console.log(
+      `[Reward Claim] FID ${fid}: Score ${displayScore} -> ${tierLabel} tier awarding ${tokenAmount.toString()} tokens`
+    );
+
+    const signature = await generateClaimSignature(fid, dayId, tierIndex, walletAddress);
+
+    let txData;
+    try {
+      txData = await prepareClaimTransaction(fid, tierIndex, dayId, signature);
+    } catch (error: any) {
+      console.error("[Reward Claim] Error preparing transaction:", error);
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            error.message || "Failed to prepare transaction. Please check contract configuration.",
+        },
+        { status: 500 }
+      );
+    }
+
+    if (!txData) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Failed to prepare transaction. Please ensure contract is deployed and configured.",
+        },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      transaction: {
+        to: txData.to,
+        data: txData.data,
+        value: txData.value.toString(),
+      },
+      tokenAmount: tokenAmount.toString(),
+      fid,
+      dayId: dayId.toString(),
+      rewardTier: tierLabel,
+      rewardTierIndex: tierIndex,
+      neynarScore: score,
+      signature,
+    });
+  } catch (error: any) {
+    console.error("[Reward Claim] Error:", error);
+    return NextResponse.json(
+      { ok: false, error: error.message || "Failed to claim reward" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const fid = Number(body.fid);
+    const txHash = body.txHash;
+
+    if (!fid || isNaN(fid)) {
+      return NextResponse.json({ ok: false, error: "Invalid fid" }, { status: 400 });
+    }
+
+    if (!txHash || typeof txHash !== "string") {
+      return NextResponse.json(
+        { ok: false, error: "Transaction hash is required" },
+        { status: 400 }
+      );
+    }
+
+    const checkin = await getCheckinByFid(fid);
+    if (!checkin) {
+      return NextResponse.json({ ok: false, error: "No check-in record found" }, { status: 400 });
+    }
+
+    await markRewardClaimed(fid, new Date().toISOString(), { recordId: checkin.id ?? null });
+    console.log(`[Reward Claim] FID ${fid}: Reward marked as claimed, tx: ${txHash}`);
+
+    return NextResponse.json({ ok: true, message: "Reward claimed successfully" });
+  } catch (error: any) {
+    console.error("[Reward Claim] PUT Error:", error);
+    return NextResponse.json(
+      { ok: false, error: error.message || "Failed to update reward status" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const fidParam = searchParams.get("fid");
+
+    if (!fidParam) {
+      return NextResponse.json(
+        { ok: false, error: "fid query parameter is required" },
+        { status: 400 }
+      );
+    }
+
+    const fid = Number(fidParam);
+    if (!fid || isNaN(fid)) {
+      return NextResponse.json({ ok: false, error: "Invalid fid" }, { status: 400 });
+    }
+
+    const checkin = await getCheckinByFid(fid);
+    if (!checkin) {
+      return NextResponse.json({
+        ok: true,
+        canClaim: false,
+        reason: "No check-in record",
+      });
+    }
+
+    if (!checkin.last_checkin) {
+      return NextResponse.json({
+        ok: true,
+        canClaim: false,
+        reason: "Not checked in today",
+      });
+    }
+
+    const lastCheckinDate = new Date(checkin.last_checkin);
+    const today = new Date();
+    const dayId = getDayId(today);
+    const hasCheckedInToday = getCheckInDayId(lastCheckinDate) === getCheckInDayId(today);
+
+    if (!hasCheckedInToday) {
+      return NextResponse.json({
+        ok: true,
+        canClaim: false,
+        reason: "Not checked in today",
+      });
+    }
+
+    let rewardClaimedToday = false;
+    if (checkin.reward_claimed_at) {
+      const claimedDate = new Date(checkin.reward_claimed_at);
+      rewardClaimedToday = getCheckInDayId(claimedDate) === getCheckInDayId(today);
+    }
+
+    if (!rewardClaimedToday) {
+      const claimedOnChain = await hasUserClaimedOnChain(fid, dayId);
+      if (claimedOnChain) {
+        rewardClaimedToday = true;
+        if (!checkin.reward_claimed_at) {
+          try {
+            await markRewardClaimed(fid, today.toISOString(), { recordId: checkin.id ?? null });
+          } catch (syncError: any) {
+            console.error(
+              "[Reward Claim] Failed to backfill reward_claimed_at from on-chain state:",
+              syncError?.message || syncError
+            );
+          }
+        }
+      }
+    }
+
+    return NextResponse.json({
+      ok: true,
+      canClaim: !rewardClaimedToday,
+      rewardClaimedToday,
+    });
+  } catch (error: any) {
+    console.error("[Reward Claim] GET Error:", error);
+    return NextResponse.json(
+      { ok: false, error: error.message || "Failed to check reward status" },
+      { status: 500 }
+    );
+  }
+}
+
+async function hasUserClaimedOnChain(fid: number, dayId: bigint): Promise<boolean> {
+  if (!REWARD_CLAIM_CONTRACT_ADDRESS || !isValidAddress(REWARD_CLAIM_CONTRACT_ADDRESS)) {
+    return false;
+  }
+
+  try {
+    const client = getPublicClient();
+    const claimedOnChain = await client.readContract({
+      address: REWARD_CLAIM_CONTRACT_ADDRESS as `0x${string}`,
+      abi: rewardClaimAbi,
+      functionName: "hasClaimed",
+      args: [BigInt(fid), dayId],
+    });
+    return Boolean(claimedOnChain);
+  } catch (error: any) {
+    console.error(
+      `[Reward Claim] hasUserClaimedOnChain error for fid ${fid}:`,
+      error?.message || error
+    );
+    return false;
+  }
+}

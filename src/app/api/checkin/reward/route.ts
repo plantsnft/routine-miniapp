@@ -1,18 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCheckinByFid, markRewardClaimed } from "~/lib/supabase";
 import { getCheckInDayId } from "~/lib/dateUtils";
-import { getNeynarClient } from "~/lib/neynar";
+import { getNeynarUser } from "~/lib/neynar";
+import { CATWALK_CREATOR_FIDS } from "~/lib/constants";
 import { createPublicClient, encodeFunctionData, http } from "viem";
 import { base } from "viem/chains";
+import type { WebhookUserCreated } from "@neynar/nodejs-sdk";
 
-// CATWALK token contract address on Base (kept for reference, not used in this route)
-// const CATWALK_TOKEN_ADDRESS = "0xa5eb1cAD0dFC1c4f8d4f84f995aeDA9a7A047B07";
-// Reward claim contract address (deploy and set this)
 const REWARD_CLAIM_CONTRACT_ADDRESS = process.env.REWARD_CLAIM_CONTRACT_ADDRESS || "";
-const REWARD_AMOUNT_USD = 0.03; // 3 cents
-// SERVER_WALLET_ADDRESS is now set in the smart contract during deployment
-// It's not needed in the API route since users sign their own transactions
 const BASE_RPC_URL = process.env.BASE_RPC_URL || "https://mainnet.base.org";
+
+const TOKEN_DECIMALS = 18n;
+const TOKEN_UNIT = 10n ** TOKEN_DECIMALS;
+const REWARD_LOW = 10000n * TOKEN_UNIT;
+const REWARD_MED = 20000n * TOKEN_UNIT;
+const REWARD_HIGH = 333333n * TOKEN_UNIT;
+const REWARD_CREATOR = 1000000n * TOKEN_UNIT;
 
 const rewardClaimAbi = [
   {
@@ -59,75 +62,78 @@ function isValidAddress(address: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(address);
 }
 
+type NeynarUserData = WebhookUserCreated["data"] | null;
+
 /**
- * Get user's wallet address from Neynar API.
- * 
- * Priority order:
- * 1. Custodial address (every Farcaster user has this - best for UX)
- * 2. Verified addresses (user's external wallets - fallback)
- * 
- * Returns null if user has no wallet address (will be skipped from reward flow).
+ * Fetch the Neynar user record for a given fid.
+ * Returns null if the user is not found or the API call fails.
  */
-async function getUserWalletAddress(fid: number): Promise<string | null> {
+async function fetchNeynarUser(fid: number): Promise<NeynarUserData> {
   try {
-    const client = getNeynarClient();
-    const { users } = await client.fetchBulkUsers({ fids: [fid] });
-    const user = users[0];
-    
+    const user = await getNeynarUser(fid);
     if (!user) {
-      console.log(`[Reward Claim] No user found for FID ${fid}`);
+      console.log(`[Reward Claim] No Neynar user found for FID ${fid}`);
       return null;
     }
-    
-    // Priority 1: Custodial address (every Farcaster user has this)
-    // This is Farcaster's integrated wallet - works for 100% of users
-    if (user.custody_address) {
-      console.log(`[Reward Claim] FID ${fid}: Using custodial address ${user.custody_address}`);
-      return user.custody_address;
-    }
-    
-    // Priority 2: Verified addresses (user's external wallets - MetaMask, etc.)
-    // Fallback if custodial address is not available
-    if (user.verified_addresses?.eth_addresses && user.verified_addresses.eth_addresses.length > 0) {
-      const verifiedAddr = user.verified_addresses.eth_addresses[0];
-      console.log(`[Reward Claim] FID ${fid}: Using verified address ${verifiedAddr}`);
-      return verifiedAddr;
-    }
-    
-    // No wallet address found - user will be skipped from reward flow
-    console.log(`[Reward Claim] FID ${fid}: No wallet address found (no custodial or verified address)`);
-    return null;
+    return user;
   } catch (error: any) {
-    console.error(`[Reward Claim] Error fetching wallet address for FID ${fid}:`, error.message);
+    console.error(`[Reward Claim] Error fetching Neynar user for FID ${fid}:`, error?.message || error);
     return null;
   }
 }
 
 /**
- * Get current CATWALK token price in USD.
+ * Choose the best wallet address for a user (custodial first, then verified wallets).
  */
-async function getTokenPrice(): Promise<number | null> {
-  try {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_URL || 'https://catwalk-smoky.vercel.app'}/api/token-price`);
-    if (!res.ok) {
-      return null;
-    }
-    const data = await res.json();
-    return data.price || null;
-  } catch (error: any) {
-    console.error("[Reward Claim] Error fetching token price:", error.message);
+function deriveWalletAddress(fid: number, user: NeynarUserData): string | null {
+  if (!user) {
     return null;
   }
+
+  if (user.custody_address) {
+    console.log(`[Reward Claim] FID ${fid}: Using custodial address ${user.custody_address}`);
+    return user.custody_address;
+  }
+
+  if (user.verified_addresses?.eth_addresses && user.verified_addresses.eth_addresses.length > 0) {
+    const verifiedAddr = user.verified_addresses.eth_addresses[0];
+    console.log(`[Reward Claim] FID ${fid}: Using verified address ${verifiedAddr}`);
+    return verifiedAddr;
+  }
+
+  console.log(`[Reward Claim] FID ${fid}: No wallet address found (no custodial or verified address)`);
+  return null;
 }
 
-/**
- * Calculate token amount for 3 cents USD.
- */
-function calculateTokenAmount(priceUsd: number): bigint {
-  // Calculate: 0.03 USD / price per token = token amount
-  // CATWALK has 18 decimals
-  const tokenAmount = (REWARD_AMOUNT_USD / priceUsd) * Math.pow(10, 18);
-  return BigInt(Math.floor(tokenAmount));
+function parseNeynarScore(user: NeynarUserData): number {
+  if (!user) return 0;
+  const rawScore = (user as any)?.score ?? (user as any)?.global_score ?? (user as any)?.rating;
+  const parsed = Number(rawScore);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+type RewardTier = "starter" | "growth" | "legend" | "creator";
+
+function determineRewardAmount(
+  fid: number,
+  user: NeynarUserData
+): { amount: bigint; tier: RewardTier; score: number } {
+  const score = parseNeynarScore(user);
+  const isCreator = CATWALK_CREATOR_FIDS.includes(fid);
+
+  if (isCreator) {
+    return { amount: REWARD_CREATOR, tier: "creator", score };
+  }
+
+  if (score < 0.42) {
+    return { amount: REWARD_LOW, tier: "starter", score };
+  }
+
+  if (score < 0.9) {
+    return { amount: REWARD_MED, tier: "growth", score };
+  }
+
+  return { amount: REWARD_HIGH, tier: "legend", score };
 }
 
 /**
@@ -247,8 +253,9 @@ export async function POST(req: NextRequest) {
       }
     }
     
-    // Get user's wallet address (prioritizes custodial, falls back to verified)
-    const walletAddress = await getUserWalletAddress(fid);
+    // Resolve Neynar profile and destination wallet
+    const neynarUser = await fetchNeynarUser(fid);
+    const walletAddress = deriveWalletAddress(fid, neynarUser);
     if (!walletAddress) {
       // Skip users without wallet addresses (as per requirements)
       // Only logged-in Farcaster users with wallets can claim
@@ -257,19 +264,12 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    
-    // Get current token price
-    const tokenPrice = await getTokenPrice();
-    if (!tokenPrice || tokenPrice <= 0) {
-      return NextResponse.json(
-        { ok: false, error: "Could not fetch token price. Please try again later." },
-        { status: 500 }
-      );
-    }
-    
-    // Calculate token amount
-    const tokenAmount = calculateTokenAmount(tokenPrice);
-    console.log(`[Reward Claim] FID ${fid}: Preparing claim for ${tokenAmount.toString()} tokens (${REWARD_AMOUNT_USD} USD at $${tokenPrice})`);
+
+    const { amount: tokenAmount, tier, score } = determineRewardAmount(fid, neynarUser);
+    const displayScore = Number.isFinite(score) ? score.toFixed(2) : "0.00";
+    console.log(
+      `[Reward Claim] FID ${fid}: Score ${displayScore} -> ${tier} tier awarding ${tokenAmount.toString()} tokens`
+    );
     
     // Validate contract address before proceeding
     if (!REWARD_CLAIM_CONTRACT_ADDRESS || !isValidAddress(REWARD_CLAIM_CONTRACT_ADDRESS)) {
@@ -333,9 +333,10 @@ export async function POST(req: NextRequest) {
         value: txData.value.toString(),
       },
       tokenAmount: tokenAmount.toString(),
-      tokenPrice,
       fid,
       dayId: dayId.toString(),
+      rewardTier: tier,
+      neynarScore: score,
     });
   } catch (error: any) {
     console.error("[Reward Claim] Error:", error);

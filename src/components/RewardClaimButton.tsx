@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import Image from "next/image";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useAccount, useSendTransaction, useWaitForTransactionReceipt, useConnect, useSwitchChain } from "wagmi";
 import { base } from "wagmi/chains";
 import { useHapticFeedback } from "~/hooks/useHapticFeedback";
@@ -9,6 +10,17 @@ import { config } from "~/components/providers/WagmiProvider";
 interface RewardClaimButtonProps {
   fid: number;
   checkedIn: boolean;
+}
+
+interface RewardStatus {
+  canClaim: boolean | null;
+  claimedToday: boolean;
+  isLoading: boolean;
+  isClaiming: boolean;
+  hasApiError: boolean;
+  success: boolean;
+  errorMessage: string | null;
+  txHash: string | null;
 }
 
 /**
@@ -20,142 +32,164 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
   const { isConnected, chainId } = useAccount();
   const { connectAsync } = useConnect();
   const { switchChainAsync } = useSwitchChain();
-  
-  const [canClaim, setCanClaim] = useState<boolean | null>(null); // null = checking, true = can claim, false = cannot claim
-  const [rewardClaimedToday, setRewardClaimedToday] = useState<boolean>(false); // Track if reward was actually claimed
-  const [loading, setLoading] = useState(true); // Start as true to show loading state
-  const [claiming, setClaiming] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [hasApiError, setHasApiError] = useState<boolean>(false); // Track if API call failed
-  const [success, setSuccess] = useState(false);
-  const [txHash, setTxHash] = useState<string | null>(null);
-  
-  // Wagmi hooks for transaction
-  const {
-    sendTransaction,
-    error: txError,
-    isError: isTxError,
-    isPending: isTxPending,
-  } = useSendTransaction();
-  
-  const { isLoading: isTxConfirming, isSuccess: isTxConfirmed } = useWaitForTransactionReceipt({
-    hash: txHash as `0x${string}` | undefined,
+
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const successTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const [status, setStatus] = useState<RewardStatus>({
+    canClaim: null,
+    claimedToday: false,
+    isLoading: true,
+    isClaiming: false,
+    hasApiError: false,
+    success: false,
+    errorMessage: null,
+    txHash: null,
   });
-  
-  // Check if reward is available
+
+  const { sendTransaction, error: txError, isError: isTxError, isPending: isTxPending } = useSendTransaction();
+  const { canClaim, claimedToday, isLoading, isClaiming, hasApiError, success, errorMessage, txHash } = status;
+  const txHashForReceipt = txHash ? (txHash as `0x${string}`) : undefined;
+
+  const { isLoading: isTxConfirming, isSuccess: isTxConfirmed } = useWaitForTransactionReceipt({
+    hash: txHashForReceipt,
+  });
+
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => () => {
+    stopPolling();
+    if (successTimerRef.current) {
+      clearTimeout(successTimerRef.current);
+      successTimerRef.current = null;
+    }
+  }, [stopPolling]);
+
   useEffect(() => {
     if (!checkedIn || !fid) {
-      setCanClaim(false);
-      setLoading(false);
+      setStatus((prev) => ({ ...prev, canClaim: false, isLoading: false }));
+      stopPolling();
       return;
     }
-    
-    const checkRewardStatus = async () => {
+
+    let isSubscribed = true;
+
+    const fetchStatus = async () => {
       try {
-        setLoading(true);
-        setError(null);
-        setHasApiError(false);
         const res = await fetch(`/api/checkin/reward?fid=${fid}`);
-        const data = await res.json();
-        
+        const data = await res.json().catch(() => ({}));
+
+        if (!isSubscribed) return;
+
         if (res.ok && data.ok !== false) {
-          // API call succeeded
-          setHasApiError(false);
-          setCanClaim(data.canClaim || false);
-          setRewardClaimedToday(data.rewardClaimedToday || false);
-          
-          // Reset success state if reward becomes available again (new day)
-          if (data.canClaim) {
-            setSuccess(false);
-            setTxHash(null);
-            setError(null);
-            setRewardClaimedToday(false);
-          }
-          
-          // Only show error if API explicitly returns an error (not just canClaim: false)
-          if (data.error && data.ok === false) {
-            setError(data.error);
-            setHasApiError(true);
+          const rewardAvailable = Boolean(data.canClaim);
+          const claimed = Boolean(data.rewardClaimedToday);
+          const explicitError = data.error && data.ok === false ? String(data.error) : null;
+
+          setStatus((prev) => ({
+            ...prev,
+            canClaim: rewardAvailable,
+            claimedToday: claimed,
+            isLoading: false,
+            hasApiError: Boolean(explicitError),
+            errorMessage: explicitError,
+            success: rewardAvailable ? false : prev.success,
+            txHash: rewardAvailable ? null : prev.txHash,
+            isClaiming: rewardAvailable ? false : prev.isClaiming,
+          }));
+
+          if (claimed) {
+            stopPolling();
           }
         } else {
-          // API call failed (non-200 status or ok: false)
-          setHasApiError(true);
-          setCanClaim(null); // Don't assume can't claim on error
-          setRewardClaimedToday(false); // Don't assume claimed on error
-          setError(data.error || "Failed to check reward status. Please try again.");
+          setStatus((prev) => ({
+            ...prev,
+            canClaim: null,
+            claimedToday: false,
+            isLoading: false,
+            hasApiError: true,
+            errorMessage: data?.error || "Failed to check reward status. Please try again.",
+          }));
         }
-      } catch (error) {
-        console.error("[RewardClaimButton] Error checking reward status:", error);
-        // On network error, don't assume anything about claim status
-        setHasApiError(true);
-        setCanClaim(null);
-        setRewardClaimedToday(false);
-        setError("Failed to check reward status. Please try again.");
-      } finally {
-        setLoading(false);
+      } catch (err) {
+        console.error("[RewardClaimButton] Error checking reward status:", err);
+        if (!isSubscribed) return;
+        setStatus((prev) => ({
+          ...prev,
+          canClaim: null,
+          claimedToday: false,
+          isLoading: false,
+          hasApiError: true,
+          errorMessage: "Failed to check reward status. Please try again.",
+        }));
       }
     };
-    
-    // Check immediately when checkedIn changes
-    checkRewardStatus();
-    
-    // Refresh every 30 seconds to check if reward becomes available
-    const interval = setInterval(checkRewardStatus, 30000);
-    return () => clearInterval(interval);
-  }, [fid, checkedIn]);
-  
+
+    setStatus((prev) => ({ ...prev, isLoading: true, errorMessage: null, hasApiError: false }));
+    fetchStatus();
+
+    stopPolling();
+    pollingRef.current = setInterval(fetchStatus, 30000);
+
+    return () => {
+      isSubscribed = false;
+      stopPolling();
+    };
+  }, [fid, checkedIn, stopPolling]);
+
   const handleClaim = useCallback(async () => {
-    // Don't allow claiming if we know for sure it was already claimed
-    if (rewardClaimedToday && !hasApiError) {
+    if (claimedToday && !hasApiError) return;
+    if (isClaiming) return;
+
+    if (isLoading && canClaim === null) {
+      setStatus((prev) => ({ ...prev, errorMessage: "Please wait while we check your reward status..." }));
       return;
     }
-    
-    if (claiming) return;
-    
-    // If still checking, wait a bit and try again
-    if (loading && canClaim === null) {
-      setError("Please wait while we check your reward status...");
-      return;
-    }
-    
-    // Clear any previous errors when user tries to claim
-    if (hasApiError) {
-      setError(null);
-      setHasApiError(false);
-    }
-    
-    setClaiming(true);
-    setError(null);
-    setSuccess(false);
+
+    setStatus((prev) => ({
+      ...prev,
+      isClaiming: true,
+      errorMessage: null,
+      hasApiError: false,
+      success: false,
+    }));
     triggerHaptic("light");
-    
+
     try {
-      // Ensure wallet is connected
       if (!isConnected) {
         try {
           await connectAsync({
             chainId: base.id,
-            connector: config.connectors[0], // Farcaster Frame connector
+            connector: config.connectors[0],
           });
         } catch (_connectError: any) {
-          setError("Please connect your wallet to claim rewards");
-          setClaiming(false);
+          setStatus((prev) => ({
+            ...prev,
+            isClaiming: false,
+            errorMessage: "Please connect your wallet to claim rewards",
+          }));
           return;
         }
       }
-      
-      // Ensure we're on Base chain
+
       if (chainId !== base.id) {
         try {
           await switchChainAsync({ chainId: base.id });
         } catch (_switchError: any) {
-          setError("Please switch to Base network to claim rewards");
-          setClaiming(false);
+          setStatus((prev) => ({
+            ...prev,
+            isClaiming: false,
+            errorMessage: "Please switch to Base network to claim rewards",
+          }));
           return;
         }
       }
-      
-      // Get transaction data from API
+
       const res = await fetch("/api/checkin/reward", {
         method: "POST",
         headers: {
@@ -163,19 +197,11 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
         },
         body: JSON.stringify({ fid }),
       });
-      
-      let data;
-      try {
-        data = await res.json();
-      } catch (jsonError) {
-        console.error("[RewardClaimButton] Failed to parse API response:", jsonError);
-        setError("Invalid response from server. Please try again.");
-        setClaiming(false);
-        return;
-      }
-      
-      if (!res.ok || !data.ok) {
-        const errorMsg = data.error || "Failed to prepare claim transaction";
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || !data?.ok) {
+        const errorMsg = data?.error || "Failed to prepare claim transaction";
         console.error("[RewardClaimButton] API error:", errorMsg);
 
         const alreadyClaimed =
@@ -183,80 +209,88 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
           (typeof errorMsg === "string" && errorMsg.toLowerCase().includes("already claimed"));
 
         if (alreadyClaimed) {
-          setRewardClaimedToday(true);
-          setCanClaim(false);
-          setHasApiError(false);
-          setError(null);
-          setClaiming(false);
-          setSuccess(false);
+          setStatus((prev) => ({
+            ...prev,
+            canClaim: false,
+            claimedToday: true,
+            isClaiming: false,
+            hasApiError: false,
+            errorMessage: null,
+            txHash: null,
+          }));
+          stopPolling();
           return;
         }
 
-        setError(errorMsg);
-        setClaiming(false);
+        setStatus((prev) => ({
+          ...prev,
+          isClaiming: false,
+          hasApiError: true,
+          errorMessage: errorMsg,
+        }));
         return;
       }
-      
-      // Validate transaction data before sending
+
       if (!data.transaction || !data.transaction.to || !data.transaction.data) {
         console.error("[RewardClaimButton] Invalid transaction data:", data);
-        setError("Invalid transaction data received from server. Please contact support.");
-        setClaiming(false);
+        setStatus((prev) => ({
+          ...prev,
+          isClaiming: false,
+          errorMessage: "Invalid transaction data received from server. Please contact support.",
+        }));
         return;
       }
-      
-      // Validate address format (must be 0x followed by 40 hex characters)
+
       const addressPattern = /^0x[a-fA-F0-9]{40}$/;
       if (!addressPattern.test(data.transaction.to)) {
         console.error("[RewardClaimButton] Invalid contract address format:", data.transaction.to);
-        setError("Invalid contract address. Please ensure REWARD_CLAIM_CONTRACT_ADDRESS is set correctly in Vercel.");
-        setClaiming(false);
+        setStatus((prev) => ({
+          ...prev,
+          isClaiming: false,
+          errorMessage: "Invalid contract address. Please ensure REWARD_CLAIM_CONTRACT_ADDRESS is set correctly in Vercel.",
+        }));
         return;
       }
-      
-      // Send transaction using Wagmi (user signs and pays gas)
-      try {
-        sendTransaction(
-          {
-            to: data.transaction.to as `0x${string}`,
-            data: data.transaction.data as `0x${string}`,
-            value: BigInt(data.transaction.value || "0"),
+
+      sendTransaction(
+        {
+          to: data.transaction.to as `0x${string}`,
+          data: data.transaction.data as `0x${string}`,
+          value: BigInt(data.transaction.value || "0"),
+        },
+        {
+          onSuccess: (hash) => {
+            setStatus((prev) => ({ ...prev, txHash: hash as string }));
+            console.log("[RewardClaimButton] Transaction sent:", hash);
           },
-          {
-            onSuccess: (hash) => {
-              setTxHash(hash);
-              console.log("[RewardClaimButton] Transaction sent:", hash);
-            },
-            onError: (error: any) => {
-              console.error("[RewardClaimButton] Transaction error:", error);
-              // Provide more helpful error messages
-              let errorMessage = error.message || "Transaction failed. Please try again.";
-              if (error.message && error.message.includes("pattern")) {
-                errorMessage = "Invalid contract address format. Please check REWARD_CLAIM_CONTRACT_ADDRESS in Vercel environment variables.";
-              } else if (error.message && error.message.includes("user rejected")) {
-                errorMessage = "Transaction cancelled by user.";
-              }
-              setError(errorMessage);
-              setClaiming(false);
-            },
-          }
-        );
-      } catch (txError: any) {
-        console.error("[RewardClaimButton] Error sending transaction:", txError);
-        setError(txError.message || "Failed to send transaction. Please try again.");
-        setClaiming(false);
-      }
-    } catch (error: any) {
-      console.error("[RewardClaimButton] Error:", error);
-      setError(error.message || "Network error. Please try again.");
-      setClaiming(false);
+          onError: (sendError: any) => {
+            console.error("[RewardClaimButton] Transaction error:", sendError);
+            let errorMessage = sendError.message || "Transaction failed. Please try again.";
+            if (sendError.message && sendError.message.includes("pattern")) {
+              errorMessage = "Invalid contract address format. Please check REWARD_CLAIM_CONTRACT_ADDRESS in Vercel environment variables.";
+            } else if (sendError.message && sendError.message.includes("user rejected")) {
+              errorMessage = "Transaction cancelled by user.";
+            }
+            setStatus((prev) => ({
+              ...prev,
+              isClaiming: false,
+              errorMessage,
+            }));
+          },
+        }
+      );
+    } catch (err: any) {
+      console.error("[RewardClaimButton] Error:", err);
+      setStatus((prev) => ({
+        ...prev,
+        isClaiming: false,
+        errorMessage: err?.message || "Network error. Please try again.",
+      }));
     }
-  }, [canClaim, rewardClaimedToday, hasApiError, claiming, loading, isConnected, chainId, connectAsync, switchChainAsync, sendTransaction, fid, triggerHaptic]);
-  
-  // Watch for transaction confirmation
+  }, [claimedToday, hasApiError, isClaiming, isLoading, canClaim, triggerHaptic, isConnected, connectAsync, chainId, switchChainAsync, fid, sendTransaction, stopPolling]);
+
   useEffect(() => {
-    if (isTxConfirmed && txHash) {
-      // Transaction confirmed - update database
+    if (isTxConfirmed && txHashForReceipt) {
       const updateClaimStatus = async () => {
         try {
           const res = await fetch("/api/checkin/reward", {
@@ -264,158 +298,221 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
             headers: {
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({ fid, txHash }),
+            body: JSON.stringify({ fid, txHash: txHashForReceipt }),
           });
-          
-          const data = await res.json();
-          
-          if (res.ok && data.ok) {
-            setSuccess(true);
-            setCanClaim(false);
-            setRewardClaimedToday(true);
-            setHasApiError(false);
-            setError(null);
+
+          const data = await res.json().catch(() => null);
+
+          if (res.ok && data?.ok) {
+            stopPolling();
+            setStatus((prev) => ({
+              ...prev,
+              success: true,
+              claimedToday: true,
+              hasApiError: false,
+              errorMessage: null,
+              isClaiming: false,
+            }));
             triggerHaptic("medium");
-            
-            // Clear success message after 5 seconds
-            setTimeout(() => {
-              setSuccess(false);
+
+            if (successTimerRef.current) {
+              clearTimeout(successTimerRef.current);
+            }
+            successTimerRef.current = setTimeout(() => {
+              setStatus((prev) => ({ ...prev, success: false }));
             }, 5000);
           } else {
-            setError(data.error || "Failed to update claim status");
-            setHasApiError(true);
+            setStatus((prev) => ({
+              ...prev,
+              isClaiming: false,
+              hasApiError: true,
+              errorMessage: data?.error || "Failed to update claim status",
+            }));
           }
-        } catch (error: any) {
-          console.error("[RewardClaimButton] Error updating claim status:", error);
-          setError("Transaction confirmed but failed to update status. Please refresh.");
-        } finally {
-          setClaiming(false);
+        } catch (err: any) {
+          console.error("[RewardClaimButton] Error updating claim status:", err);
+          setStatus((prev) => ({
+            ...prev,
+            isClaiming: false,
+            errorMessage: "Transaction confirmed but failed to update status. Please refresh.",
+          }));
         }
       };
-      
+
       updateClaimStatus();
     }
-  }, [isTxConfirmed, txHash, fid, triggerHaptic]);
-  
-  // Watch for transaction errors
+  }, [isTxConfirmed, txHashForReceipt, fid, triggerHaptic, stopPolling]);
+
   useEffect(() => {
     if (isTxError && txError) {
-      setError(txError.message || "Transaction failed. Please try again.");
-      setClaiming(false);
+      setStatus((prev) => ({
+        ...prev,
+        isClaiming: false,
+        errorMessage: txError.message || "Transaction failed. Please try again.",
+      }));
     }
   }, [isTxError, txError]);
-  
-  // Don't render if user hasn't checked in
+
   if (!checkedIn) {
     return null;
   }
-  
-  // Determine button state and styling
-  // Only disable if we know for sure reward was claimed, or if we're processing
-  // Don't disable on API errors - allow user to try claiming anyway
-  const hasClaimed = rewardClaimedToday && !hasApiError;
-  const isDisabled = claiming || loading || success || isTxPending || isTxConfirming;
 
-  const buttonText = isTxPending || isTxConfirming
-    ? "Confirming..."
-    : claiming
-    ? "Preparing..."
-    : success
-    ? "Reward Claimed! ✓"
-    : loading
-    ? "Checking..."
-    : hasApiError
-    ? "Claim Reward"
-    : canClaim === true
-    ? "Claim Reward"
-    : canClaim === false
-    ? "Reward Not Available"
-    : "Claim Reward";
+  const hasClaimedBanner = useMemo(() => claimedToday && !hasApiError, [claimedToday, hasApiError]);
+  const isDisabled = useMemo(
+    () => isClaiming || isLoading || success || isTxPending || isTxConfirming,
+    [isClaiming, isLoading, success, isTxPending, isTxConfirming]
+  );
+
+  const buttonText = useMemo(() => {
+    if (isTxPending || isTxConfirming) return "Confirming...";
+    if (isClaiming) return "Preparing...";
+    if (success) return "Reward Claimed! ✓";
+    if (isLoading) return "Checking...";
+    if (hasApiError) return "Claim Reward";
+    if (canClaim === true) return "Claim Reward";
+    if (canClaim === false) return "Reward Not Available";
+    return "Claim Reward";
+  }, [isTxPending, isTxConfirming, isClaiming, success, isLoading, hasApiError, canClaim]);
+
+  const buttonClassName = useMemo(() => {
+    let className = "reward-claim-button";
+    if (success) className += " reward-claim-button--success";
+    if (isDisabled) className += " reward-claim-button--disabled";
+    return className;
+  }, [success, isDisabled]);
 
   return (
-    <div style={{ marginTop: 12 }}>
-      {hasClaimed ? (
-        <div
-          style={{
-            width: "100%",
-            background: "#f4f2c2",
-            color: "#2a2616",
-            border: "2px solid #000000",
-            borderRadius: 8,
-            padding: "12px 16px",
-            fontSize: 13,
-            fontWeight: 700,
-            textAlign: "center",
-            lineHeight: 1.5,
-            boxShadow: "0 2px 4px rgba(0, 0, 0, 0.18)",
-          }}
-        >
-          Thank you for walking your cat today. Your $CATWALK reward was sponsored by $REKT Energy Drinks.
-        </div>
-      ) : (
-        <button
-          onClick={handleClaim}
-          disabled={isDisabled}
-          style={{
-            width: "100%",
-            background: success ? "#666666" : "#c1b400",
-            color: success ? "#999999" : "#000000",
-            border: "2px solid #000000",
-            borderRadius: 8,
-            padding: "10px 16px",
-            fontSize: 14,
-            fontWeight: 700,
-            cursor: isDisabled ? "not-allowed" : "pointer",
-            opacity: isDisabled && !success ? 0.6 : success ? 0.8 : 1,
-            transition: "all 0.2s",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
-          }}
-          onMouseEnter={(e) => {
-            if (!isDisabled) {
-              e.currentTarget.style.background = "#d4c700";
-              e.currentTarget.style.transform = "translateY(-1px)";
-              e.currentTarget.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.3)";
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!isDisabled) {
-              e.currentTarget.style.background = "#c1b400";
-              e.currentTarget.style.transform = "translateY(0)";
-              e.currentTarget.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.2)";
-            }
-          }}
-        >
-          {buttonText}
-        </button>
-      )}
+    <>
+      <div className="reward-claim-container">
+        {hasClaimedBanner ? (
+          <div className="reward-claim-banner">
+            <span className="reward-claim-banner__text">
+              Thank you for walking your cat today. Your $CATWALK reward was sponsored by the community of rektguy holders.
+            </span>
+            <Image
+              src="/images/rektguy-sponsor.png"
+              alt="Rektguy celebratory illustration"
+              width={72}
+              height={72}
+              priority={false}
+              className="reward-claim-banner__image"
+            />
+          </div>
+        ) : (
+          <button onClick={handleClaim} disabled={isDisabled} className={buttonClassName}>
+            {buttonText}
+          </button>
+        )}
 
-      {error && (
-        <p style={{ margin: "8px 0 0 0", color: "#ff4444", fontSize: 12, textAlign: "center", fontWeight: 600 }}>
-          {error}
-        </p>
-      )}
+        {errorMessage && <p className="reward-claim-error">{errorMessage}</p>}
 
-      {success && txHash && (
-        <div style={{ marginTop: 8, textAlign: "center" }}>
-          <a
-            href={`https://basescan.org/tx/${txHash}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              color: "#c1b400",
-              fontSize: 12,
-              textDecoration: "underline",
-              fontWeight: 600,
-            }}
-          >
-            View transaction on Basescan
-          </a>
-        </div>
-      )}
-    </div>
+        {success && txHash && (
+          <div className="reward-claim-link">
+            <a href={`https://basescan.org/tx/${txHash}`} target="_blank" rel="noopener noreferrer">
+              View transaction on Basescan
+            </a>
+          </div>
+        )}
+      </div>
+
+      <style jsx>{`
+        .reward-claim-container {
+          margin-top: 12px;
+        }
+
+        .reward-claim-button {
+          width: 100%;
+          background: #c1b400;
+          color: #000000;
+          border: 2px solid #000000;
+          border-radius: 8px;
+          padding: 10px 16px;
+          font-size: 14px;
+          font-weight: 700;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+          transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+        }
+
+        .reward-claim-button:not([disabled]):hover {
+          background: #d4c700;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .reward-claim-button--success {
+          background: #666666;
+          color: #999999;
+          opacity: 0.8;
+        }
+
+        .reward-claim-button--disabled {
+          cursor: not-allowed;
+          opacity: 0.6;
+        }
+
+        .reward-claim-banner {
+          width: 100%;
+          background: #f4f2c2;
+          color: #2a2616;
+          border: 2px solid #000000;
+          border-radius: 8px;
+          padding: 12px 16px;
+          font-size: 13px;
+          font-weight: 700;
+          line-height: 1.5;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.18);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+        }
+
+        .reward-claim-banner__text {
+          flex: 1;
+          text-align: left;
+        }
+
+        .reward-claim-banner__image {
+          border-radius: 10px;
+          border: 2px solid #000000;
+          background: #000;
+          animation: rektguyFloat 2.6s ease-in-out infinite;
+        }
+
+        .reward-claim-error {
+          margin: 8px 0 0 0;
+          color: #ff4444;
+          font-size: 12px;
+          text-align: center;
+          font-weight: 600;
+        }
+
+        .reward-claim-link {
+          margin-top: 8px;
+          text-align: center;
+        }
+
+        .reward-claim-link a {
+          color: #c1b400;
+          font-size: 12px;
+          text-decoration: underline;
+          font-weight: 600;
+        }
+
+        @keyframes rektguyFloat {
+          0%, 100% {
+            transform: translateY(0px) rotate(-1deg);
+          }
+          50% {
+            transform: translateY(-5px) rotate(1.5deg);
+          }
+        }
+      `}</style>
+    </>
   );
 }
 

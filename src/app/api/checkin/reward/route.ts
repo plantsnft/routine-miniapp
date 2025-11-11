@@ -60,7 +60,7 @@ const rewardClaimAbi = [
   },
 ] as const;
 
-let publicClient: ReturnType<typeof createPublicClient> | null = null;
+let publicClient: any = null;
 function getPublicClient() {
   if (!publicClient) {
     publicClient = createPublicClient({

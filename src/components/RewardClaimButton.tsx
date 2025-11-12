@@ -30,7 +30,7 @@ interface RewardStatus {
 export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
   const { triggerHaptic } = useHapticFeedback();
   const { isConnected, chainId } = useAccount();
-  const { connectAsync } = useConnect();
+  const { connectAsync, connectors } = useConnect();
   const { switchChainAsync } = useSwitchChain();
 
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
@@ -163,9 +163,15 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
     try {
       if (!isConnected) {
         try {
+          const preferredConnector = connectors.find((connector) => connector.ready) ?? connectors[0];
+
+          if (!preferredConnector) {
+            throw new Error("No available wallet connector");
+          }
+
           await connectAsync({
             chainId: base.id,
-            connector: config.connectors[0],
+            connector: preferredConnector,
           });
         } catch (_connectError: any) {
           setStatus((prev) => ({
@@ -287,7 +293,7 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
         errorMessage: err?.message || "Network error. Please try again.",
       }));
     }
-  }, [claimedToday, hasApiError, isClaiming, isLoading, canClaim, triggerHaptic, isConnected, connectAsync, chainId, switchChainAsync, fid, sendTransaction, stopPolling]);
+  }, [claimedToday, hasApiError, isClaiming, isLoading, canClaim, triggerHaptic, isConnected, connectAsync, connectors, chainId, switchChainAsync, fid, sendTransaction, stopPolling]);
 
   useEffect(() => {
     if (isTxConfirmed && txHashForReceipt) {

@@ -5,3 +5,7 @@ node_modules
 .DS_Store
 npm-debug.log*
 .vercel
+artifacts/
+cache/
+.cursor/
+.vscode/

@@ -6,6 +6,7 @@ import fs from "fs/promises";
 import path from "path";
 import url from "url";
 import dotenv from "dotenv";
+import { execSync } from "child_process";
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, ".env") });
@@ -43,9 +44,8 @@ async function main() {
   try {
     artifact = JSON.parse(await fs.readFile(artifactPath, "utf-8"));
   } catch (err) {
-    console.log("Compiling contract...");
-    const { compile } = await import("hardhat-workspace/compile.cjs");
-    await compile();
+    console.log("Compiling contract with Hardhat...");
+    execSync("npx hardhat compile", { stdio: "inherit" });
     artifact = JSON.parse(await fs.readFile(artifactPath, "utf-8"));
   }
 

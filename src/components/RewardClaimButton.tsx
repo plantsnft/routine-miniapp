@@ -5,7 +5,6 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useAccount, useSendTransaction, useWaitForTransactionReceipt, useConnect, useSwitchChain } from "wagmi";
 import { base } from "wagmi/chains";
 import { useHapticFeedback } from "~/hooks/useHapticFeedback";
-import { config } from "~/components/providers/WagmiProvider";
 
 interface RewardClaimButtonProps {
   fid: number;

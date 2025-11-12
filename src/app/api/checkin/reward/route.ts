@@ -61,7 +61,7 @@ const rewardClaimAbi = [
 ] as const;
 
 let publicClient: any = null;
-function getPublicClient() {
+function getPublicClient(): any {
   if (!publicClient) {
     publicClient = createPublicClient({
       chain: base,

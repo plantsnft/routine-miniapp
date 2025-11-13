@@ -4,6 +4,8 @@ import { getNeynarClient } from "~/lib/neynar";
 import type { LeaderboardEntry } from "~/lib/models";
 
 const TOKEN_ADDRESS = "0xa5eb1cAD0dFC1c4f8d4f84f995aeDA9a7A047B07"; // CATWALK on Base
+const LEADERBOARD_PROFILE_BASE_URL =
+  process.env.CATWALK_PROFILE_BASE_URL || "https://warpcast.com";
 const BASESCAN_API_KEY = process.env.BASESCAN_API_KEY || "";
 
 /**
@@ -796,6 +798,7 @@ export async function GET(req: NextRequest) {
             displayName: u.display_name,
             pfp_url: u.pfp_url || undefined,
             allAddresses,
+            profileUrl: u.username ? `${LEADERBOARD_PROFILE_BASE_URL}/${u.username}` : undefined,
           },
         ] as const;
       })
@@ -808,6 +811,7 @@ export async function GET(req: NextRequest) {
           displayName: undefined,
           pfp_url: undefined,
           allAddresses: [],
+          profileUrl: undefined,
         });
       }
     });

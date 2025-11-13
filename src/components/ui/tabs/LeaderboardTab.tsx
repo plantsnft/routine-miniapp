@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import type { LeaderboardEntry } from "~/lib/models";
 import { useHapticFeedback } from "~/hooks/useHapticFeedback";
+import { CATWALK_CREATOR_FIDS } from "~/lib/constants";
 
 type SortBy = "holdings" | "streak" | "total_checkins";
 type WalkSortMode = "current_streak" | "all_time";
@@ -389,10 +391,15 @@ export function LeaderboardTab() {
                 </div>
 
                 {/* Profile Picture */}
-                {entry.pfp_url && (
+                <Link
+                  href={entry.profileUrl || `https://warpcast.com/~/users/${entry.fid}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ display: "flex", alignItems: "center" }}
+                >
                   <img
-                    src={entry.pfp_url}
-                    alt={entry.displayName || entry.username || "User"}
+                    src={entry.pfp_url || "/catwalk-default-pfp.png"}
+                    alt={entry.displayName || entry.username || `FID ${entry.fid}`}
                     style={{
                       width: 20,
                       height: 20,
@@ -402,11 +409,14 @@ export function LeaderboardTab() {
                       flexShrink: 0,
                     }}
                   />
-                )}
+                </Link>
 
                 {/* Name and badge in one line */}
                 <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}>
-                  <span
+                  <Link
+                    href={entry.profileUrl || `https://warpcast.com/~/users/${entry.fid}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     style={{
                       color: "#ffffff",
                       fontSize: 11,
@@ -415,10 +425,19 @@ export function LeaderboardTab() {
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
                       lineHeight: 1.2,
+                      textDecoration: "none",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
                     }}
                   >
-                    {entry.displayName || entry.username || `FID: ${entry.fid}`}
-                  </span>
+                    <span>{entry.displayName || entry.username || `FID: ${entry.fid}`}</span>
+                    {CATWALK_CREATOR_FIDS.includes(entry.fid) && (
+                      <span style={{ color: "#c1b400", fontWeight: 700, fontSize: 10 }}>
+                        🐱 Catwalk Creator
+                      </span>
+                    )}
+                  </Link>
                   {/* Yellow badge inline */}
                   {sortBy === "holdings" ? (
                     <span

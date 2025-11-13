@@ -30,6 +30,7 @@ export interface LeaderboardEntry {
   username?: string;
   displayName?: string;
   pfp_url?: string;
+  profileUrl?: string;
   rank: number;
   tokenBalance?: number; // $CATWALK token holdings
 }

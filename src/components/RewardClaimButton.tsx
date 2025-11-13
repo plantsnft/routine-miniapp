@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useAccount, useSendTransaction, useWaitForTransactionReceipt, useConnect, useSwitchChain } from "wagmi";
+import { useAccount, useSendTransaction, useWaitForTransactionReceipt, useConnect, useSwitchChain, useDisconnect } from "wagmi";
 import { base } from "wagmi/chains";
 import { useHapticFeedback } from "~/hooks/useHapticFeedback";
 
@@ -28,9 +28,10 @@ interface RewardStatus {
  */
 export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
   const { triggerHaptic } = useHapticFeedback();
-  const { isConnected, chainId } = useAccount();
+  const { isConnected, chainId, connector: activeConnector } = useAccount();
   const { connectAsync, connectors } = useConnect();
   const { switchChainAsync } = useSwitchChain();
+  const { disconnectAsync } = useDisconnect();
 
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const successTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -160,7 +161,21 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
     triggerHaptic("light");
 
     try {
-      if (!isConnected) {
+      const isConnectorCapable = (connector: (typeof connectors)[number] | typeof activeConnector | null) =>
+        !!connector && typeof (connector as any)?.getChainId === "function" && !new Set(["farcaster-frame", "frame"]).has(connector.id);
+
+      let hasCapableConnection = isConnected && isConnectorCapable(activeConnector);
+
+      if (isConnected && !hasCapableConnection && disconnectAsync) {
+        try {
+          await disconnectAsync();
+        } catch (disconnectError) {
+          console.warn("[RewardClaimButton] Unable to disconnect incompatible connector", disconnectError);
+        }
+        hasCapableConnection = false;
+      }
+
+      if (!hasCapableConnection) {
         try {
           const frameIds = new Set(["farcaster-frame", "frame"]);
           const isCapable = (connector: (typeof connectors)[number]) =>
@@ -187,6 +202,7 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
             chainId: base.id,
             connector: preferredConnector,
           });
+          hasCapableConnection = true;
         } catch (_connectError: any) {
           setStatus((prev) => ({
             ...prev,
@@ -195,6 +211,15 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
           }));
           return;
         }
+      }
+
+      if (!hasCapableConnection) {
+        setStatus((prev) => ({
+          ...prev,
+          isClaiming: false,
+          errorMessage: "Wallet connection failed. Please try again.",
+        }));
+        return;
       }
 
       if (chainId !== base.id) {
@@ -307,7 +332,24 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
         errorMessage: err?.message || "Network error. Please try again.",
       }));
     }
-  }, [claimedToday, hasApiError, isClaiming, isLoading, canClaim, triggerHaptic, isConnected, connectAsync, connectors, chainId, switchChainAsync, fid, sendTransaction, stopPolling]);
+  }, [
+    claimedToday,
+    hasApiError,
+    isClaiming,
+    isLoading,
+    canClaim,
+    triggerHaptic,
+    isConnected,
+    connectAsync,
+    connectors,
+    chainId,
+    switchChainAsync,
+    fid,
+    sendTransaction,
+    stopPolling,
+    activeConnector,
+    disconnectAsync,
+  ]);
 
   useEffect(() => {
     if (isTxConfirmed && txHashForReceipt) {

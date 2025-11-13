@@ -52,7 +52,10 @@ export const config = createConfig({
     [celo.id]: http(),
   },
   connectors: [
-    farcasterFrame(),
+    (() => {
+      const frame = farcasterFrame();
+      return { ...frame, id: "w3m-frame" } as typeof frame;
+    })(),
     coinbaseWallet({
       appName: APP_NAME,
       appLogoUrl: APP_ICON_URL,

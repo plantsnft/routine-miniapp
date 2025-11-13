@@ -162,19 +162,27 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
     try {
       if (!isConnected) {
         try {
+          const frameIds = new Set(["farcaster-frame", "frame", "w3m-frame"]);
           const capableConnectors = connectors.filter(
             (connector) =>
               typeof (connector as any)?.getChainId === "function" &&
-              connector.id !== "farcaster-frame"
+              !frameIds.has(connector.id)
           );
 
           const preferredConnector =
             capableConnectors.find((connector) => connector.ready) ??
             capableConnectors[0] ??
             connectors.find((connector) =>
+              typeof (connector as any)?.getChainId === "function" && connector.ready && !frameIds.has(connector.id)
+            ) ??
+            connectors.find((connector) =>
+              typeof (connector as any)?.getChainId === "function" && !frameIds.has(connector.id)
+            ) ??
+            connectors.find((connector) =>
               typeof (connector as any)?.getChainId === "function" && connector.ready
             ) ??
             connectors.find((connector) => typeof (connector as any)?.getChainId === "function") ??
+            connectors.find((connector) => connector.ready && !frameIds.has(connector.id)) ??
             connectors.find((connector) => connector.ready) ??
             connectors[0];
 

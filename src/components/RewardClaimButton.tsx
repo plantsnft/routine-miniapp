@@ -6,6 +6,10 @@ import { useAccount, useConnect, useSwitchChain } from "wagmi";
 import { base } from "wagmi/chains";
 import { useHapticFeedback } from "~/hooks/useHapticFeedback";
 
+// Polling cadence while waiting for Base to mine the reward transaction.
+const RECEIPT_POLL_INTERVAL_MS = 1000;
+const RECEIPT_MAX_ATTEMPTS = 30;
+
 interface RewardClaimButtonProps {
   fid: number;
   checkedIn: boolean;
@@ -48,6 +52,7 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
   });
 
   const [isTxPending, setIsTxPending] = useState(false);
+  // Shared helper to stop the 30s status refresher.
   const stopPolling = useCallback(() => {
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
@@ -66,6 +71,7 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
 
     let isSubscribed = true;
 
+    // Poll the server to keep canClaim/claimedToday in sync while the user stays on the page.
     const fetchStatus = async () => {
       try {
         const res = await fetch(`/api/checkin/reward?fid=${fid}`);
@@ -362,7 +368,7 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
       setIsTxPending(true);
 
       const waitForReceipt = async (hash: string) => {
-        for (let attempt = 0; attempt < 30; attempt += 1) {
+        for (let attempt = 0; attempt < RECEIPT_MAX_ATTEMPTS; attempt += 1) {
           try {
             const receipt = await provider.request?.({
               method: "eth_getTransactionReceipt",
@@ -372,7 +378,7 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
           } catch (receiptError) {
             console.warn("[RewardClaimButton] Waiting for receipt", receiptError);
           }
-          await new Promise((resolve) => setTimeout(resolve, 1000));
+          await new Promise((resolve) => setTimeout(resolve, RECEIPT_POLL_INTERVAL_MS));
         }
         return null;
       };
@@ -480,6 +486,7 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
   const hasClaimedBanner = claimedToday && !hasApiError;
   const isDisabled = isClaiming || isLoading || success || isTxPending;
 
+  // Keep button copy descriptive for each UI state.
   const buttonContent = (() => {
     if (isTxPending || isClaiming) {
       return (

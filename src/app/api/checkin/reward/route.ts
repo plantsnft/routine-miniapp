@@ -8,6 +8,12 @@ import { createPublicClient, encodeFunctionData, http } from "viem";
 import { base } from "viem/chains";
 import type { WebhookUserCreated } from "@neynar/nodejs-sdk";
 
+/**
+ * Reward claim flow for the Catwalk mini app.
+ * The POST handler prepares a signed transaction users submit via Frame's smart wallet.
+ * The PUT handler backfills Supabase once the transaction is mined.
+ */
+
 const REWARD_CLAIM_CONTRACT_ADDRESS = process.env.REWARD_CLAIM_CONTRACT_ADDRESS || "";
 const BASE_RPC_URL = process.env.BASE_RPC_URL || "https://mainnet.base.org";
 const REWARD_SIGNER_ADDRESS = process.env.REWARD_SIGNER_ADDRESS || "";
@@ -106,6 +112,9 @@ async function fetchNeynarUser(fid: number): Promise<NeynarUserData> {
   }
 }
 
+/**
+ * Coerces an address string into checksum format or returns null when invalid.
+ */
 function normalizeAddress(address: string | null | undefined): string | null {
   if (!address || typeof address !== "string") {
     return null;
@@ -121,11 +130,14 @@ function normalizeAddress(address: string | null | undefined): string | null {
   }
 }
 
+// Extract every wallet Neynar associates with the given FID so we can validate claimants.
 function collectWalletAddresses(fid: number, user: NeynarUserData): string[] {
   const addresses = new Set<string>();
 
   if (!user) {
-    console.log(`[Reward Claim] FID ${fid}: No Neynar profile found, cannot derive wallet address`);
+    console.log(
+      `[Reward Claim] FID ${fid}: No Neynar profile found, cannot derive wallet address`
+    );
     return [];
   }
 
@@ -166,6 +178,10 @@ function collectWalletAddresses(fid: number, user: NeynarUserData): string[] {
   return unique;
 }
 
+/**
+ * Prefers the user's currently connected wallet as long as Neynar recognises it.
+ * Falls back to custodial / verified addresses when nothing is supplied.
+ */
 function resolveClaimantAddress(
   fid: number,
   user: NeynarUserData,
@@ -350,7 +366,9 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const fid = Number(body.fid);
     const rawClaimantAddress =
-      typeof body.claimantAddress === "string" ? body.claimantAddress : (body.claimantAddress?.address as string | undefined) || "";
+      typeof body.claimantAddress === "string"
+        ? body.claimantAddress
+        : ((body.claimantAddress?.address as string | undefined) || "");
     const normalizedClaimant = normalizeAddress(rawClaimantAddress);
 
     if (!fid || isNaN(fid)) {
@@ -396,8 +414,8 @@ export async function POST(req: NextRequest) {
     }
 
     const neynarUser = await fetchNeynarUser(fid);
-    const walletAddress = resolveClaimantAddress(fid, neynarUser, normalizedClaimant);
-    if (!walletAddress) {
+    const claimantAddress = resolveClaimantAddress(fid, neynarUser, normalizedClaimant);
+    if (!claimantAddress) {
       return NextResponse.json(
         {
           ok: false,
@@ -449,7 +467,7 @@ export async function POST(req: NextRequest) {
       `[Reward Claim] FID ${fid}: Score ${displayScore} -> ${tierLabel} tier awarding ${tokenAmount.toString()} tokens`
     );
 
-    const signature = await generateClaimSignature(fid, dayId, tierIndex, walletAddress);
+    const signature = await generateClaimSignature(fid, dayId, tierIndex, claimantAddress);
 
     let txData;
     try {

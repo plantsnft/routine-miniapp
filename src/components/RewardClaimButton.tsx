@@ -226,11 +226,13 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
       let accounts: string[] = [];
       try {
         accounts = await provider.request?.({ method: "eth_requestAccounts" });
+        console.log("[RewardClaimButton] Accounts from provider:", accounts);
       } catch (accountsError) {
         console.warn("[RewardClaimButton] Unable to read accounts from provider", accountsError);
       }
 
       const fromAddress = accounts?.[0] ?? address;
+      console.log("[RewardClaimButton] Using fromAddress:", fromAddress);
       if (!fromAddress) {
         throw new Error("No wallet account available. Please connect your wallet again.");
       }

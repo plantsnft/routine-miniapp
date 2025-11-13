@@ -22,11 +22,22 @@ const REWARD_HIGH = 333_333n * TOKEN_UNIT;
 const REWARD_CREATOR = 1_000_000n * TOKEN_UNIT;
 
 const signerWallet = SIGNER_PRIVATE_KEY ? new ethers.Wallet(SIGNER_PRIVATE_KEY) : null;
+if (signerWallet) {
+  console.info("[Reward Claim] Loaded signer address:", signerWallet.address);
+}
 if (signerWallet && REWARD_SIGNER_ADDRESS) {
   const signerAddr = signerWallet.address.toLowerCase();
   if (signerAddr !== REWARD_SIGNER_ADDRESS.toLowerCase()) {
     console.warn(
-      "[Reward Claim] Warning: REWARD_SIGNER_PRIVATE_KEY address does not match REWARD_SIGNER_ADDRESS env."
+      "[Reward Claim] Warning: REWARD_SIGNER_PRIVATE_KEY address does not match REWARD_SIGNER_ADDRESS env.",
+      "signer=",
+      signerAddr,
+      "env=",
+      REWARD_SIGNER_ADDRESS.toLowerCase(),
+      "privateKeyPrefix=",
+      SIGNER_PRIVATE_KEY.slice(0, 10),
+      "fallbackPrefix=",
+      process.env.PRIVATE_KEY?.slice(0, 10)
     );
   }
 } else if (!process.env.REWARD_SIGNER_PRIVATE_KEY) {

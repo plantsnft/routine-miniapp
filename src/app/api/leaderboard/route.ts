@@ -622,6 +622,9 @@ export async function GET(req: NextRequest) {
     } else {
       if (sortBy === "total_checkins") {
         const topAllTime = await getTopUsersByTotalCheckins(200);
+        if (topAllTime.length === 0) {
+          console.warn("[Leaderboard] total_checkins query returned no rows; falling back to streak data");
+        }
         fids = topAllTime.map((c) => c.fid);
         topAllTime.forEach((c) => {
           checkinMap.set(c.fid, {
@@ -630,6 +633,17 @@ export async function GET(req: NextRequest) {
             total_checkins: c.total_checkins || 0,
           });
         });
+        if (fids.length === 0) {
+          const fallbackCheckins = await getTopUsersByStreak(200);
+          fids = fallbackCheckins.map((c) => c.fid);
+          fallbackCheckins.forEach((c) => {
+            checkinMap.set(c.fid, {
+              streak: c.streak || 0,
+              last_checkin: c.last_checkin || null,
+              total_checkins: c.total_checkins || 0,
+            });
+          });
+        }
       } else {
         // For current streak mode: Only get users who have checked in (ranked by streak)
         const topCheckins = await getTopUsersByStreak(200);
@@ -781,11 +795,22 @@ export async function GET(req: NextRequest) {
             username: u.username,
             displayName: u.display_name,
             pfp_url: u.pfp_url || undefined,
-            allAddresses: allAddresses,
+            allAddresses,
           },
-        ];
+        ] as const;
       })
     );
+    // Ensure every fid we plan to rank has a basic entry even if Neynar omitted user data.
+    fids.forEach((fid) => {
+      if (!userMap.has(fid)) {
+        userMap.set(fid, {
+          username: undefined,
+          displayName: undefined,
+          pfp_url: undefined,
+          allAddresses: [],
+        });
+      }
+    });
 
     // Step 4: Use balances from blockchain (already matched to FIDs in Step 2-3)
     // For holdings mode: Use blockchain balances we already fetched and matched

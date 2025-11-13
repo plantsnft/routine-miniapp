@@ -273,7 +273,7 @@ export async function markRewardClaimed(
  */
 export async function getTopUsersByStreak(limit: number = 100): Promise<CheckinRecord[]> {
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/checkins?order=streak.desc&limit=${limit}`,
+    `${SUPABASE_URL}/rest/v1/checkins?select=fid,last_checkin,streak,total_checkins&order=streak.desc.nullslast&limit=${limit}`,
     {
       method: "GET",
       headers: SUPABASE_HEADERS,
@@ -299,7 +299,7 @@ export async function getTopUsersByTotalCheckins(
   limit: number = 100
 ): Promise<CheckinRecord[]> {
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/checkins?order=total_checkins.desc&limit=${limit}`,
+    `${SUPABASE_URL}/rest/v1/checkins?select=fid,last_checkin,streak,total_checkins&order=total_checkins.desc.nullslast&limit=${limit}`,
     {
       method: "GET",
       headers: SUPABASE_HEADERS,

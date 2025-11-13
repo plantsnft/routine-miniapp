@@ -162,32 +162,24 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
     try {
       if (!isConnected) {
         try {
-          const frameIds = new Set(["farcaster-frame", "frame", "w3m-frame"]);
-          const capableConnectors = connectors.filter(
-            (connector) =>
-              typeof (connector as any)?.getChainId === "function" &&
-              !frameIds.has(connector.id)
+          const frameIds = new Set(["farcaster-frame", "frame"]);
+          const capableConnectors = connectors.filter((connector) => {
+            const hasChainId = typeof (connector as any)?.getChainId === "function";
+            return hasChainId && !frameIds.has(connector.id);
+          });
+
+          const fallbackCapable = connectors.filter(
+            (connector) => typeof (connector as any)?.getChainId === "function"
           );
 
           const preferredConnector =
             capableConnectors.find((connector) => connector.ready) ??
             capableConnectors[0] ??
-            connectors.find((connector) =>
-              typeof (connector as any)?.getChainId === "function" && connector.ready && !frameIds.has(connector.id)
-            ) ??
-            connectors.find((connector) =>
-              typeof (connector as any)?.getChainId === "function" && !frameIds.has(connector.id)
-            ) ??
-            connectors.find((connector) =>
-              typeof (connector as any)?.getChainId === "function" && connector.ready
-            ) ??
-            connectors.find((connector) => typeof (connector as any)?.getChainId === "function") ??
-            connectors.find((connector) => connector.ready && !frameIds.has(connector.id)) ??
-            connectors.find((connector) => connector.ready) ??
-            connectors[0];
+            fallbackCapable.find((connector) => connector.ready) ??
+            fallbackCapable[0];
 
           if (!preferredConnector) {
-            throw new Error("No available wallet connector");
+            throw new Error("No compatible wallet connector available");
           }
 
           await connectAsync({
@@ -198,7 +190,7 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
           setStatus((prev) => ({
             ...prev,
             isClaiming: false,
-            errorMessage: "Please connect your wallet to claim rewards",
+            errorMessage: "No compatible wallet found. Please open in Coinbase Wallet or Frame-compatible browser.",
           }));
           return;
         }

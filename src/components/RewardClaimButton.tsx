@@ -259,7 +259,7 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ fid }),
+        body: JSON.stringify({ fid, claimantAddress: fromAddress }),
       });
 
       const transactionData = await transactionRes.json().catch(() => null);

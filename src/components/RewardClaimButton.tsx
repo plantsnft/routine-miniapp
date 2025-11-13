@@ -4,8 +4,6 @@ import Image from "next/image";
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   useAccount,
-  useSendTransaction,
-  useWaitForTransactionReceipt,
   useConnect,
   useSwitchChain,
   useDisconnect,
@@ -35,13 +33,14 @@ interface RewardStatus {
  */
 export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
   const { triggerHaptic } = useHapticFeedback();
-  const { isConnected, chainId, connector: activeConnector } = useAccount();
+  const { isConnected, chainId, connector: activeConnector, address } = useAccount();
   const { connectAsync, connectors } = useConnect();
   const { switchChainAsync } = useSwitchChain();
   const { disconnectAsync } = useDisconnect();
 
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const successTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const baseHexChainId = `0x${base.id.toString(16)}`;
 
   const [status, setStatus] = useState<RewardStatus>({
     canClaim: null,
@@ -54,28 +53,9 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
     txHash: null,
   });
 
-  const { sendTransaction, error: txError, isError: isTxError, isPending: isTxPending } = useSendTransaction();
+  const [isTxPending, setIsTxPending] = useState(false);
   const { canClaim, claimedToday, isLoading, isClaiming, hasApiError, success, errorMessage, txHash } = status;
   const txHashForReceipt = txHash ? (txHash as `0x${string}`) : undefined;
-
-  const { isLoading: isTxConfirming, isSuccess: isTxConfirmed } = useWaitForTransactionReceipt({
-    hash: txHashForReceipt,
-  });
-
-  const stopPolling = useCallback(() => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-      pollingRef.current = null;
-    }
-  }, []);
-
-  useEffect(() => () => {
-    stopPolling();
-    if (successTimerRef.current) {
-      clearTimeout(successTimerRef.current);
-      successTimerRef.current = null;
-    }
-  }, [stopPolling]);
 
   useEffect(() => {
     if (!checkedIn || !fid) {
@@ -168,6 +148,7 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
     triggerHaptic("light");
 
     try {
+      const isFrameId = (id?: string) => (id ? ["farcaster-frame", "frame"].includes(id) : false);
       const isConnectorCapable = (
         connector: (typeof connectors)[number] | typeof activeConnector | null
       ) => !!connector && typeof (connector as any)?.getChainId === "function";
@@ -258,14 +239,7 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
         return;
       }
 
-      let targetChainId = chainId;
-      try {
-        targetChainId = await (currentConnector as any)?.getChainId?.();
-      } catch (err) {
-        console.warn("[RewardClaimButton] Unable to read connector chainId", err);
-      }
-
-      if (targetChainId !== base.id) {
+      if (chainId !== base.id) {
         try {
           await switchChainAsync({ chainId: base.id });
         } catch (_switchError: any) {
@@ -340,33 +314,135 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
         return;
       }
 
-      sendTransaction(
-        {
-          to: data.transaction.to as `0x${string}`,
-          data: data.transaction.data as `0x${string}`,
-          value: BigInt(data.transaction.value || "0"),
-        },
-        {
-          onSuccess: (hash) => {
-            setStatus((prev) => ({ ...prev, txHash: hash as string }));
-            console.log("[RewardClaimButton] Transaction sent:", hash);
-          },
-          onError: (sendError: any) => {
-            console.error("[RewardClaimButton] Transaction error:", sendError);
-            let errorMessage = sendError.message || "Transaction failed. Please try again.";
-            if (sendError.message && sendError.message.includes("pattern")) {
-              errorMessage = "Invalid contract address format. Please check REWARD_CLAIM_CONTRACT_ADDRESS in Vercel environment variables.";
-            } else if (sendError.message && sendError.message.includes("user rejected")) {
-              errorMessage = "Transaction cancelled by user.";
-            }
-            setStatus((prev) => ({
-              ...prev,
-              isClaiming: false,
-              errorMessage,
-            }));
-          },
+      const provider =
+        (await (activeConnector as any)?.getProvider?.()) ??
+        (window as any)?.ethereum ??
+        null;
+
+      if (!provider) {
+        throw new Error("No wallet provider detected. Please open in Frame or Coinbase Wallet.");
+      }
+
+      try {
+        const currentChainHex = await provider.request?.({ method: "eth_chainId" });
+        if (currentChainHex?.toLowerCase() !== baseHexChainId.toLowerCase()) {
+          await provider.request?.({
+            method: "wallet_switchEthereumChain",
+            params: [{ chainId: baseHexChainId }],
+          });
         }
-      );
+      } catch (switchError: any) {
+        console.error("[RewardClaimButton] Provider chain switch error:", switchError);
+        setStatus((prev) => ({
+          ...prev,
+          isClaiming: false,
+          errorMessage: "Please switch to Base network to claim rewards",
+        }));
+        return;
+      }
+
+      let fromAddress = address;
+      if (!fromAddress) {
+        try {
+          const accounts = await provider.request?.({ method: "eth_accounts" });
+          fromAddress = accounts?.[0] ?? null;
+        } catch (accountsError) {
+          console.warn("[RewardClaimButton] Unable to read accounts from provider", accountsError);
+        }
+      }
+
+      if (!fromAddress) {
+        throw new Error("No wallet account available. Please connect your wallet again.");
+      }
+
+      const toHexValue = (value?: string | null) => {
+        if (!value) return "0x0";
+        try {
+          const big = BigInt(value);
+          if (big === 0n) return "0x0";
+          return `0x${big.toString(16)}`;
+        } catch {
+          return value;
+        }
+      };
+
+      const txParams = {
+        from: fromAddress,
+        to: data.transaction.to,
+        data: data.transaction.data,
+        value: toHexValue(data.transaction.value),
+      };
+
+      let txHashSent: string | null = null;
+
+      try {
+        txHashSent = await provider.request?.({
+          method: "eth_sendTransaction",
+          params: [txParams],
+        });
+      } catch (sendError: any) {
+        console.error("[RewardClaimButton] Transaction error:", sendError);
+        let errorMessage = sendError?.message || "Transaction failed. Please try again.";
+        if (errorMessage.toLowerCase().includes("user rejected")) {
+          errorMessage = "Transaction cancelled by user.";
+        }
+        setStatus((prev) => ({
+          ...prev,
+          isClaiming: false,
+          errorMessage,
+        }));
+        return;
+      }
+
+      if (!txHashSent || typeof txHashSent !== "string") {
+        throw new Error("Failed to send transaction. Please try again.");
+      }
+
+      setStatus((prev) => ({ ...prev, txHash: txHashSent }));
+      setIsTxPending(true);
+
+      try {
+        const updateRes = await fetch("/api/checkin/reward", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ fid, txHash: txHashSent }),
+        });
+
+        const updateData = await updateRes.json().catch(() => null);
+        if (!updateRes.ok || !updateData?.ok) {
+          throw new Error(updateData?.error || "Failed to update reward status.");
+        }
+
+        setStatus((prev) => ({
+          ...prev,
+          success: true,
+          claimedToday: true,
+          hasApiError: false,
+          errorMessage: null,
+          isClaiming: false,
+          canClaim: false,
+        }));
+        triggerHaptic("medium");
+        stopPolling();
+        if (successTimerRef.current) {
+          clearTimeout(successTimerRef.current);
+        }
+        successTimerRef.current = setTimeout(() => {
+          setStatus((prev) => ({ ...prev, success: false }));
+        }, 5000);
+      } catch (putError: any) {
+        console.error("[RewardClaimButton] Error updating reward status:", putError);
+        setStatus((prev) => ({
+          ...prev,
+          isClaiming: false,
+          hasApiError: true,
+          errorMessage: putError?.message || "Failed to update reward status",
+        }));
+      } finally {
+        setIsTxPending(false);
+      }
     } catch (err: any) {
       console.error("[RewardClaimButton] Error:", err);
       setStatus((prev) => ({
@@ -374,6 +450,7 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
         isClaiming: false,
         errorMessage: err?.message || "Network error. Please try again.",
       }));
+      setIsTxPending(false);
     }
   }, [
     claimedToday,
@@ -388,14 +465,16 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
     chainId,
     switchChainAsync,
     fid,
-    sendTransaction,
     stopPolling,
     activeConnector,
     disconnectAsync,
+    address,
+    baseHexChainId,
+    successTimerRef,
   ]);
 
   useEffect(() => {
-    if (isTxConfirmed && txHashForReceipt) {
+    if (isTxPending) {
       const updateClaimStatus = async () => {
         try {
           const res = await fetch("/api/checkin/reward", {
@@ -446,7 +525,7 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
 
       updateClaimStatus();
     }
-  }, [isTxConfirmed, txHashForReceipt, fid, triggerHaptic, stopPolling]);
+  }, [isTxPending, txHashForReceipt, fid, triggerHaptic, stopPolling]);
 
   useEffect(() => {
     if (isTxError && txError) {
@@ -459,10 +538,10 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
   }, [isTxError, txError]);
 
   const hasClaimedBanner = claimedToday && !hasApiError;
-  const isDisabled = isClaiming || isLoading || success || isTxPending || isTxConfirming;
+  const isDisabled = isClaiming || isLoading || success || isTxPending;
 
   const buttonText = (() => {
-    if (isTxPending || isTxConfirming) return "Confirming...";
+    if (isTxPending) return "Confirming...";
     if (isClaiming) return "Preparing...";
     if (success) return "Reward Claimed! ✓";
     if (isLoading) return "Checking...";

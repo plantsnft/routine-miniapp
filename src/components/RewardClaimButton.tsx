@@ -162,7 +162,15 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
     try {
       if (!isConnected) {
         try {
-          const preferredConnector = connectors.find((connector) => connector.ready) ?? connectors[0];
+          const eligibleConnectors = connectors.filter(
+            (connector) => connector.id !== "farcaster-frame"
+          );
+
+          const preferredConnector =
+            eligibleConnectors.find((connector) => connector.ready) ??
+            eligibleConnectors[0] ??
+            connectors.find((connector) => connector.ready) ??
+            connectors[0];
 
           if (!preferredConnector) {
             throw new Error("No available wallet connector");

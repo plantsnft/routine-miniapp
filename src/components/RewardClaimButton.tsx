@@ -163,19 +163,20 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
       if (!isConnected) {
         try {
           const frameIds = new Set(["farcaster-frame", "frame"]);
-          const capableConnectors = connectors.filter((connector) => {
-            const hasChainId = typeof (connector as any)?.getChainId === "function";
-            return hasChainId && !frameIds.has(connector.id);
-          });
+          const isCapable = (connector: (typeof connectors)[number]) =>
+            typeof (connector as any)?.getChainId === "function" && !frameIds.has(connector.id);
 
-          const fallbackCapable = connectors.filter(
-            (connector) => typeof (connector as any)?.getChainId === "function"
-          );
+          const prioritizedIds = ["coinbaseWallet", "metaMask"];
+          const prioritizedConnectors = prioritizedIds
+            .map((id) => connectors.find((connector) => connector.id === id && isCapable(connector) && connector.ready))
+            .filter(Boolean) as typeof connectors;
+
+          const readyCapable = connectors.filter((connector) => isCapable(connector) && connector.ready);
+          const fallbackCapable = connectors.filter((connector) => isCapable(connector));
 
           const preferredConnector =
-            capableConnectors.find((connector) => connector.ready) ??
-            capableConnectors[0] ??
-            fallbackCapable.find((connector) => connector.ready) ??
+            prioritizedConnectors[0] ??
+            readyCapable[0] ??
             fallbackCapable[0];
 
           if (!preferredConnector) {
@@ -190,7 +191,7 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
           setStatus((prev) => ({
             ...prev,
             isClaiming: false,
-            errorMessage: "No compatible wallet found. Please open in Coinbase Wallet or Frame-compatible browser.",
+            errorMessage: "We couldn't find a compatible wallet. Please open the mini app in Coinbase Wallet or a standard browser.",
           }));
           return;
         }

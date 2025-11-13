@@ -54,7 +54,7 @@ export const config = createConfig({
   connectors: [
     (() => {
       const frame = farcasterFrame();
-      return { ...frame, id: "w3m-frame" } as typeof frame;
+      return Object.assign({}, frame, { id: "w3m-frame" });
     })(),
     coinbaseWallet({
       appName: APP_NAME,

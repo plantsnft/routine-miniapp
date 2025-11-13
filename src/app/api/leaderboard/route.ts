@@ -917,6 +917,10 @@ export async function GET(req: NextRequest) {
       // For holdings mode: Include users with tokens OR users who have checked in (for broader coverage)
       // For streak mode: Only include users who have checked in
       const checkinData = checkinMap.get(fid);
+      const allTimeStreak = Math.max(
+        checkinData?.total_checkins ?? 0,
+        checkinData?.streak ?? 0
+      );
       if (sortBy === "holdings") {
         // Include if they have tokens OR if they have checked in (to show all potential holders)
         if (tokenBalance > 0 || checkinData) {
@@ -929,6 +933,7 @@ export async function GET(req: NextRequest) {
             displayName,
             pfp_url: userData?.pfp_url,
             rank: 0, // Will be set after sorting
+            allTimeStreak,
             tokenBalance: tokenBalance,
           });
         }
@@ -944,6 +949,7 @@ export async function GET(req: NextRequest) {
             displayName,
             pfp_url: userData?.pfp_url,
             rank: 0, // Will be set after sorting
+            allTimeStreak,
             tokenBalance: 0, // Not needed for streak mode
           });
         }
@@ -965,8 +971,8 @@ export async function GET(req: NextRequest) {
     } else if (sortBy === "total_checkins") {
       // Sort by total check-ins all time (descending)
       entriesWithBalances.sort((a, b) => {
-        const totalA = a.total_checkins || 0;
-        const totalB = b.total_checkins || 0;
+        const totalA = Math.max(a.allTimeStreak || 0, a.total_checkins || 0);
+        const totalB = Math.max(b.allTimeStreak || 0, b.total_checkins || 0);
         if (totalB !== totalA) {
           return totalB - totalA;
         }

@@ -27,6 +27,7 @@ export interface LeaderboardEntry {
   streak: number;
   last_checkin: string | null;
   total_checkins?: number; // All-time total check-in count
+  allTimeStreak?: number; // Derived longest streak
   username?: string;
   displayName?: string;
   pfp_url?: string;

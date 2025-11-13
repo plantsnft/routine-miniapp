@@ -371,6 +371,10 @@ export function LeaderboardTab() {
                 const primaryText = displayLabel || usernameLabel;
                 const linkHref =
                   entry.profileUrl || `https://warpcast.com/~/users/${entry.fid.toString()}`;
+                const allTimeValue =
+                  entry.allTimeStreak !== undefined && entry.allTimeStreak !== null
+                    ? entry.allTimeStreak
+                    : entry.total_checkins || 0;
 
                 return (
               <div
@@ -464,8 +468,7 @@ export function LeaderboardTab() {
                     >
                       💰 {formatTokenBalance(entry.tokenBalance)} $CATWALK
                     </span>
-                  ) : (
-                    walkSortMode === "current_streak" ? (
+                  ) : walkSortMode === "current_streak" ? (
                       <span
                         style={{
                           color: "#000000",
@@ -480,22 +483,21 @@ export function LeaderboardTab() {
                       >
                         🔥 {entry.streak} day{entry.streak === 1 ? "" : "s"}
                       </span>
-                    ) : (
-                      <span
-                        style={{
-                          color: "#000000",
-                          fontSize: 9,
-                          background: "#c1b400",
-                          padding: "2px 6px",
-                          borderRadius: 4,
-                          fontWeight: 700,
-                          whiteSpace: "nowrap",
-                          flexShrink: 0,
-                        }}
-                      >
-                        🐱 {entry.total_checkins || 0} walk{entry.total_checkins === 1 ? "" : "s"}
-                      </span>
-                    )
+                  ) : (
+                    <span
+                      style={{
+                        color: "#000000",
+                        fontSize: 9,
+                        background: "#c1b400",
+                        padding: "2px 6px",
+                        borderRadius: 4,
+                        fontWeight: 700,
+                        whiteSpace: "nowrap",
+                        flexShrink: 0,
+                      }}
+                    >
+                      🏁 {allTimeValue} day{allTimeValue === 1 ? "" : "s"}
+                    </span>
                   )}
                 </div>
               </div>

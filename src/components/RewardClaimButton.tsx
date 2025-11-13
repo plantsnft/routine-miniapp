@@ -2,12 +2,7 @@
 
 import Image from "next/image";
 import { useState, useEffect, useCallback, useRef } from "react";
-import {
-  useAccount,
-  useConnect,
-  useSwitchChain,
-  useDisconnect,
-} from "wagmi";
+import { useAccount, useConnect, useSwitchChain } from "wagmi";
 import { base } from "wagmi/chains";
 import { useHapticFeedback } from "~/hooks/useHapticFeedback";
 
@@ -36,7 +31,6 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
   const { isConnected, chainId, connector: activeConnector, address } = useAccount();
   const { connectAsync, connectors } = useConnect();
   const { switchChainAsync } = useSwitchChain();
-  const { disconnectAsync } = useDisconnect();
 
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const successTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -54,6 +48,12 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
   });
 
   const [isTxPending, setIsTxPending] = useState(false);
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+  }, []);
   const { canClaim, claimedToday, isLoading, isClaiming, hasApiError, success, errorMessage, txHash } = status;
   const txHashForReceipt = txHash ? (txHash as `0x${string}`) : undefined;
 
@@ -148,111 +148,111 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
     triggerHaptic("light");
 
     try {
-      const isFrameId = (id?: string) => (id ? ["farcaster-frame", "frame"].includes(id) : false);
-      const isConnectorCapable = (
-        connector: (typeof connectors)[number] | typeof activeConnector | null
-      ) => !!connector && typeof (connector as any)?.getChainId === "function";
+      let provider: any = null;
+      let connectorInUse = activeConnector ?? null;
 
-      let currentConnector = activeConnector ?? null;
-      let hasCapableConnection = false;
-
-      if (isConnected && currentConnector && isConnectorCapable(currentConnector)) {
+      if (typeof window !== "undefined") {
         try {
-          const connectorChainId = await (currentConnector as any).getChainId?.();
-          if (connectorChainId != null) {
-            hasCapableConnection = true;
+          const miniAppModule = await import("@farcaster/miniapp-sdk");
+          const miniAppProvider = miniAppModule?.default?.wallet?.ethProvider;
+          if (miniAppProvider) {
+            provider = miniAppProvider;
           }
-        } catch (chainIdError) {
-          console.warn(
-            "[RewardClaimButton] Connected connector does not provide getChainId result",
-            chainIdError
-          );
+        } catch (sdkError) {
+          console.debug("[RewardClaimButton] MiniApp SDK not available", sdkError);
         }
       }
 
-      if (isConnected && (!currentConnector || !hasCapableConnection) && disconnectAsync) {
-        try {
-          await disconnectAsync();
-          currentConnector = null;
-        } catch (disconnectError) {
-          console.warn("[RewardClaimButton] Unable to disconnect incompatible connector", disconnectError);
-        }
-        hasCapableConnection = false;
+      const connectorMap = new Map<string, (typeof connectors)[number]>();
+      if (connectorInUse) {
+        connectorMap.set(connectorInUse.id, connectorInUse);
       }
+      connectors.forEach((connector) => {
+        if (connector) {
+          connectorMap.set(connector.id, connector);
+        }
+      });
 
-      if (!hasCapableConnection) {
+      const preferredOrder = [
+        connectorInUse?.id,
+        "farcaster",
+        "farcaster-frame",
+        "frame",
+        "coinbaseWallet",
+        "metaMask",
+      ].filter(Boolean) as string[];
+
+      const orderedConnectors = Array.from(
+        new Map(
+          [
+            ...preferredOrder.map((id) => [id, connectorMap.get(id) ?? null]),
+            ...connectorMap.entries(),
+          ].filter((entry): entry is [string, (typeof connectors)[number]] => Boolean(entry[1]))
+        ).values()
+      );
+
+      const ensureConnected = async (connector: (typeof connectors)[number] | null) => {
+        if (!connector) return null;
         try {
-          const frameIds = new Set(["farcaster-frame", "frame"]);
-          const isCapable = (connector: (typeof connectors)[number]) =>
-            typeof (connector as any)?.getChainId === "function" && !frameIds.has(connector.id);
-
-          const prioritizedIds = ["coinbaseWallet", "metaMask"];
-          const prioritizedConnectors = prioritizedIds
-            .map((id) => connectors.find((connector) => connector.id === id && isCapable(connector) && connector.ready))
-            .filter(Boolean) as typeof connectors;
-
-          const readyCapable = connectors.filter((connector) => isCapable(connector) && connector.ready);
-          const fallbackCapable = connectors.filter((connector) => isCapable(connector));
-
-          const preferredConnector =
-            prioritizedConnectors[0] ??
-            readyCapable[0] ??
-            fallbackCapable[0];
-
-          if (!preferredConnector) {
-            throw new Error("No compatible wallet connector available");
+          if (!isConnected || activeConnector?.id !== connector.id) {
+            await connectAsync({ connector, chainId: base.id });
           }
-
-          await connectAsync({
-            chainId: base.id,
-            connector: preferredConnector,
-          });
-          currentConnector = preferredConnector ?? currentConnector;
-          if (currentConnector && typeof (currentConnector as any)?.getChainId === "function") {
-            try {
-              const connectorChainId = await (currentConnector as any).getChainId?.();
-              hasCapableConnection = connectorChainId != null;
-            } catch (chainIdError) {
-              console.warn(
-                "[RewardClaimButton] Connector getChainId failed after connection",
-                chainIdError
-              );
-              hasCapableConnection = false;
-            }
+          const providerInstance = await connector.getProvider?.();
+          if (providerInstance) {
+            connectorInUse = connector;
+            return providerInstance;
           }
-        } catch (_connectError: any) {
-          setStatus((prev) => ({
-            ...prev,
-            isClaiming: false,
-            errorMessage: "We couldn't find a compatible wallet. Please open the mini app in Coinbase Wallet or a standard browser.",
-          }));
-          return;
+        } catch (connectorError) {
+          console.warn(`[RewardClaimButton] Connector ${connector.id} failed`, connectorError);
+        }
+        return null;
+      };
+
+      if (!provider) {
+        for (const connector of orderedConnectors) {
+          provider = await ensureConnected(connector);
+          if (provider) break;
         }
       }
 
-      if (!hasCapableConnection || !currentConnector || typeof (currentConnector as any)?.getChainId !== "function") {
-        setStatus((prev) => ({
-          ...prev,
-          isClaiming: false,
-          errorMessage: "Wallet connection failed. Please try again.",
-        }));
-        return;
+      if (!provider && typeof window !== "undefined") {
+        provider = (window as any)?.ethereum ?? null;
       }
 
-      if (chainId !== base.id) {
+      if (!provider) {
+        throw new Error("No wallet provider detected. Please open the mini app in Frame or Coinbase Wallet.");
+      }
+
+      let accounts: string[] = [];
+      try {
+        accounts = await provider.request?.({ method: "eth_requestAccounts" });
+      } catch (accountsError) {
+        console.warn("[RewardClaimButton] Unable to read accounts from provider", accountsError);
+      }
+
+      const fromAddress = accounts?.[0] ?? address;
+      if (!fromAddress) {
+        throw new Error("No wallet account available. Please connect your wallet again.");
+      }
+
+      const ensureBaseChain = async () => {
         try {
-          await switchChainAsync({ chainId: base.id });
-        } catch (_switchError: any) {
-          setStatus((prev) => ({
-            ...prev,
-            isClaiming: false,
-            errorMessage: "Please switch to Base network to claim rewards",
-          }));
-          return;
+          const currentChainHex = await provider.request?.({ method: "eth_chainId" });
+          if (currentChainHex?.toLowerCase() !== baseHexChainId.toLowerCase()) {
+            await provider.request?.({
+              method: "wallet_switchEthereumChain",
+              params: [{ chainId: baseHexChainId }],
+            });
+          }
+        } catch (switchError) {
+          console.warn("[RewardClaimButton] Provider chain switch error", switchError);
+          throw new Error("Please switch to Base network to claim rewards");
         }
-      }
+      };
 
-      const res = await fetch("/api/checkin/reward", {
+      await ensureBaseChain();
+
+      const transactionRes = await fetch("/api/checkin/reward", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -260,14 +260,14 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
         body: JSON.stringify({ fid }),
       });
 
-      const data = await res.json().catch(() => null);
+      const transactionData = await transactionRes.json().catch(() => null);
 
-      if (!res.ok || !data?.ok) {
-        const errorMsg = data?.error || "Failed to prepare claim transaction";
+      if (!transactionRes.ok || !transactionData?.ok) {
+        const errorMsg = transactionData?.error || "Failed to prepare claim transaction";
         console.error("[RewardClaimButton] API error:", errorMsg);
 
         const alreadyClaimed =
-          res.status === 409 ||
+          transactionRes.status === 409 ||
           (typeof errorMsg === "string" && errorMsg.toLowerCase().includes("already claimed"));
 
         if (alreadyClaimed) {
@@ -293,8 +293,8 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
         return;
       }
 
-      if (!data.transaction || !data.transaction.to || !data.transaction.data) {
-        console.error("[RewardClaimButton] Invalid transaction data:", data);
+      const txPayload = transactionData.transaction;
+      if (!txPayload || !txPayload.to || !txPayload.data) {
         setStatus((prev) => ({
           ...prev,
           isClaiming: false,
@@ -303,59 +303,8 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
         return;
       }
 
-      const addressPattern = /^0x[a-fA-F0-9]{40}$/;
-      if (!addressPattern.test(data.transaction.to)) {
-        console.error("[RewardClaimButton] Invalid contract address format:", data.transaction.to);
-        setStatus((prev) => ({
-          ...prev,
-          isClaiming: false,
-          errorMessage: "Invalid contract address. Please ensure REWARD_CLAIM_CONTRACT_ADDRESS is set correctly in Vercel.",
-        }));
-        return;
-      }
-
-      const provider =
-        (await (activeConnector as any)?.getProvider?.()) ??
-        (window as any)?.ethereum ??
-        null;
-
-      if (!provider) {
-        throw new Error("No wallet provider detected. Please open in Frame or Coinbase Wallet.");
-      }
-
-      try {
-        const currentChainHex = await provider.request?.({ method: "eth_chainId" });
-        if (currentChainHex?.toLowerCase() !== baseHexChainId.toLowerCase()) {
-          await provider.request?.({
-            method: "wallet_switchEthereumChain",
-            params: [{ chainId: baseHexChainId }],
-          });
-        }
-      } catch (switchError: any) {
-        console.error("[RewardClaimButton] Provider chain switch error:", switchError);
-        setStatus((prev) => ({
-          ...prev,
-          isClaiming: false,
-          errorMessage: "Please switch to Base network to claim rewards",
-        }));
-        return;
-      }
-
-      let fromAddress = address;
-      if (!fromAddress) {
-        try {
-          const accounts = await provider.request?.({ method: "eth_accounts" });
-          fromAddress = accounts?.[0] ?? null;
-        } catch (accountsError) {
-          console.warn("[RewardClaimButton] Unable to read accounts from provider", accountsError);
-        }
-      }
-
-      if (!fromAddress) {
-        throw new Error("No wallet account available. Please connect your wallet again.");
-      }
-
-      const toHexValue = (value?: string | null) => {
+      const normalizedValue = (() => {
+        const value = txPayload.value;
         if (!value) return "0x0";
         try {
           const big = BigInt(value);
@@ -364,19 +313,18 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
         } catch {
           return value;
         }
-      };
+      })();
 
       const txParams = {
         from: fromAddress,
-        to: data.transaction.to,
-        data: data.transaction.data,
-        value: toHexValue(data.transaction.value),
+        to: txPayload.to,
+        data: txPayload.data,
+        value: normalizedValue,
       };
 
-      let txHashSent: string | null = null;
-
+      let txHash: string | null = null;
       try {
-        txHashSent = await provider.request?.({
+        txHash = await provider.request?.({
           method: "eth_sendTransaction",
           params: [txParams],
         });
@@ -394,12 +342,36 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
         return;
       }
 
-      if (!txHashSent || typeof txHashSent !== "string") {
+      if (!txHash || typeof txHash !== "string") {
         throw new Error("Failed to send transaction. Please try again.");
       }
 
-      setStatus((prev) => ({ ...prev, txHash: txHashSent }));
+      setStatus((prev) => ({ ...prev, txHash }));
       setIsTxPending(true);
+
+      const waitForReceipt = async (hash: string) => {
+        for (let attempt = 0; attempt < 30; attempt += 1) {
+          try {
+            const receipt = await provider.request?.({
+              method: "eth_getTransactionReceipt",
+              params: [hash],
+            });
+            if (receipt) return receipt;
+          } catch (receiptError) {
+            console.warn("[RewardClaimButton] Waiting for receipt", receiptError);
+          }
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+        }
+        return null;
+      };
+
+      const receipt = await waitForReceipt(txHash);
+      if (!receipt) {
+        throw new Error("Transaction not confirmed yet. Please check again shortly.");
+      }
+      if (receipt.status === "0x0" || receipt.status === 0) {
+        throw new Error("Transaction failed on-chain.");
+      }
 
       try {
         const updateRes = await fetch("/api/checkin/reward", {
@@ -407,7 +379,7 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ fid, txHash: txHashSent }),
+          body: JSON.stringify({ fid, txHash }),
         });
 
         const updateData = await updateRes.json().catch(() => null);
@@ -415,6 +387,7 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
           throw new Error(updateData?.error || "Failed to update reward status.");
         }
 
+        stopPolling();
         setStatus((prev) => ({
           ...prev,
           success: true,
@@ -425,7 +398,6 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
           canClaim: false,
         }));
         triggerHaptic("medium");
-        stopPolling();
         if (successTimerRef.current) {
           clearTimeout(successTimerRef.current);
         }
@@ -440,6 +412,7 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
           hasApiError: true,
           errorMessage: putError?.message || "Failed to update reward status",
         }));
+        return;
       } finally {
         setIsTxPending(false);
       }
@@ -467,75 +440,9 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
     fid,
     stopPolling,
     activeConnector,
-    disconnectAsync,
     address,
     baseHexChainId,
-    successTimerRef,
   ]);
-
-  useEffect(() => {
-    if (isTxPending) {
-      const updateClaimStatus = async () => {
-        try {
-          const res = await fetch("/api/checkin/reward", {
-            method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ fid, txHash: txHashForReceipt }),
-          });
-
-          const data = await res.json().catch(() => null);
-
-          if (res.ok && data?.ok) {
-            stopPolling();
-            setStatus((prev) => ({
-              ...prev,
-              success: true,
-              claimedToday: true,
-              hasApiError: false,
-              errorMessage: null,
-              isClaiming: false,
-            }));
-            triggerHaptic("medium");
-
-            if (successTimerRef.current) {
-              clearTimeout(successTimerRef.current);
-            }
-            successTimerRef.current = setTimeout(() => {
-              setStatus((prev) => ({ ...prev, success: false }));
-            }, 5000);
-          } else {
-            setStatus((prev) => ({
-              ...prev,
-              isClaiming: false,
-              hasApiError: true,
-              errorMessage: data?.error || "Failed to update claim status",
-            }));
-          }
-        } catch (err: any) {
-          console.error("[RewardClaimButton] Error updating claim status:", err);
-          setStatus((prev) => ({
-            ...prev,
-            isClaiming: false,
-            errorMessage: "Transaction confirmed but failed to update status. Please refresh.",
-          }));
-        }
-      };
-
-      updateClaimStatus();
-    }
-  }, [isTxPending, txHashForReceipt, fid, triggerHaptic, stopPolling]);
-
-  useEffect(() => {
-    if (isTxError && txError) {
-      setStatus((prev) => ({
-        ...prev,
-        isClaiming: false,
-        errorMessage: txError.message || "Transaction failed. Please try again.",
-      }));
-    }
-  }, [isTxError, txError]);
 
   const hasClaimedBanner = claimedToday && !hasApiError;
   const isDisabled = isClaiming || isLoading || success || isTxPending;

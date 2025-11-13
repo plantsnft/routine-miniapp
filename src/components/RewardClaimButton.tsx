@@ -2,7 +2,14 @@
 
 import Image from "next/image";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useAccount, useSendTransaction, useWaitForTransactionReceipt, useConnect, useSwitchChain, useDisconnect } from "wagmi";
+import {
+  useAccount,
+  useSendTransaction,
+  useWaitForTransactionReceipt,
+  useConnect,
+  useSwitchChain,
+  useDisconnect,
+} from "wagmi";
 import { base } from "wagmi/chains";
 import { useHapticFeedback } from "~/hooks/useHapticFeedback";
 
@@ -161,14 +168,31 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
     triggerHaptic("light");
 
     try {
-      const isConnectorCapable = (connector: (typeof connectors)[number] | typeof activeConnector | null) =>
-        !!connector && typeof (connector as any)?.getChainId === "function" && !new Set(["farcaster-frame", "frame"]).has(connector.id);
+      const isConnectorCapable = (
+        connector: (typeof connectors)[number] | typeof activeConnector | null
+      ) => !!connector && typeof (connector as any)?.getChainId === "function";
 
-      let hasCapableConnection = isConnected && isConnectorCapable(activeConnector);
+      let currentConnector = activeConnector ?? null;
+      let hasCapableConnection = false;
 
-      if (isConnected && !hasCapableConnection && disconnectAsync) {
+      if (isConnected && currentConnector && isConnectorCapable(currentConnector)) {
+        try {
+          const connectorChainId = await (currentConnector as any).getChainId?.();
+          if (connectorChainId != null) {
+            hasCapableConnection = true;
+          }
+        } catch (chainIdError) {
+          console.warn(
+            "[RewardClaimButton] Connected connector does not provide getChainId result",
+            chainIdError
+          );
+        }
+      }
+
+      if (isConnected && (!currentConnector || !hasCapableConnection) && disconnectAsync) {
         try {
           await disconnectAsync();
+          currentConnector = null;
         } catch (disconnectError) {
           console.warn("[RewardClaimButton] Unable to disconnect incompatible connector", disconnectError);
         }
@@ -202,7 +226,19 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
             chainId: base.id,
             connector: preferredConnector,
           });
-          hasCapableConnection = true;
+          currentConnector = preferredConnector ?? currentConnector;
+          if (currentConnector && typeof (currentConnector as any)?.getChainId === "function") {
+            try {
+              const connectorChainId = await (currentConnector as any).getChainId?.();
+              hasCapableConnection = connectorChainId != null;
+            } catch (chainIdError) {
+              console.warn(
+                "[RewardClaimButton] Connector getChainId failed after connection",
+                chainIdError
+              );
+              hasCapableConnection = false;
+            }
+          }
         } catch (_connectError: any) {
           setStatus((prev) => ({
             ...prev,
@@ -213,7 +249,7 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
         }
       }
 
-      if (!hasCapableConnection) {
+      if (!hasCapableConnection || !currentConnector || typeof (currentConnector as any)?.getChainId !== "function") {
         setStatus((prev) => ({
           ...prev,
           isClaiming: false,
@@ -222,7 +258,14 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
         return;
       }
 
-      if (chainId !== base.id) {
+      let targetChainId = chainId;
+      try {
+        targetChainId = await (currentConnector as any)?.getChainId?.();
+      } catch (err) {
+        console.warn("[RewardClaimButton] Unable to read connector chainId", err);
+      }
+
+      if (targetChainId !== base.id) {
         try {
           await switchChainAsync({ chainId: base.id });
         } catch (_switchError: any) {

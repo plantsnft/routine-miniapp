@@ -106,24 +106,104 @@ async function fetchNeynarUser(fid: number): Promise<NeynarUserData> {
   }
 }
 
-function deriveWalletAddress(fid: number, user: NeynarUserData): string | null {
+function normalizeAddress(address: string | null | undefined): string | null {
+  if (!address || typeof address !== "string") {
+    return null;
+  }
+  if (!isValidAddress(address)) {
+    return null;
+  }
+  try {
+    return ethers.getAddress(address);
+  } catch (err) {
+    console.warn("[Reward Claim] Failed to normalize address:", address, err);
+    return null;
+  }
+}
+
+function collectWalletAddresses(fid: number, user: NeynarUserData): string[] {
+  const addresses = new Set<string>();
+
   if (!user) {
-    console.log(`[Reward Claim] FID ${fid}: No wallet address found (no Neynar user)`);
+    console.log(`[Reward Claim] FID ${fid}: No Neynar profile found, cannot derive wallet address`);
+    return [];
+  }
+
+  const maybeAdd = (value: string | null | undefined) => {
+    const normalised = normalizeAddress(value);
+    if (normalised) {
+      addresses.add(normalised.toLowerCase());
+    }
+  };
+
+  maybeAdd(user.custody_address);
+
+  if (Array.isArray(user.verified_addresses?.eth_addresses)) {
+    for (const verified of user.verified_addresses.eth_addresses) {
+      maybeAdd(verified);
+    }
+  }
+
+  if (Array.isArray((user as any)?.wallets)) {
+    for (const wallet of (user as any).wallets) {
+      maybeAdd(wallet?.address);
+      if (Array.isArray(wallet?.addresses)) {
+        for (const nested of wallet.addresses) {
+          maybeAdd(nested);
+        }
+      }
+    }
+  }
+
+  const unique = Array.from(addresses).map((addr) => ethers.getAddress(addr));
+  if (unique.length === 0) {
+    console.log(
+      `[Reward Claim] FID ${fid}: No wallet address found (no custodial or verified addresses)`
+    );
+  } else {
+    console.log(`[Reward Claim] FID ${fid}: Known addresses -> ${unique.join(", ")}`);
+  }
+  return unique;
+}
+
+function resolveClaimantAddress(
+  fid: number,
+  user: NeynarUserData,
+  providedAddress: string | null
+): string | null {
+  const knownAddresses = collectWalletAddresses(fid, user);
+  const knownSet = new Set(knownAddresses.map((addr) => addr.toLowerCase()));
+
+  if (providedAddress) {
+    if (knownSet.size === 0) {
+      console.log(
+        `[Reward Claim] FID ${fid}: Using claimant-provided address ${providedAddress} (no Neynar addresses available)`
+      );
+      return providedAddress;
+    }
+
+    if (knownSet.has(providedAddress.toLowerCase())) {
+      console.log(
+        `[Reward Claim] FID ${fid}: Using claimant-provided address ${providedAddress} (matches Neynar profile)`
+      );
+      return providedAddress;
+    }
+
+    console.warn(
+      `[Reward Claim] FID ${fid}: Provided claimant address ${providedAddress} not present in Neynar profile addresses: ${Array.from(
+        knownSet
+      ).join(", ")}`
+    );
     return null;
   }
 
-  if (user.custody_address) {
-    console.log(`[Reward Claim] FID ${fid}: Using custodial address ${user.custody_address}`);
-    return user.custody_address;
+  if (knownAddresses.length > 0) {
+    console.log(
+      `[Reward Claim] FID ${fid}: Falling back to Neynar-derived address ${knownAddresses[0]}`
+    );
+    return knownAddresses[0];
   }
 
-  if (user.verified_addresses?.eth_addresses && user.verified_addresses.eth_addresses.length > 0) {
-    const verifiedAddr = user.verified_addresses.eth_addresses[0];
-    console.log(`[Reward Claim] FID ${fid}: Using verified address ${verifiedAddr}`);
-    return verifiedAddr;
-  }
-
-  console.log(`[Reward Claim] FID ${fid}: No wallet address found (no custodial or verified address)`);
   return null;
 }
 
@@ -269,6 +349,9 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const fid = Number(body.fid);
+    const rawClaimantAddress =
+      typeof body.claimantAddress === "string" ? body.claimantAddress : (body.claimantAddress?.address as string | undefined) || "";
+    const normalizedClaimant = normalizeAddress(rawClaimantAddress);
 
     if (!fid || isNaN(fid)) {
       return NextResponse.json({ ok: false, error: "Invalid fid" }, { status: 400 });
@@ -313,12 +396,13 @@ export async function POST(req: NextRequest) {
     }
 
     const neynarUser = await fetchNeynarUser(fid);
-    const walletAddress = deriveWalletAddress(fid, neynarUser);
+    const walletAddress = resolveClaimantAddress(fid, neynarUser, normalizedClaimant);
     if (!walletAddress) {
       return NextResponse.json(
         {
           ok: false,
-          error: "No wallet address found. Please ensure you are logged in to Farcaster.",
+          error:
+            "We could not verify your Farcaster wallet for this FID. Please reconnect your account and try again.",
         },
         { status: 400 }
       );

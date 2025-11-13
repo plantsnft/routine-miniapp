@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getTopUsersByStreak } from "~/lib/supabase";
+import { getTopUsersByStreak, getTopUsersByTotalCheckins } from "~/lib/supabase";
 import { getNeynarClient } from "~/lib/neynar";
 import type { LeaderboardEntry } from "~/lib/models";
 
@@ -462,16 +462,40 @@ export async function GET(req: NextRequest) {
         
         // Fallback: Get users from check-ins and channel
         const allCheckins = await getTopUsersByStreak(1000);
+        const allTimeCheckins = await getTopUsersByTotalCheckins(1000);
         const allFidsSet = new Set<number>();
+        const upsertCheckinRecord = (record: {
+          fid: number;
+          streak: number;
+          last_checkin: string | null;
+          total_checkins: number;
+        }) => {
+          if (!record?.fid) return;
+          allFidsSet.add(record.fid);
+          const existing = checkinMap.get(record.fid);
+          checkinMap.set(record.fid, {
+            streak: record.streak || existing?.streak || 0,
+            last_checkin: record.last_checkin || existing?.last_checkin || null,
+            total_checkins: record.total_checkins || existing?.total_checkins || 0,
+          });
+        };
         
-        allCheckins.forEach((c) => {
-          allFidsSet.add(c.fid);
-          checkinMap.set(c.fid, {
+        allCheckins.forEach((c) =>
+          upsertCheckinRecord({
+            fid: c.fid,
             streak: c.streak || 0,
             last_checkin: c.last_checkin || null,
             total_checkins: c.total_checkins || 0,
-          });
-        });
+          })
+        );
+        allTimeCheckins.forEach((c) =>
+          upsertCheckinRecord({
+            fid: c.fid,
+            streak: c.streak || 0,
+            last_checkin: c.last_checkin || null,
+            total_checkins: c.total_checkins || 0,
+          })
+        );
         
         try {
           const channelResponse = await fetch(`${new URL(req.url).origin}/api/channel-feed?limit=500`);
@@ -564,24 +588,60 @@ export async function GET(req: NextRequest) {
       
       // 4. Also get check-in data for users we found
       const allCheckins = await getTopUsersByStreak(1000);
-      allCheckins.forEach((c) => {
-        checkinMap.set(c.fid, {
+      const allTimeCheckins = await getTopUsersByTotalCheckins(1000);
+      const mergeIntoMap = (record: {
+        fid: number;
+        streak: number;
+        last_checkin: string | null;
+        total_checkins: number;
+      }) => {
+        if (!record?.fid) return;
+        const existing = checkinMap.get(record.fid);
+        checkinMap.set(record.fid, {
+          streak: record.streak || existing?.streak || 0,
+          last_checkin: record.last_checkin || existing?.last_checkin || null,
+          total_checkins: record.total_checkins || existing?.total_checkins || 0,
+        });
+      };
+      allCheckins.forEach((c) =>
+        mergeIntoMap({
+          fid: c.fid,
           streak: c.streak || 0,
           last_checkin: c.last_checkin || null,
           total_checkins: c.total_checkins || 0,
-        });
-      });
+        })
+      );
+      allTimeCheckins.forEach((c) =>
+        mergeIntoMap({
+          fid: c.fid,
+          streak: c.streak || 0,
+          last_checkin: c.last_checkin || null,
+          total_checkins: c.total_checkins || 0,
+        })
+      );
     } else {
-      // For streak mode: Only get users who have checked in (for streak ranking)
-      const topCheckins = await getTopUsersByStreak(200);
-      fids = topCheckins.map((c) => c.fid);
-      topCheckins.forEach((c) => {
-        checkinMap.set(c.fid, {
-          streak: c.streak || 0,
-          last_checkin: c.last_checkin || null,
-          total_checkins: c.total_checkins || 0,
+      if (sortBy === "total_checkins") {
+        const topAllTime = await getTopUsersByTotalCheckins(200);
+        fids = topAllTime.map((c) => c.fid);
+        topAllTime.forEach((c) => {
+          checkinMap.set(c.fid, {
+            streak: c.streak || 0,
+            last_checkin: c.last_checkin || null,
+            total_checkins: c.total_checkins || 0,
+          });
         });
-      });
+      } else {
+        // For current streak mode: Only get users who have checked in (ranked by streak)
+        const topCheckins = await getTopUsersByStreak(200);
+        fids = topCheckins.map((c) => c.fid);
+        topCheckins.forEach((c) => {
+          checkinMap.set(c.fid, {
+            streak: c.streak || 0,
+            last_checkin: c.last_checkin || null,
+            total_checkins: c.total_checkins || 0,
+          });
+        });
+      }
     }
     
     if (fids.length === 0) {

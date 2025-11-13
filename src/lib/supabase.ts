@@ -290,6 +290,32 @@ export async function getTopUsersByStreak(limit: number = 100): Promise<CheckinR
 }
 
 /**
+ * Get top users by total check-ins (all time) for leaderboard.
+ *
+ * @param limit - Number of users to return (default: 100)
+ * @returns Array of check-in records sorted by total check-ins (descending)
+ */
+export async function getTopUsersByTotalCheckins(
+  limit: number = 100
+): Promise<CheckinRecord[]> {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/checkins?order=total_checkins.desc&limit=${limit}`,
+    {
+      method: "GET",
+      headers: SUPABASE_HEADERS,
+    }
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("[Supabase] Leaderboard total_checkins query error:", text);
+    throw new Error(`Failed to fetch leaderboard total_checkins: ${text}`);
+  }
+
+  return await res.json();
+}
+
+/**
  * Price history record interface matching Supabase schema.
  */
 export interface PriceHistoryRecord {

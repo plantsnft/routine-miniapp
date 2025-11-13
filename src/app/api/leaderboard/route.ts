@@ -669,36 +669,63 @@ export async function GET(req: NextRequest) {
 
     // Fetch user data from Neynar (includes usernames and verified addresses)
     // Try to get comprehensive wallet data by using the API directly if needed
+    const chunkArray = <T,>(arr: T[], size: number) => {
+      const chunks: T[][] = [];
+      for (let i = 0; i < arr.length; i += size) {
+        chunks.push(arr.slice(i, i + size));
+      }
+      return chunks;
+    };
+
     let users: any[] = [];
-    try {
-      const response = await client.fetchBulkUsers({ fids });
-      users = response.users || [];
-    } catch (error) {
-      console.error("[Leaderboard] Error fetching users from Neynar SDK:", error);
-      // Fallback: Try direct API call
+    const fidChunks = chunkArray(fids, 100);
+    for (const chunk of fidChunks) {
+      try {
+        const response = await client.fetchBulkUsers({ fids: chunk });
+        if (response?.users?.length) {
+          users.push(...response.users);
+          continue;
+        }
+      } catch (error) {
+        console.error("[Leaderboard] Error fetching users from Neynar SDK chunk:", error);
+      }
+
+      // Fallback: direct API per chunk
       try {
         const apiKey = process.env.NEYNAR_API_KEY;
         if (apiKey) {
-          const fidsParam = fids.join(',');
+          const fidsParam = chunk.join(",");
           const apiResponse = await fetch(
             `https://api.neynar.com/v2/farcaster/user/bulk?fids=${fidsParam}`,
             {
               headers: {
-                'api_key': apiKey,
+                api_key: apiKey,
               },
             }
           );
           if (apiResponse.ok) {
             const apiData = await apiResponse.json();
-            users = apiData.users || [];
-            console.log(`[Leaderboard] Fetched ${users.length} users via direct API call`);
+            if (apiData?.users?.length) {
+              users.push(...apiData.users);
+              console.log(
+                `[Leaderboard] Fetched ${apiData.users.length} users via direct Neynar API chunk`
+              );
+            }
           }
         }
       } catch (apiError) {
-        console.error("[Leaderboard] Direct API call also failed:", apiError);
-        throw error; // Throw original error
+        console.error("[Leaderboard] Direct API chunk fetch failed:", apiError);
       }
+      await new Promise((resolve) => setTimeout(resolve, 120));
     }
+
+    // Deduplicate user records by FID, preferring first occurrence (should have most fields)
+    const seenFids = new Set<number>();
+    users = users.filter((u: any) => {
+      if (!u?.fid || seenFids.has(u.fid)) return false;
+      seenFids.add(u.fid);
+      return true;
+    });
 
     // Helper function to collect ALL addresses from a user object
     // This includes: verified addresses, custodial addresses, and any other linked addresses
@@ -794,9 +821,15 @@ export async function GET(req: NextRequest) {
         return [
           u.fid,
           {
-            username: u.username,
-            displayName: u.display_name,
-            pfp_url: u.pfp_url || undefined,
+            username: u.username || u?.profile?.username || undefined,
+            displayName:
+              u.display_name || u?.profile?.display_name || u?.profile?.name || undefined,
+            pfp_url:
+              u.pfp_url ||
+              u?.profile?.pfp_url ||
+              u?.pfp ||
+              u?.profile_picture_url ||
+              undefined,
             allAddresses,
             profileUrl: u.username ? `${LEADERBOARD_PROFILE_BASE_URL}/${u.username}` : undefined,
           },

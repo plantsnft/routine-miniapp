@@ -6,6 +6,8 @@ import type { LeaderboardEntry } from "~/lib/models";
 import { useHapticFeedback } from "~/hooks/useHapticFeedback";
 import { CATWALK_CREATOR_FIDS } from "~/lib/constants";
 
+const DEFAULT_PFP = "https://warpcast.com/~/assets/default-avatar.png";
+
 type SortBy = "holdings" | "streak" | "total_checkins";
 type WalkSortMode = "current_streak" | "all_time";
 
@@ -363,7 +365,14 @@ export function LeaderboardTab() {
         {!loading && !error && entries.length > 0 && (
           <>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {entries.map((entry) => (
+              {entries.map((entry) => {
+                const displayLabel = entry.displayName?.trim() || "";
+                const usernameLabel = entry.username ? `@${entry.username}` : `FID ${entry.fid}`;
+                const primaryText = displayLabel || usernameLabel;
+                const linkHref =
+                  entry.profileUrl || `https://warpcast.com/~/users/${entry.fid.toString()}`;
+
+                return (
               <div
                 key={`${entry.fid}-${sortBy}`}
                 style={{
@@ -392,14 +401,15 @@ export function LeaderboardTab() {
 
                 {/* Profile Picture */}
                 <Link
-                  href={entry.profileUrl || `https://warpcast.com/~/users/${entry.fid}`}
+                  href={linkHref}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{ display: "flex", alignItems: "center" }}
+                  aria-label={`View Farcaster profile for ${primaryText}`}
                 >
                   <img
-                    src={entry.pfp_url || "/catwalk-default-pfp.png"}
-                    alt={entry.displayName || entry.username || `FID ${entry.fid}`}
+                    src={entry.pfp_url || DEFAULT_PFP}
+                    alt={primaryText}
                     style={{
                       width: 20,
                       height: 20,
@@ -414,7 +424,7 @@ export function LeaderboardTab() {
                 {/* Name and badge in one line */}
                 <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}>
                   <Link
-                    href={entry.profileUrl || `https://warpcast.com/~/users/${entry.fid}`}
+                    href={linkHref}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{
@@ -431,7 +441,7 @@ export function LeaderboardTab() {
                       gap: 4,
                     }}
                   >
-                    <span>{entry.displayName || entry.username || `FID: ${entry.fid}`}</span>
+                    <span>{primaryText}</span>
                     {CATWALK_CREATOR_FIDS.includes(entry.fid) && (
                       <span style={{ color: "#c1b400", fontWeight: 700, fontSize: 10 }}>
                         🐱 Catwalk Creator
@@ -489,7 +499,8 @@ export function LeaderboardTab() {
                   )}
                 </div>
               </div>
-              ))}
+              );
+            })}
             </div>
             
             {/* Total holdings and holders display */}

@@ -339,6 +339,7 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
         setStatus((prev) => ({
           ...prev,
           isClaiming: false,
+          canClaim: true,
           errorMessage,
         }));
         return;
@@ -348,7 +349,16 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
         throw new Error("Failed to send transaction. Please try again.");
       }
 
-      setStatus((prev) => ({ ...prev, txHash }));
+      setStatus((prev) => ({
+        ...prev,
+        txHash,
+        success: true,
+        claimedToday: true,
+        hasApiError: false,
+        errorMessage: null,
+        isClaiming: false,
+        canClaim: false,
+      }));
       setIsTxPending(true);
 
       const waitForReceipt = async (hash: string) => {
@@ -362,17 +372,37 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
           } catch (receiptError) {
             console.warn("[RewardClaimButton] Waiting for receipt", receiptError);
           }
-          await new Promise((resolve) => setTimeout(resolve, 2000));
+          await new Promise((resolve) => setTimeout(resolve, 1000));
         }
         return null;
       };
 
       const receipt = await waitForReceipt(txHash);
       if (!receipt) {
-        throw new Error("Transaction not confirmed yet. Please check again shortly.");
+        console.error("[RewardClaimButton] Receipt timeout for tx:", txHash);
+        setStatus((prev) => ({
+          ...prev,
+          success: false,
+          claimedToday: false,
+          hasApiError: true,
+          canClaim: true,
+          errorMessage: "Transaction still pending. Please check Basescan shortly.",
+        }));
+        setIsTxPending(false);
+        return;
       }
       if (receipt.status === "0x0" || receipt.status === 0) {
-        throw new Error("Transaction failed on-chain.");
+        console.error("[RewardClaimButton] Transaction failed on-chain:", receipt);
+        setStatus((prev) => ({
+          ...prev,
+          success: false,
+          claimedToday: false,
+          hasApiError: true,
+          canClaim: true,
+          errorMessage: "Transaction failed on-chain. Please try again.",
+        }));
+        setIsTxPending(false);
+        return;
       }
 
       try {
@@ -423,6 +453,7 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
       setStatus((prev) => ({
         ...prev,
         isClaiming: false,
+        canClaim: true,
         errorMessage: err?.message || "Network error. Please try again.",
       }));
       setIsTxPending(false);
@@ -449,9 +480,17 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
   const hasClaimedBanner = claimedToday && !hasApiError;
   const isDisabled = isClaiming || isLoading || success || isTxPending;
 
-  const buttonText = (() => {
-    if (isTxPending) return "Confirming...";
-    if (isClaiming) return "Preparing...";
+  const buttonContent = (() => {
+    if (isTxPending || isClaiming) {
+      return (
+        <>
+          <span>Claiming in process…</span>
+          <span className="reward-claim-button__subtext">
+            Sponsored by the rektguy PFP community
+          </span>
+        </>
+      );
+    }
     if (success) return "Reward Claimed! ✓";
     if (isLoading) return "Checking...";
     if (hasApiError) return "Claim Reward";
@@ -489,8 +528,8 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
             />
           </div>
         ) : (
-          <button onClick={handleClaim} disabled={isDisabled} className={buttonClassName}>
-            {buttonText}
+                <button onClick={handleClaim} disabled={isDisabled} className={buttonClassName}>
+                  {buttonContent}
           </button>
         )}
 
@@ -533,7 +572,14 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
           box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
         }
 
-        .reward-claim-button--success {
+               .reward-claim-button__subtext {
+                 display: block;
+                 font-size: 11px;
+                 font-weight: 600;
+                 margin-top: 2px;
+               }
+
+               .reward-claim-button--success {
           background: #666666;
           color: #999999;
           opacity: 0.8;

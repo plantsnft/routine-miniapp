@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  SUPABASE_URL,
   SUPABASE_SERVICE_ROLE,
   SUPER_OWNER_FID,
   HELLFIRE_OWNER_FID,
@@ -30,17 +29,21 @@ const SUPABASE_SERVICE_HEADERS = {
  */
 export async function POST(req: NextRequest) {
   try {
+    // Get Supabase URL from environment variables
+    const supabaseUrl =
+      process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+
     // Check Supabase configuration with detailed logging
-    const hasUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const hasUrl = !!supabaseUrl;
     const hasAnonKey = !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     const hasServiceRole = !!process.env.SUPABASE_SERVICE_ROLE;
 
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE) {
+    if (!supabaseUrl || !SUPABASE_SERVICE_ROLE) {
       console.error('[API][admin][seed-super-owner] Supabase config check:', {
         hasUrl,
         hasAnonKey,
         hasServiceRole,
-        urlLength: process.env.NEXT_PUBLIC_SUPABASE_URL?.length || 0,
+        urlLength: supabaseUrl?.length || 0,
         serviceRoleLength: process.env.SUPABASE_SERVICE_ROLE?.length || 0,
       });
       throw new Error("Supabase not configured");
@@ -62,7 +65,7 @@ export async function POST(req: NextRequest) {
 
     // Step 1: Fetch or create clubs
     const clubsRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/clubs?select=id,slug,owner_fid&or=(slug.eq.${HELLFIRE_CLUB_SLUG},slug.eq.${BURRFRIENDS_CLUB_SLUG})`,
+      `${supabaseUrl}/rest/v1/clubs?select=id,slug,owner_fid&or=(slug.eq.${HELLFIRE_CLUB_SLUG},slug.eq.${BURRFRIENDS_CLUB_SLUG})`,
       { headers: SUPABASE_SERVICE_HEADERS }
     );
 
@@ -76,7 +79,7 @@ export async function POST(req: NextRequest) {
 
     // Create Hellfire club if it doesn't exist
     if (!hellfireClub) {
-      const createHellfireRes = await fetch(`${SUPABASE_URL}/rest/v1/clubs`, {
+      const createHellfireRes = await fetch(`${supabaseUrl}/rest/v1/clubs`, {
         method: "POST",
         headers: {
           ...SUPABASE_SERVICE_HEADERS,
@@ -101,7 +104,7 @@ export async function POST(req: NextRequest) {
 
     // Create Burrfriends club if it doesn't exist
     if (!burrfriendsClub) {
-      const createBurrfriendsRes = await fetch(`${SUPABASE_URL}/rest/v1/clubs`, {
+      const createBurrfriendsRes = await fetch(`${supabaseUrl}/rest/v1/clubs`, {
         method: "POST",
         headers: {
           ...SUPABASE_SERVICE_HEADERS,
@@ -162,7 +165,7 @@ export async function POST(req: NextRequest) {
     for (const membership of memberships) {
       try {
         // Try to insert the membership
-        const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/club_members`, {
+        const insertRes = await fetch(`${supabaseUrl}/rest/v1/club_members`, {
           method: "POST",
           headers: {
             ...SUPABASE_SERVICE_HEADERS,
@@ -197,7 +200,7 @@ export async function POST(req: NextRequest) {
             // Duplicate membership - this is fine, it means it already exists
             // Try to update it to ensure role/status are correct
             await fetch(
-              `${SUPABASE_URL}/rest/v1/club_members?club_id=eq.${membership.club_id}&member_fid=eq.${membership.member_fid}`,
+              `${supabaseUrl}/rest/v1/club_members?club_id=eq.${membership.club_id}&member_fid=eq.${membership.member_fid}`,
               {
                 method: "PATCH",
                 headers: {
@@ -233,7 +236,7 @@ export async function POST(req: NextRequest) {
           // Try to update to ensure correct role/status
           try {
             await fetch(
-              `${SUPABASE_URL}/rest/v1/club_members?club_id=eq.${membership.club_id}&member_fid=eq.${membership.member_fid}`,
+              `${supabaseUrl}/rest/v1/club_members?club_id=eq.${membership.club_id}&member_fid=eq.${membership.member_fid}`,
               {
                 method: "PATCH",
                 headers: {
@@ -280,17 +283,21 @@ export async function POST(req: NextRequest) {
  */
 export async function GET(req: NextRequest) {
   try {
+    // Get Supabase URL from environment variables
+    const supabaseUrl =
+      process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+
     // Check Supabase configuration with detailed logging
-    const hasUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const hasUrl = !!supabaseUrl;
     const hasAnonKey = !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     const hasServiceRole = !!process.env.SUPABASE_SERVICE_ROLE;
 
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE) {
+    if (!supabaseUrl || !SUPABASE_SERVICE_ROLE) {
       console.error('[API][admin][seed-super-owner] Supabase config check:', {
         hasUrl,
         hasAnonKey,
         hasServiceRole,
-        urlLength: process.env.NEXT_PUBLIC_SUPABASE_URL?.length || 0,
+        urlLength: supabaseUrl?.length || 0,
         serviceRoleLength: process.env.SUPABASE_SERVICE_ROLE?.length || 0,
       });
       throw new Error("Supabase not configured");
@@ -298,7 +305,7 @@ export async function GET(req: NextRequest) {
 
     // Fetch both clubs
     const clubsRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/clubs?select=id,slug,name,owner_fid&or=(slug.eq.${HELLFIRE_CLUB_SLUG},slug.eq.${BURRFRIENDS_CLUB_SLUG})`,
+      `${supabaseUrl}/rest/v1/clubs?select=id,slug,name,owner_fid&or=(slug.eq.${HELLFIRE_CLUB_SLUG},slug.eq.${BURRFRIENDS_CLUB_SLUG})`,
       { headers: SUPABASE_SERVICE_HEADERS }
     );
 
@@ -320,7 +327,7 @@ export async function GET(req: NextRequest) {
     if (hellfireClub && burrfriendsClub) {
       // Check memberships
       const membersRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/club_members?member_fid=eq.${SUPER_OWNER_FID}&club_id=in.(${hellfireClub.id},${burrfriendsClub.id})&select=club_id,role,status`,
+        `${supabaseUrl}/rest/v1/club_members?member_fid=eq.${SUPER_OWNER_FID}&club_id=in.(${hellfireClub.id},${burrfriendsClub.id})&select=club_id,role,status`,
         { headers: SUPABASE_SERVICE_HEADERS }
       );
 

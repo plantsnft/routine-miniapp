@@ -33,7 +33,7 @@ export async function GET() {
     let fromBlock = "latest";
     if (latestBlockRes.ok) {
       try {
-        const blockData = await latestBlockRes.json();
+        const blockData = await latestBlockRes.json() as any;
         if (blockData.result) {
           const latestBlock = parseInt(blockData.result, 16);
           // Query last 10000 blocks (roughly last few hours)
@@ -63,7 +63,7 @@ export async function GET() {
       });
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     console.log("[Recent Purchases] BaseScan response:", {
       status: data.status,
       resultLength: data.result?.length,

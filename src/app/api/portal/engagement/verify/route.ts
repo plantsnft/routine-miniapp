@@ -35,7 +35,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const client = getNeynarClient();
     const verifiedEngagements: Array<{
       castHash: string;
       engagementType: "like" | "comment" | "recast";

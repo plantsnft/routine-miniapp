@@ -48,6 +48,7 @@ export function PortalTab() {
     } else {
       setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userFid]);
 
   const fetchClaimStatus = async () => {
@@ -319,7 +320,7 @@ export function PortalTab() {
                     ✅ Reward Claimed
                   </p>
                   <p style={{ color: "#ffffff", fontSize: 14 }}>
-                    You've already claimed {creatorClaimStatus.rewardAmount?.toLocaleString()} CATWALK tokens.
+                    You&apos;ve already claimed {creatorClaimStatus.rewardAmount?.toLocaleString()} CATWALK tokens.
                   </p>
                   {creatorClaimStatus.transactionHash && (
                     <p style={{ color: "#999999", fontSize: 12, marginTop: 8 }}>
@@ -341,7 +342,7 @@ export function PortalTab() {
                     ✅ Verification Complete
                   </p>
                   <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 16 }}>
-                    You're eligible to claim {creatorClaimStatus.rewardAmount?.toLocaleString()} CATWALK tokens!
+                    You&apos;re eligible to claim {creatorClaimStatus.rewardAmount?.toLocaleString()} CATWALK tokens!
                   </p>
                   <button
                     onClick={handleClaimCreator}
@@ -405,7 +406,7 @@ export function PortalTab() {
               💬 Engagement Rewards
             </h2>
             <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 20, lineHeight: 1.6 }}>
-              Like, comment, or recast posts in the /catwalk channel to earn rewards. Verify your engagement to claim.
+              Like, comment, or recast posts in the /catwalk channel to earn rewards. Verify your engagement to claim rewards.
             </p>
 
             {engagementClaimStatus ? (
@@ -418,7 +419,7 @@ export function PortalTab() {
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       {engagementClaimStatus.claims
                         .filter((claim) => !claim.claimed)
-                        .map((claim, idx) => (
+                        .map((claim) => (
                           <div
                             key={`${claim.castHash}-${claim.engagementType}`}
                             style={{

@@ -5,7 +5,7 @@ const client = createClient();
 
 export async function POST(request: Request) {
   try {
-    const { token } = await request.json();
+    const { token } = await request.json() as any;
 
     if (!token) {
       return NextResponse.json({ error: 'Token is required' }, { status: 400 });

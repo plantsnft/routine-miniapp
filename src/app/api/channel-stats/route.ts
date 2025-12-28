@@ -50,7 +50,7 @@ export async function GET() {
           );
           
           if (response.ok) {
-            const data = await response.json();
+            const data = await response.json() as any;
             // Try to find the catwalk channel in the results
             if (data.channels && Array.isArray(data.channels)) {
               const catwalkChannel = data.channels.find((ch: any) => 

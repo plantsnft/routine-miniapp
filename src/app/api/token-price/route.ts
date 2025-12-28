@@ -434,7 +434,7 @@ export async function GET() {
         });
 
         if (pairResponse.ok) {
-          const pairData = await pairResponse.json();
+          const pairData = await pairResponse.json() as any;
           console.log("[Token Price] Token-as-pair endpoint response:", JSON.stringify(pairData).substring(0, 300));
           
           if (pairData.pair) {
@@ -961,7 +961,7 @@ export async function GET() {
       );
 
       if (coinGeckoResponse.ok) {
-        const data = await coinGeckoResponse.json();
+        const data = await coinGeckoResponse.json() as any;
         const tokenData = data[tokenAddressLower];
 
         if (tokenData && tokenData.usd) {

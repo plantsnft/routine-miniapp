@@ -52,7 +52,7 @@ async function fetchUserLocation(fid: number, apiKey: string): Promise<string | 
       return null;
     }
     
-    const userData = await userResponse.json();
+    const userData = await userResponse.json() as any;
     const user = userData.users?.[0]?.user || userData.users?.[0];
     return user ? parseLocationFromUser(user) : null;
   } catch (error: any) {
@@ -121,7 +121,7 @@ export async function GET() {
         break;
       }
 
-      const data = await response.json();
+      const data = await response.json() as any;
       const currentPageCasts = data.casts || data.result?.casts || data.result?.feed || [];
       const nextCursor = extractNextCursor(data);
       

@@ -54,7 +54,7 @@ export async function POST(request: Request) {
       );
 
       if (feedResponse.ok) {
-        const feedData = await feedResponse.json();
+        const feedData = await feedResponse.json() as any;
         channelCasts = feedData.casts || feedData.result?.casts || [];
       }
     } catch (err) {
@@ -84,7 +84,7 @@ export async function POST(request: Request) {
 
         if (!castResponse.ok) continue;
 
-        const castData = await castResponse.json();
+        const castData = await castResponse.json() as any;
         const castDetails = castData.cast || castData.result?.cast || cast;
 
         // Check for likes
@@ -163,7 +163,7 @@ export async function POST(request: Request) {
 
     let allClaims: any[] = [];
     if (allClaimsRes.ok) {
-      allClaims = await allClaimsRes.json();
+      allClaims = await allClaimsRes.json() as any;
     }
 
     const claimed = allClaims.filter((c: any) => c.claimed_at);

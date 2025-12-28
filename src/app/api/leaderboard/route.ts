@@ -147,7 +147,7 @@ async function _getTokenBalance(address: string, retries: number = 3): Promise<n
       });
 
       if (response.ok) {
-        const data = await response.json();
+        const data = await response.json() as any;
         if (data.status === "1" && data.result) {
           // BaseScan returns balance in wei (as string)
           const balanceWei = BigInt(data.result);
@@ -225,7 +225,7 @@ async function _getTokenBalance(address: string, retries: number = 3): Promise<n
         return 0;
       }
 
-      const data = await response.json();
+      const data = await response.json() as any;
       
       if (data.result && data.result !== "0x" && !data.error) {
         // Convert from hex to BigInt, then divide by 10^18 (18 decimals)
@@ -331,7 +331,7 @@ export async function GET(req: NextRequest) {
             });
             
             if (tokenInfoResponse.ok) {
-              const tokenInfo = await tokenInfoResponse.json();
+              const tokenInfo = await tokenInfoResponse.json() as any;
               if (tokenInfo.status === "1" && tokenInfo.result && tokenInfo.result.length > 0) {
                 const holderCount = parseInt(tokenInfo.result[0].holders || "0", 10);
                 if (holderCount > 0) {
@@ -359,7 +359,7 @@ export async function GET(req: NextRequest) {
             
             let latestBlock = 0;
             if (latestBlockResponse.ok) {
-              const latestBlockData = await latestBlockResponse.json();
+              const latestBlockData = await latestBlockResponse.json() as any;
               if (latestBlockData.result) {
                 latestBlock = parseInt(latestBlockData.result, 16);
                 console.log(`[Leaderboard] Latest block: ${latestBlock}`);
@@ -385,7 +385,7 @@ export async function GET(req: NextRequest) {
               });
               
               if (logsResponse.ok) {
-                const logsData = await logsResponse.json();
+                const logsData = await logsResponse.json() as any;
                 
                 if (logsData.status === "1" && logsData.result && Array.isArray(logsData.result)) {
                   const eventsInChunk = logsData.result.length;
@@ -502,7 +502,7 @@ export async function GET(req: NextRequest) {
         try {
           const channelResponse = await fetch(`${new URL(req.url).origin}/api/channel-feed?limit=500`);
           if (channelResponse.ok) {
-            const channelData = await channelResponse.json();
+            const channelData = await channelResponse.json() as any;
             if (channelData.casts && Array.isArray(channelData.casts)) {
               channelData.casts.forEach((cast: any) => {
                 if (cast.author?.fid) {
@@ -544,7 +544,7 @@ export async function GET(req: NextRequest) {
               });
               
               if (lookupResponse.ok) {
-                const lookupData = await lookupResponse.json();
+                const lookupData = await lookupResponse.json() as any;
                 const user = lookupData.user || lookupData.users?.[0] || lookupData.result?.user;
                 if (user?.fid) {
                   return { address, fid: user.fid };
@@ -704,7 +704,7 @@ export async function GET(req: NextRequest) {
             }
           );
           if (apiResponse.ok) {
-            const apiData = await apiResponse.json();
+            const apiData = await apiResponse.json() as any;
             if (apiData?.users?.length) {
               users.push(...apiData.users);
               console.log(

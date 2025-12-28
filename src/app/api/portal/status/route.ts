@@ -45,7 +45,7 @@ export async function GET(request: Request) {
       );
 
       if (creatorRes.ok) {
-        const creatorData = await creatorRes.json();
+        const creatorData = await creatorRes.json() as any;
         if (creatorData && creatorData.length > 0) {
           creatorClaim = {
             isEligible: true,
@@ -73,7 +73,7 @@ export async function GET(request: Request) {
       );
 
       if (engagementRes.ok) {
-        const engagementClaims = await engagementRes.json();
+        const engagementClaims = await engagementRes.json() as any;
         const claimed = engagementClaims.filter((c: any) => c.claimed_at);
         const unclaimed = engagementClaims.filter((c: any) => !c.claimed_at);
 

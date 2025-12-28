@@ -42,7 +42,7 @@ async function fetchTotalSupply(): Promise<number | null> {
     });
 
     if (response.ok) {
-      const data = await response.json();
+      const data = await response.json() as any;
       if (data.result && data.result !== "0x" && !data.error) {
         // Convert from hex to BigInt, then divide by 10^18 (assuming 18 decimals)
         const supplyRaw = BigInt(data.result);
@@ -74,7 +74,7 @@ async function fetchTokenStats() {
     });
 
     if (tokenInfoResponse.ok) {
-      const tokenData = await tokenInfoResponse.json();
+      const tokenData = await tokenInfoResponse.json() as any;
       if (tokenData.status === "1" && tokenData.result && tokenData.result.length > 0) {
         const info = tokenData.result[0];
         if (info.holders) {
@@ -98,7 +98,7 @@ async function fetchTokenStats() {
     });
 
     if (txResponse.ok) {
-      const txData = await txResponse.json();
+      const txData = await txResponse.json() as any;
       if (txData.result && Array.isArray(txData.result)) {
         transactions = txData.result.length;
       }
@@ -132,7 +132,7 @@ async function findUniswapPairAddress(): Promise<string | null> {
     });
 
     if (response.ok) {
-      const data = await response.json();
+      const data = await response.json() as any;
       if (data.status === "1" && data.result && data.result.length > 0) {
         // Get the most recent pool creation
         const latestLog = data.result[data.result.length - 1];
@@ -236,7 +236,7 @@ async function fetch24hChange(): Promise<number | null> {
     );
 
     if (coinGeckoResponse.ok) {
-      const data = await coinGeckoResponse.json();
+      const data = await coinGeckoResponse.json() as any;
       const tokenData = data[tokenAddressLower];
       if (tokenData && tokenData.usd_24h_change !== null && tokenData.usd_24h_change !== undefined) {
         console.log("[24h Change] Fetched from CoinGecko:", tokenData.usd_24h_change);
@@ -256,7 +256,7 @@ async function fetch24hChange(): Promise<number | null> {
     });
 
     if (dexResponse.ok) {
-      const data = await dexResponse.json();
+      const data = await dexResponse.json() as any;
       const pair = data.pair || (data.pairs && data.pairs[0]);
       
       if (pair) {
@@ -294,7 +294,7 @@ async function fetch24hChange(): Promise<number | null> {
     });
 
     if (dexResponse.ok) {
-      const data = await dexResponse.json();
+      const data = await dexResponse.json() as any;
       if (data.pairs && Array.isArray(data.pairs) && data.pairs.length > 0) {
         // Find the pair on Base chain with highest liquidity
         const basePairs = data.pairs.filter(
@@ -358,7 +358,7 @@ export async function GET() {
       });
 
       if (pairResponse.ok) {
-        const pairData = await pairResponse.json();
+        const pairData = await pairResponse.json() as any;
         console.log("[Token Price] Pair endpoint response:", JSON.stringify(pairData).substring(0, 500));
         
         // DexScreener pair endpoint can return either { pair: {...} } or { pairs: [...] }
@@ -407,7 +407,7 @@ export async function GET() {
         });
 
       if (dexScreenerResponse.ok) {
-        const data = await dexScreenerResponse.json();
+        const data = await dexScreenerResponse.json() as any;
           console.log("[Token Price] DexScreener tokens response:", JSON.stringify(data).substring(0, 300));
           
           if (data.pairs && Array.isArray(data.pairs) && data.pairs.length > 0) {
@@ -467,8 +467,8 @@ export async function GET() {
           });
 
           if (pairResponse.ok) {
-            const pairData = await pairResponse.json();
-            if (pairData.pair) {
+          const pairData = await pairResponse.json() as any;
+          if (pairData.pair) {
               pairs = [pairData.pair];
               foundPair = true;
               console.log("[Token Price] Found pair using discovered pair address");
@@ -589,7 +589,7 @@ export async function GET() {
       try {
         const wethPriceRes = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=weth&vs_currencies=usd");
         if (wethPriceRes.ok) {
-          const wethData = await wethPriceRes.json();
+          const wethData = await wethPriceRes.json() as any;
           if (wethData.weth?.usd) {
             wethPrice = wethData.weth.usd;
             console.log("[Token Price] Fetched WETH price:", wethPrice);
@@ -654,8 +654,8 @@ export async function GET() {
       ]);
 
       if (token0Res.ok && token1Res.ok) {
-        const token0Data = await token0Res.json();
-        const token1Data = await token1Res.json();
+        const token0Data = await token0Res.json() as any;
+        const token1Data = await token1Res.json() as any;
         
         console.log("[Token Price] Token responses:", { 
           token0Result: token0Data.result?.substring(0, 50), 
@@ -714,7 +714,7 @@ export async function GET() {
             });
 
             if (slot0Res.ok) {
-              const slot0Data = await slot0Res.json();
+              const slot0Data = await slot0Res.json() as any;
               console.log("[Token Price] Slot0 response:", { 
                 hasResult: !!slot0Data.result, 
                 resultLength: slot0Data.result?.length,
@@ -901,7 +901,7 @@ export async function GET() {
       });
 
       if (quoteResponse.ok) {
-        const quoteData = await quoteResponse.json();
+        const quoteData = await quoteResponse.json() as any;
         // Calculate price from quote (amount in USDC / amount out in tokens)
         // This gives us price per token
         if (quoteData.quote && quoteData.quote.amount && quoteData.quote.amountOut) {

@@ -138,7 +138,7 @@ export async function POST(req: NextRequest) {
   try {
     let body: any;
     try {
-      body = await req.json();
+      body = await req.json() as any;
     } catch (jsonError: any) {
       console.error("[API] /api/checkin POST - JSON parse error:", jsonError);
       return NextResponse.json<CheckinResponse>(

@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       );
 
       if (existingRes.ok) {
-        const existing = await existingRes.json();
+        const existing = await existingRes.json() as any;
         if (existing && existing.length > 0) {
           return NextResponse.json({
             isEligible: true,
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
       );
 
       if (feedResponse.ok) {
-        const feedData = await feedResponse.json();
+        const feedData = await feedResponse.json() as any;
         const feedCasts = feedData.casts || feedData.result?.casts || [];
 
         // Find a cast by this user
@@ -127,7 +127,7 @@ export async function POST(request: Request) {
         throw new Error("Failed to store verification");
       }
 
-      const inserted = await insertRes.json();
+      const inserted = await insertRes.json() as any;
       const claim = inserted && inserted.length > 0 ? inserted[0] : claimData;
 
       return NextResponse.json({

@@ -258,7 +258,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   let body: any = {};
   try {
-    body = await req.json();
+    body = await req.json() as any;
   } catch (_e) {
     return NextResponse.json<SiwnResponse>(
       { ok: false, error: "Body was not JSON" },

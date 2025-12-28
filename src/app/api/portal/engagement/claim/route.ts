@@ -57,7 +57,7 @@ export async function POST(request: Request) {
       throw new Error("Failed to check claim status");
     }
 
-    const existing = await checkRes.json();
+    const existing = await checkRes.json() as any;
     if (!existing || existing.length === 0) {
       return NextResponse.json(
         { error: "No verified engagement claim found. Please verify first." },
@@ -101,7 +101,7 @@ export async function POST(request: Request) {
       throw new Error("Failed to claim reward");
     }
 
-    const updated = await updateRes.json();
+    const updated = await updateRes.json() as any;
     const updatedClaim = updated && updated.length > 0 ? updated[0] : { ...claim, ...updateData };
 
     return NextResponse.json({

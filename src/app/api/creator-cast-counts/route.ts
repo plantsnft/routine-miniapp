@@ -73,7 +73,7 @@ export async function GET(request: Request) {
           break;
         }
 
-        const data = await response.json();
+        const data = await response.json() as any;
         const casts = data.casts || data.feed || [];
         
         if (casts.length === 0) {

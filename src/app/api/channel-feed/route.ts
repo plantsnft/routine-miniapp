@@ -64,7 +64,7 @@ export async function GET(request: Request) {
           );
           
           if (searchResponse.ok) {
-            const searchData = await searchResponse.json();
+            const searchData = await searchResponse.json() as any;
             if (searchData.channels && Array.isArray(searchData.channels)) {
               channelInfo = searchData.channels.find((ch: any) => 
                 ch.id === CATWALK_CHANNEL_ID || 
@@ -235,7 +235,7 @@ export async function GET(request: Request) {
         );
         
         if (response.ok) {
-          const data = await response.json();
+          const data = await response.json() as any;
           const allCasts = data.casts || data.result?.casts || [];
           // Filter casts that belong to our channel
           casts = allCasts.filter((cast: any) => 
@@ -607,7 +607,7 @@ export async function GET(request: Request) {
                 );
                 
                 if (castResponse.ok) {
-                  const castData = await castResponse.json();
+                  const castData = await castResponse.json() as any;
                   const fetchedParent = castData.cast || castData.result?.cast;
                   
                   if (fetchedParent) {

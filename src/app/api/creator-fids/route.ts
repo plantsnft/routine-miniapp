@@ -39,7 +39,7 @@ export async function GET(request: Request) {
         );
 
         if (response.ok) {
-          const data = await response.json();
+          const data = await response.json() as any;
           // Check different possible response structures
           // API returns { transfer: { to: 123 } } or { transfers: [{ to: 123 }] }
           const fidStr = data?.transfer?.to || data?.transfers?.[0]?.to || data?.to || data?.fid;

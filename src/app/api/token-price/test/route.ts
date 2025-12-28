@@ -20,7 +20,7 @@ export async function GET() {
     const pairResponse = await fetch(pairUrl, {
       headers: { "User-Agent": "Catwalk-MiniApp" },
     });
-    const pairData = await pairResponse.json();
+    const pairData = await pairResponse.json() as any;
     
     results.tests.push({
       name: "Pair Address Endpoint",
@@ -57,7 +57,7 @@ export async function GET() {
     const tokenResponse = await fetch(tokenUrl, {
       headers: { "User-Agent": "Catwalk-MiniApp" },
     });
-    const tokenData = await tokenResponse.json();
+    const tokenData = await tokenResponse.json() as any;
     
     results.tests.push({
       name: "Token Address Endpoint",

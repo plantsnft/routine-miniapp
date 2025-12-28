@@ -44,8 +44,8 @@ export async function GET() {
     ]);
 
     if (token0Res.ok && token1Res.ok) {
-      const token0Data = await token0Res.json();
-      const token1Data = await token1Res.json();
+      const token0Data = await token0Res.json() as any;
+      const token1Data = await token1Res.json() as any;
       
       if (token0Data.error || token1Data.error) {
         results.tests.push({
@@ -100,7 +100,7 @@ export async function GET() {
     });
     
     if (slot0Res.ok) {
-      const slot0Data = await slot0Res.json();
+      const slot0Data = await slot0Res.json() as any;
       if (slot0Data.error) {
         results.tests.push({
           name: "Pool Slot0",
@@ -137,7 +137,7 @@ export async function GET() {
   try {
     const dexRes = await fetch(`https://api.dexscreener.com/latest/dex/pairs/base/${PAIR_ADDRESS.toLowerCase()}`);
     if (dexRes.ok) {
-      const dexData = await dexRes.json();
+      const dexData = await dexRes.json() as any;
       results.tests.push({
         name: "DexScreener Pair",
         hasPair: !!dexData.pair,
@@ -158,7 +158,7 @@ export async function GET() {
   try {
     const dexRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${TOKEN_ADDRESS.toLowerCase()}`);
     if (dexRes.ok) {
-      const dexData = await dexRes.json();
+      const dexData = await dexRes.json() as any;
       results.tests.push({
         name: "DexScreener Token",
         pairsCount: dexData.pairs?.length || 0,

@@ -303,7 +303,7 @@ export function PortalTab() {
                 🐱 Creator Reward
               </h2>
               <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 20, lineHeight: 1.6 }}>
-                Verify that you've posted to the /catwalk channel and claim 500,000 CATWALK tokens.
+                Verify that you&apos;ve posted to the /catwalk channel and claim 500,000 CATWALK tokens.
               </p>
 
               {creatorClaimStatus?.hasClaimed ? (

@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
         });
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
+          const errorData = (await response.json().catch(() => ({}))) as any;
           throw new Error(errorData.message || `Failed to ${reactionType} cast`);
         }
 

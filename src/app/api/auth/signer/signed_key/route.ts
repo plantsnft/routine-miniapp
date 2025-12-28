@@ -9,7 +9,7 @@ import {
 const postRequiredFields = ['signerUuid', 'publicKey'];
 
 export async function POST(request: Request) {
-  const body = await request.json();
+  const body = await request.json() as any;
 
   // Validate required fields
   for (const field of postRequiredFields) {

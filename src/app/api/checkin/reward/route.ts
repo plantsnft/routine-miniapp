@@ -363,7 +363,7 @@ async function prepareClaimTransaction(
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const body = await req.json() as any;
     const fid = Number(body.fid);
     const rawClaimantAddress =
       typeof body.claimantAddress === "string"
@@ -520,7 +520,7 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const body = await req.json();
+    const body = await req.json() as any;
     const fid = Number(body.fid);
     const txHash = body.txHash;
 

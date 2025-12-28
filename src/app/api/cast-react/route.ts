@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   try {
-    const { castHash, reactionType, fid: _fid, signerUuid } = await req.json();
+    const { castHash, reactionType, fid: _fid, signerUuid } = await req.json() as any;
     const apiKey = process.env.NEYNAR_API_KEY;
 
     if (!castHash || !reactionType) {

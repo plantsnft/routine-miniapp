@@ -136,7 +136,7 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
-    let body;
+    let body: any;
     try {
       body = await req.json();
     } catch (jsonError: any) {

@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
       throw new Error(`Neynar API error: ${response.statusText}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     const cast = data.cast;
 
     // Extract replies from the cast

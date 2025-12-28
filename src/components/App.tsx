@@ -5,7 +5,7 @@ import { useMiniApp } from "@neynar/react";
 import { Header } from "~/components/ui/Header";
 import { TokenTicker } from "~/components/ui/TokenTicker";
 import { Footer } from "~/components/ui/Footer";
-import { HomeTab, LeaderboardTab, FeedTab, ActionsTab, ContextTab, WalletTab } from "~/components/ui/tabs";
+import { HomeTab, LeaderboardTab, FeedTab, ActionsTab, ContextTab, WalletTab, PortalTab } from "~/components/ui/tabs";
 import { useNeynarUser } from "../hooks/useNeynarUser";
 import { ErrorBoundary } from "~/components/ErrorBoundary";
 import { CreatorGreeting } from "~/components/CreatorGreeting";
@@ -19,6 +19,7 @@ export enum Tab {
   Actions = "actions",
   Context = "context",
   Wallet = "wallet",
+  Portal = "portal",
 }
 
 export interface AppProps {
@@ -149,6 +150,7 @@ export default function App(
           {currentTab === Tab.Actions && <ActionsTab />}
           {currentTab === Tab.Context && <ContextTab />}
           {currentTab === Tab.Wallet && <WalletTab />}
+          {currentTab === Tab.Portal && <PortalTab />}
         </ErrorBoundary>
 
         {/* Footer with navigation */}

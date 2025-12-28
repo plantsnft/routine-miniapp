@@ -1,0 +1,31 @@
+{
+  "frame": {
+    "name": "Poker Lobby",
+    "tags": [
+      "poker",
+      "hellfire",
+      "community",
+      "clanker"
+    ],
+    "homeUrl": "https://poker-swart.vercel.app/",
+    "iconUrl": "https://imgur.com/qqNbLzq",
+    "ogTitle": "Poker LObby",
+    "tagline": "Poker on Farcaster",
+    "version": "1",
+    "imageUrl": "https://imgur.com/qqNbLzq",
+    "subtitle": "Find poker games on Farcaster",
+    "ogImageUrl": "https://imgur.com/qqNbLzq",
+    "buttonTitle": "Open Mini App",
+    "description": "Find poker games and be alerted when they start",
+    "ogDescription": "Find and stay on stop of poker games on Farcaster",
+    "splashImageUrl": "https://imgur.com/qqNbLzq",
+    "primaryCategory": "games",
+    "splashBackgroundColor": "#111111"
+  },
+  "accountAssociation": {
+    "header": "eyJmaWQiOjMxODQ0NywidHlwZSI6ImF1dGgiLCJrZXkiOiIweDdjNTI3ZDk1NmY0NzkyMEZlYzM4ZEZjNTgzNEZlMzFiNUE3MmRCMTIifQ",
+    "payload": "eyJkb21haW4iOiJodHRwcyJ9",
+    "signature": "eqHy2mOaZaoHutlgUkXY07C42cqhOBriRbL//VN68y4tDAefpDSQvem+0ky4EYszoGDTgw1XNhjbL8bYdgpbMxw="
+  }
+}
+

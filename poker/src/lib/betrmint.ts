@@ -23,8 +23,6 @@ export interface BetrmintStakeCheck {
 export async function checkBetrmintStake(params: BetrmintStakeCheck): Promise<boolean> {
   const { fid, poolId, minAmount } = params;
   
-  console.log('[Betrmint] Stub check:', { fid, poolId, minAmount });
-  
   // STUB IMPLEMENTATION
   // For MVP, return false for most cases, but allow some test FIDs
   // In production, this should:
@@ -34,11 +32,9 @@ export async function checkBetrmintStake(params: BetrmintStakeCheck): Promise<bo
   
   // Example: Allow FID 1-100 as test users (remove in production)
   if (fid >= 1 && fid <= 100) {
-    console.log('[Betrmint] Stub: Allowing test FID', fid);
     return true;
   }
   
   // Default: deny (real implementation will check actual stake)
-  console.log('[Betrmint] Stub: Denying FID', fid, '(real API check needed)');
   return false;
 }

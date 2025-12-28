@@ -37,7 +37,10 @@ export async function canUserJoinGame(
   }
 
   // Check gating type
-  switch (game.gating_type) {
+  // MVP: Anyone can join any game. Payment check happens when accessing credentials.
+  const gatingType = game.gating_type || 'entry_fee'; // Default to entry_fee if not set
+  
+  switch (gatingType) {
     case 'open':
       return {
         eligible: true,
@@ -46,19 +49,11 @@ export async function canUserJoinGame(
       };
 
     case 'entry_fee':
-      // For entry_fee, check if they've been marked as paid
-      // In MVP, this is done manually by owner
-      if (existingParticipant?.join_reason === 'entry_fee' && existingParticipant.is_eligible) {
-        return {
-          eligible: true,
-          reason: 'entry_fee',
-          message: 'Entry fee paid',
-        };
-      }
+      // MVP: Anyone can join entry_fee games. Payment verification happens when accessing credentials.
       return {
-        eligible: false,
-        reason: 'not_eligible',
-        message: 'Entry fee not yet paid. Owner must mark payment as received.',
+        eligible: true,
+        reason: 'entry_fee',
+        message: 'Anyone can join. Payment required to access credentials.',
       };
 
     case 'stake_threshold':

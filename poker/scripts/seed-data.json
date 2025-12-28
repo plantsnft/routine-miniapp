@@ -1,0 +1,16 @@
+{
+  "clubs": [
+    {
+      "slug": "hellfire",
+      "name": "Hellfire Club",
+      "description": "Tormental's poker club",
+      "owner_fid": 318447
+    }
+  ],
+  "members": {
+    "hellfire": [
+      318447
+    ]
+  }
+}
+

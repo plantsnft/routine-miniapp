@@ -1,81 +1,96 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SUPABASE_URL, SUPABASE_SERVICE_ROLE } from "~/lib/constants";
-import { isClubOwnerOrAdmin } from "~/lib/permissions";
-import type { ApiResponse, Game, GameParticipant } from "~/lib/types";
-
-const SUPABASE_SERVICE_HEADERS = {
-  apikey: SUPABASE_SERVICE_ROLE,
-  Authorization: `Bearer ${SUPABASE_SERVICE_ROLE}`,
-  "Content-Type": "application/json",
-} as const;
+import { requireAuth } from "~/lib/auth";
+import { pokerDb } from "~/lib/pokerDb";
+import { requireGameAccess, requireClubOwner, getClubForGame } from "~/lib/pokerPermissions";
+import { isGlobalAdmin } from "~/lib/permissions";
+import type { ApiResponse, GameParticipant } from "~/lib/types";
 
 /**
  * GET /api/games/[id]/participants
- * Get all participants for a game (owner only)
+ * Get all participants for a game
+ * - Club owner/admin: sees all participants
+ * - Regular users: see only their own participation (MVP: open signup)
+ * 
+ * MVP: Open signup - any authed user can view participants (but only see their own unless admin)
+ * 
+ * SAFETY: Uses requireAuth() - FID comes only from verified JWT
+ * SAFETY: Uses pokerDb - enforces poker.* schema only
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id: gameId } = await params;
-    const { searchParams } = new URL(req.url);
-    const fid = searchParams.get('fid'); // Current user FID for authorization
+    
+    // SAFETY: Require authentication - FID comes only from verified JWT
+    const { fid } = await requireAuth(req);
+    
+    // Verify game exists (no membership requirement for MVP)
+    const clubId = await requireGameAccess(fid, gameId);
 
-    if (!fid) {
-      return NextResponse.json<ApiResponse>(
-        { ok: false, error: "Missing fid parameter for authorization" },
-        { status: 401 }
-      );
+    // Check if user is club owner/admin (can see all participants)
+    const isOwner = isGlobalAdmin(fid) || await requireClubOwner(fid, clubId).then(() => true).catch(() => false);
+
+    // Fetch participants - use pokerDb
+    // Return all participants for everyone (so all users can see who has joined)
+    const filters: Record<string, string | number> = { game_id: gameId };
+
+    console.log(`[API PARTICIPANTS] Fetching participants for game ${gameId}, user FID: ${fid}, isOwner: ${isOwner}, filters:`, filters);
+
+    // CRITICAL: Explicitly select all fields including transaction hashes
+    // NOTE: wallet_address column does not exist in schema - removed to prevent 42703 error
+    const participants = await pokerDb.fetch<GameParticipant>('participants', {
+      filters,
+      select: 'id,game_id,fid,status,tx_hash,paid_at,refund_tx_hash,refunded_at,payout_tx_hash,payout_amount,paid_out_at,inserted_at,updated_at',
+      order: 'inserted_at.desc',
+    });
+
+    // Debug logging: show distinct statuses and transaction fields
+    const distinctStatuses = [...new Set(participants.map(p => p.status))];
+    const debugEnabled = process.env.NEXT_PUBLIC_DEBUG_PARTICIPANTS === '1';
+    if (debugEnabled) {
+      console.log(`[API PARTICIPANTS][DEBUG] Game ${gameId}, total rows: ${participants.length}, distinct statuses: [${distinctStatuses.join(', ')}]`);
+      console.log(`[API PARTICIPANTS][DEBUG] Sample participant fields:`, participants.length > 0 ? Object.keys(participants[0]) : []);
     }
+    console.log(`[API PARTICIPANTS] Game ${gameId} returned ${participants.length} participants:`, participants.map(p => ({ 
+      id: p.id, 
+      game_id: (p as any).game_id, 
+      fid: (p as any).fid || (p as any).player_fid,
+      status: p.status,
+      hasTxHash: !!(p.tx_hash),
+      hasRefundTxHash: !!((p as any).refund_tx_hash),
+      hasPayoutTxHash: !!((p as any).payout_tx_hash),
+    })));
 
-    if (!SUPABASE_URL) {
-      throw new Error("Supabase not configured");
-    }
+    // Get version for deployment verification
+    const gitSha = process.env.VERCEL_GIT_COMMIT_SHA || process.env.GIT_SHA || 'unknown';
 
-    // Verify game exists
-    const gameRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/games?id=eq.${gameId}&select=*,club:clubs!inner(owner_fid)`,
-      { headers: SUPABASE_SERVICE_HEADERS }
-    );
-
-    if (!gameRes.ok) {
-      throw new Error("Failed to fetch game");
-    }
-
-    const games: any[] = await gameRes.json();
-    if (!games || games.length === 0) {
-      return NextResponse.json<ApiResponse>(
-        { ok: false, error: "Game not found" },
-        { status: 404 }
-      );
-    }
-
-    const game = games[0];
-    const viewerFid = parseInt(fid, 10);
-    const isOwner = isClubOwnerOrAdmin(viewerFid, game.club);
-
-    // If not owner, only return the current user's participation
-    let query = `${SUPABASE_URL}/rest/v1/game_participants?game_id=eq.${gameId}`;
-    if (!isOwner) {
-      query += `&player_fid=eq.${fid}`;
-    }
-    query += `&select=*&order=inserted_at.desc`;
-
-    // Fetch participants
-    const participantsRes = await fetch(query, { headers: SUPABASE_SERVICE_HEADERS });
-
-    if (!participantsRes.ok) {
-      throw new Error("Failed to fetch participants");
-    }
-
-    const participants: GameParticipant[] = await participantsRes.json();
-
-    return NextResponse.json<ApiResponse<GameParticipant[]>>({
+    const response = NextResponse.json<ApiResponse<GameParticipant[]>>({
       ok: true,
       data: participants,
     });
+    
+    response.headers.set('X-App-Version', gitSha);
+    return response;
   } catch (error: any) {
+    // Handle auth errors
+    if (error.message?.includes('authentication') || error.message?.includes('token')) {
+      return NextResponse.json<ApiResponse>(
+        { ok: false, error: error.message },
+        { status: 401 }
+      );
+    }
+    // Handle permission errors
+    if (error.message?.includes('member') || error.message?.includes('access')) {
+      return NextResponse.json<ApiResponse>(
+        { ok: false, error: error.message },
+        { status: 403 }
+      );
+    }
+
     console.error("[API][games][participants] Error:", error);
     return NextResponse.json<ApiResponse>(
       { ok: false, error: error?.message || "Failed to fetch participants" },
@@ -86,8 +101,11 @@ export async function GET(
 
 /**
  * POST /api/games/[id]/participants
- * Manually add/update a participant (owner only)
- * Body: { player_fid: number, is_eligible: boolean, join_reason?: string }
+ * Manually add/update a participant (club owner only)
+ * 
+ * SAFETY: Uses requireAuth() - FID comes only from verified JWT
+ * SAFETY: Uses pokerDb - enforces poker.* schema only
+ * SAFETY: Uses requireClubOwner - only club owner can manage participants
  */
 export async function POST(
   req: NextRequest,
@@ -95,77 +113,61 @@ export async function POST(
 ) {
   try {
     const { id: gameId } = await params;
+    
+    // SAFETY: Require authentication - FID comes only from verified JWT
+    const { fid } = await requireAuth(req);
+    
     const body = await req.json();
-    const { fid, player_fid, is_eligible, join_reason } = body;
+    const { fid: targetFid } = body;
 
-    if (!fid || !player_fid) {
+    if (!targetFid) {
       return NextResponse.json<ApiResponse>(
-        { ok: false, error: "Missing fid or player_fid" },
+        { ok: false, error: "Missing fid" },
         { status: 400 }
       );
     }
 
-    if (!SUPABASE_URL) {
-      throw new Error("Supabase not configured");
-    }
-
-    // Verify ownership (same as GET)
-    const gameRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/games?id=eq.${gameId}&select=*,club:clubs!inner(owner_fid)`,
-      { headers: SUPABASE_SERVICE_HEADERS }
-    );
-
-    if (!gameRes.ok) {
-      throw new Error("Failed to fetch game");
-    }
-
-    const games: any[] = await gameRes.json();
-    if (!games || games.length === 0) {
+    // SAFETY: Require club ownership
+    const clubId = await getClubForGame(gameId);
+    if (!clubId) {
       return NextResponse.json<ApiResponse>(
         { ok: false, error: "Game not found" },
         { status: 404 }
       );
     }
+    await requireClubOwner(fid, clubId);
 
-    const game = games[0];
-    const viewerFid = parseInt(fid, 10);
+    // Upsert participant - use pokerDb
+    // Note: Schema only has: id, game_id, fid, status, tx_hash, paid_at, inserted_at, updated_at
+    const participantData: any = {
+      game_id: gameId,
+      fid: parseInt(String(targetFid), 10),
+      status: 'joined',
+    };
 
-    if (!isClubOwnerOrAdmin(viewerFid, game.club)) {
+    const participant = await pokerDb.upsert<GameParticipant>('participants', participantData);
+    const result = Array.isArray(participant) ? participant[0] : participant;
+
+    return NextResponse.json<ApiResponse<GameParticipant>>({
+      ok: true,
+      data: result,
+    });
+  } catch (error: any) {
+    // Handle auth errors
+    if (error.message?.includes('authentication') || error.message?.includes('token')) {
       return NextResponse.json<ApiResponse>(
-        { ok: false, error: "Only club owner can manage participants" },
+        { ok: false, error: error.message },
+        { status: 401 }
+      );
+    }
+    // Handle permission errors
+    if (error.message?.includes('owner') || error.message?.includes('permission')) {
+      return NextResponse.json<ApiResponse>(
+        { ok: false, error: error.message },
         { status: 403 }
       );
     }
 
-    // Upsert participant
-    const participantData: any = {
-      game_id: gameId,
-      player_fid: parseInt(player_fid, 10),
-      is_eligible: is_eligible !== undefined ? is_eligible : true,
-      join_reason: join_reason || 'manual_override',
-    };
-
-    const upsertRes = await fetch(`${SUPABASE_URL}/rest/v1/game_participants`, {
-      method: "POST",
-      headers: {
-        ...SUPABASE_SERVICE_HEADERS,
-        Prefer: "resolution=merge-duplicates",
-      },
-      body: JSON.stringify([participantData]),
-    });
-
-    if (!upsertRes.ok) {
-      const text = await upsertRes.text();
-      throw new Error(`Failed to update participant: ${text}`);
-    }
-
-    const participants: GameParticipant[] = await upsertRes.json();
-
-    return NextResponse.json<ApiResponse<GameParticipant>>({
-      ok: true,
-      data: participants[0],
-    });
-  } catch (error: any) {
     console.error("[API][games][participants] Error:", error);
     return NextResponse.json<ApiResponse>(
       { ok: false, error: error?.message || "Failed to update participant" },

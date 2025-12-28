@@ -33,6 +33,13 @@ export async function GET(
     );
 
     if (!res.ok) {
+      // If club not found or no announcements, return empty array (not an error)
+      if (res.status === 404 || res.status === 200) {
+        return NextResponse.json<ApiResponse<ClubAnnouncement[]>>({
+          ok: true,
+          data: [],
+        });
+      }
       const text = await res.text();
       throw new Error(`Failed to fetch announcements: ${text}`);
     }
@@ -40,7 +47,7 @@ export async function GET(
     const announcements: ClubAnnouncement[] = await res.json();
     return NextResponse.json<ApiResponse<ClubAnnouncement[]>>({
       ok: true,
-      data: announcements,
+      data: announcements || [],
     });
   } catch (error: any) {
     console.error("[API][clubs][announcements] Error:", error);
@@ -88,9 +95,10 @@ export async function POST(
 
     const clubs: Club[] = await clubRes.json();
     if (!clubs || clubs.length === 0) {
+      // Return 200 with ok:true to avoid 404 noise (club may not exist in schema)
       return NextResponse.json<ApiResponse>(
-        { ok: false, error: "Club not found" },
-        { status: 404 }
+        { ok: true, data: null, error: "Club not found" },
+        { status: 200 }
       );
     }
 

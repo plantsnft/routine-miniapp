@@ -5,6 +5,17 @@
 import { SUPER_OWNER_FID } from './constants';
 import type { Club } from './types';
 
+import { TORMENTAL_FID } from './constants';
+
+/**
+ * Global admin FIDs (hardcoded allowlist for Hellfire-only MVP)
+ * Only Plants (318447) and Tormental (from TORMENTAL_FID env var) have global admin access
+ */
+export const GLOBAL_ADMIN_FIDS = [
+  318447, // Plants
+  ...(TORMENTAL_FID && Number.isFinite(TORMENTAL_FID) ? [TORMENTAL_FID] : []), // Tormental
+].filter(Number.isFinite) as readonly number[];
+
 /**
  * Check if a viewer FID has owner/admin access to a club.
  * Super owner (318447) has access to all clubs.
@@ -37,4 +48,16 @@ export function isClubOwnerOrAdmin(viewerFid: number | null | undefined, club: {
 export function isSuperOwner(viewerFid: number | null | undefined): boolean {
   if (!viewerFid) return false;
   return viewerFid === SUPER_OWNER_FID;
+}
+
+/**
+ * Check if a viewer FID is a global admin (hardcoded allowlist).
+ * Global admins can manage all clubs.
+ * 
+ * @param viewerFid - The FID of the user
+ * @returns true if the viewer is a global admin
+ */
+export function isGlobalAdmin(viewerFid: number | null | undefined): boolean {
+  if (!viewerFid) return false;
+  return GLOBAL_ADMIN_FIDS.includes(viewerFid as any);
 }

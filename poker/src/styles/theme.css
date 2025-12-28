@@ -1,0 +1,95 @@
+/**
+ * Hellfire Poker Design Tokens
+ * 
+ * Single source of truth for design system variables.
+ * Import this file in globals.css to apply across the app.
+ */
+
+:root {
+  /* Backgrounds - deep black with subtle variation */
+  --bg-0: #000000;
+  --bg-1: #0B0B0B;
+  --bg-2: #121212;
+  
+  /* Text - white with opacity hierarchy */
+  --text-0: #FFFFFF;
+  --text-1: rgba(255, 255, 255, 0.72);
+  --text-2: rgba(255, 255, 255, 0.52);
+  
+  /* Ember accents (derived from logo: fire/ember gradients) */
+  --ember-0: #FFB000;  /* hot highlight/gold edge */
+  --ember-1: #FF3B1A;  /* primary orange-red (from spec) */
+  --ember-2: #B22222;  /* deep red (from spec) */
+  --ember-3: #8B0000;  /* blood red/darkest (from spec) */
+  
+  /* Borders / strokes */
+  --stroke-0: rgba(255, 255, 255, 0.08);
+  --stroke-ember: rgba(255, 59, 26, 0.28);
+  
+  /* Radius scale */
+  --radius-card: 12px;
+  --radius-input: 10px;
+  --radius-badge: 999px;
+  
+  /* Spacing scale (4/8/12/16/24) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  
+  /* Transition timings */
+  --transition-fast: 150ms;
+  --transition-base: 200ms;
+  --transition-slow: 250ms;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  
+  /* Shadows - subtle, ember-tinted */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.3);
+  --shadow-ember: 0 0 8px rgba(255, 59, 26, 0.15);
+  --shadow-ember-hover: 0 0 12px rgba(255, 59, 26, 0.25);
+}
+
+/* Ember gradient utilities */
+.ember-gradient {
+  background: linear-gradient(135deg, var(--ember-1) 0%, var(--ember-2) 100%);
+}
+
+.ember-edge-light {
+  box-shadow: 0 0 0 1px rgba(255, 59, 26, 0.2),
+              0 0 8px rgba(255, 59, 26, 0.1);
+}
+
+/* Chip motif (very subtle watermark, CSS-only, 3-6% opacity) */
+.chip-watermark {
+  position: relative;
+}
+
+.chip-watermark::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: 
+    radial-gradient(circle at 30% 30%, rgba(255, 176, 0, 0.04) 0%, transparent 50%),
+    radial-gradient(circle at 70% 70%, rgba(255, 59, 26, 0.04) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+  border-radius: inherit;
+}
+
+/* Reduced motion - disable animations */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+
+

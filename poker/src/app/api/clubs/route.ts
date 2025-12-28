@@ -1,42 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SUPABASE_URL, SUPABASE_SERVICE_ROLE, HELLFIRE_OWNER_FID, BURRFRIENDS_OWNER_FID } from "~/lib/constants";
+import { HELLFIRE_OWNER_FID } from "~/lib/constants";
+import { requireAuth } from "~/lib/auth";
+import { pokerDb } from "~/lib/pokerDb";
+import { isGlobalAdmin } from "~/lib/permissions";
 import type { ApiResponse, Club } from "~/lib/types";
-
-const SUPABASE_SERVICE_HEADERS = {
-  apikey: SUPABASE_SERVICE_ROLE,
-  Authorization: `Bearer ${SUPABASE_SERVICE_ROLE}`,
-  "Content-Type": "application/json",
-} as const;
 
 /**
  * GET /api/clubs
- * Get all clubs
+ * Get Hellfire club only (MVP-only)
+ * 
+ * SAFETY: Uses requireAuth() - FID comes only from verified JWT
+ * SAFETY: Uses pokerDb - enforces poker.* schema only
  */
 export async function GET(req: NextRequest) {
   try {
-    if (!SUPABASE_URL) {
-      throw new Error("Supabase not configured");
-    }
+    // SAFETY: Require authentication - FID comes only from verified JWT
+    const { fid } = await requireAuth(req);
 
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/clubs?select=*&order=name.asc`, {
-      method: "GET",
-      headers: {
-        apikey: SUPABASE_SERVICE_ROLE,
-        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE}`,
-      },
+    // MVP-only: Only return Hellfire club
+    const clubs = await pokerDb.fetch<Club>('clubs', {
+      filters: { slug: 'hellfire' },
+      select: '*',
+      limit: 1,
     });
 
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Failed to fetch clubs: ${text}`);
-    }
-
-    const clubs: Club[] = await res.json();
     return NextResponse.json<ApiResponse<Club[]>>({
       ok: true,
-      data: clubs,
+      data: clubs || [],
     });
   } catch (error: any) {
+
+    // Handle auth errors
+    if (error.message?.includes('authentication') || error.message?.includes('token')) {
+      return NextResponse.json<ApiResponse>(
+        { ok: false, error: error.message },
+        { status: 401 }
+      );
+    }
+
     console.error("[API][clubs] Error:", error);
     return NextResponse.json<ApiResponse>(
       { ok: false, error: error?.message || "Failed to fetch clubs" },
@@ -47,99 +48,77 @@ export async function GET(req: NextRequest) {
 
 /**
  * POST /api/clubs/seed
- * Seed the two clubs (Hellfire and Burrfriends)
+ * Seed Hellfire club (MVP-only)
  * Should only be called once during initial setup
+ * 
+ * SAFETY: Requires global admin auth
+ * SAFETY: Uses pokerDb - enforces poker.* schema only
  */
 export async function POST(req: NextRequest) {
   try {
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE) {
-      throw new Error("Supabase not configured");
+    // SAFETY: Require authentication - FID comes only from verified JWT
+    const { fid } = await requireAuth(req);
+
+    // SAFETY: Only global admins can seed clubs
+    if (!isGlobalAdmin(fid)) {
+      return NextResponse.json<ApiResponse>(
+        { ok: false, error: "Only global admins can seed clubs" },
+        { status: 403 }
+      );
     }
 
-    if (!HELLFIRE_OWNER_FID || !BURRFRIENDS_OWNER_FID) {
-      throw new Error("Club owner FIDs not configured in environment variables");
+    if (!HELLFIRE_OWNER_FID) {
+      throw new Error("HELLFIRE_OWNER_FID not configured in environment variables");
     }
 
-    // Check if clubs already exist
-    const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/clubs?select=slug`, {
-      method: "GET",
-      headers: SUPABASE_SERVICE_HEADERS,
+    // Check if club already exists - use pokerDb
+    const existing = await pokerDb.fetch<Club>('clubs', {
+      filters: { slug: 'hellfire' },
+      limit: 1,
     });
 
-    if (!checkRes.ok) {
-      throw new Error("Failed to check existing clubs");
-    }
-
-    const existing = await checkRes.json();
-    const existingSlugs = existing.map((c: Club) => c.slug);
-
-    const clubsToSeed = [
-      {
-        slug: "hellfire",
-        owner_fid: HELLFIRE_OWNER_FID,
-        name: "Hellfire Club",
-        description: "Tormental's poker club",
-      },
-      {
-        slug: "burrfriends",
-        owner_fid: BURRFRIENDS_OWNER_FID,
-        name: "Burrfriends",
-        description: "Burr's poker club",
-      },
-    ];
-
-    const clubsToCreate = clubsToSeed.filter(c => !existingSlugs.includes(c.slug));
-
-    if (clubsToCreate.length === 0) {
+    if (existing.length > 0) {
       return NextResponse.json<ApiResponse>({
         ok: true,
-        data: { message: "Clubs already seeded" },
+        data: { message: "Hellfire club already seeded", club: existing[0] },
       });
     }
 
-    // Insert clubs
-    const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/clubs`, {
-      method: "POST",
-      headers: {
-        ...SUPABASE_SERVICE_HEADERS,
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify(clubsToCreate),
-    });
+    // Insert club - use pokerDb
+    const clubToCreate = {
+      slug: "hellfire",
+      owner_fid: HELLFIRE_OWNER_FID,
+      name: "Hellfire Club",
+      description: "Tormental's poker club",
+    };
 
-    if (!insertRes.ok) {
-      const text = await insertRes.text();
-      throw new Error(`Failed to seed clubs: ${text}`);
-    }
+    const createdClubs = await pokerDb.insert<Club>('clubs', [clubToCreate] as any) as Club[];
+    const createdClub = createdClubs[0];
 
-    const createdClubs: Club[] = await insertRes.json();
-
-    // Ensure owners are in club_members with role='owner'
-    for (const club of createdClubs) {
-      // Upsert owner as club member
-      await fetch(`${SUPABASE_URL}/rest/v1/club_members`, {
-        method: "POST",
-        headers: {
-          ...SUPABASE_SERVICE_HEADERS,
-          Prefer: "resolution=merge-duplicates",
-        },
-        body: JSON.stringify([{
-          club_id: club.id,
-          member_fid: club.owner_fid,
-          role: "owner",
-          status: "active",
-        }]),
-      });
-    }
+    // Ensure owner is in club_members with role='owner' - use pokerDb
+    await pokerDb.upsert('club_members', {
+      club_id: createdClub.id,
+      member_fid: createdClub.owner_fid,
+      role: "owner",
+      status: "active",
+    } as any);
 
     return NextResponse.json<ApiResponse<Club[]>>({
       ok: true,
-      data: createdClubs,
+      data: [createdClub],
     });
   } catch (error: any) {
+    // Handle auth errors
+    if (error.message?.includes('authentication') || error.message?.includes('token')) {
+      return NextResponse.json<ApiResponse>(
+        { ok: false, error: error.message },
+        { status: 401 }
+      );
+    }
+
     console.error("[API][clubs] Seed error:", error);
     return NextResponse.json<ApiResponse>(
-      { ok: false, error: error?.message || "Failed to seed clubs" },
+      { ok: false, error: error?.message || "Failed to seed club" },
       { status: 500 }
     );
   }

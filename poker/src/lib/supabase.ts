@@ -133,3 +133,33 @@ export function getServiceRoleHeaders() {
 export function getAnonHeaders() {
   return SUPABASE_HEADERS;
 }
+
+/**
+ * Get service role headers for poker schema operations.
+ * All poker.* tables should be accessed via service role for MVP.
+ */
+export function getPokerServiceHeaders() {
+  return getServiceRoleHeaders();
+}
+
+/**
+ * Build a Supabase REST API URL for poker schema tables.
+ * Example: getPokerApiUrl('clubs') => '${SUPABASE_URL}/rest/v1/poker.clubs'
+ */
+export function getPokerApiUrl(tableName: string): string {
+  if (!SUPABASE_URL) {
+    throw new Error('SUPABASE_URL not configured');
+  }
+  // Use schema-qualified table name: poker.tableName
+  // Supabase REST API uses dot notation for schema-qualified tables
+  return `${SUPABASE_URL}/rest/v1/poker.${tableName}`;
+}
+
+/**
+ * Build a Supabase REST API URL with query params for poker schema.
+ */
+export function getPokerApiUrlWithQuery(tableName: string, params: Record<string, string>): string {
+  const baseUrl = getPokerApiUrl(tableName);
+  const queryString = new URLSearchParams(params).toString();
+  return queryString ? `${baseUrl}?${queryString}` : baseUrl;
+}

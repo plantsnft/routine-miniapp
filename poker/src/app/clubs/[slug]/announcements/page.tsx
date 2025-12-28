@@ -2,12 +2,15 @@
 
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
+import { useAuth } from '~/components/AuthProvider';
+import { authedFetch } from '~/lib/authedFetch';
 import { isClubOwnerOrAdmin } from '~/lib/permissions';
 import type { Club, ClubAnnouncement, Game } from '~/lib/types';
 import { formatRelativeTime } from '~/lib/utils';
 
 export default function ClubAnnouncementsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
+  const { token, fid } = useAuth();
   const [club, setClub] = useState<Club | null>(null);
   const [announcements, setAnnouncements] = useState<ClubAnnouncement[]>([]);
   const [games, setGames] = useState<Game[]>([]);
@@ -21,18 +24,28 @@ export default function ClubAnnouncementsPage({ params }: { params: Promise<{ sl
   const [formGameId, setFormGameId] = useState('');
 
   useEffect(() => {
-    loadData();
-  }, [slug]);
+    if (token) {
+      loadData();
+    } else if (!token && fid === null) {
+      setError('Please sign in');
+      setLoading(false);
+    }
+  }, [slug, token, fid]);
 
   const loadData = async () => {
+    if (!token) {
+      setError('Please sign in');
+      setLoading(false);
+      return;
+    }
+
     try {
-      const fid = localStorage.getItem('userFid');
       if (fid) {
-        setCurrentUserFid(parseInt(fid, 10));
+        setCurrentUserFid(fid);
       }
 
-      // Fetch club
-      const clubsRes = await fetch('/api/clubs');
+      // Fetch club (requires auth)
+      const clubsRes = await authedFetch('/api/clubs', { method: 'GET' }, token);
       if (!clubsRes.ok) throw new Error('Failed to fetch clubs');
       const clubsData = await clubsRes.json();
       const foundClub = clubsData.data?.find((c: Club) => c.slug === slug);
@@ -104,7 +117,7 @@ export default function ClubAnnouncementsPage({ params }: { params: Promise<{ sl
     return (
       <main className="min-h-screen p-8 bg-gray-50">
         <div className="max-w-4xl mx-auto">
-          <p className="text-gray-600">Loading...</p>
+          <p className="text-black">Loading...</p>
         </div>
       </main>
     );
@@ -128,7 +141,7 @@ export default function ClubAnnouncementsPage({ params }: { params: Promise<{ sl
         </Link>
 
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold">{club?.name} - Announcements</h1>
+          <h1 className="text-3xl font-bold text-black">{club?.name} - Announcements</h1>
           {isOwner && !showCreateForm && (
             <button
               onClick={() => setShowCreateForm(true)}
@@ -147,7 +160,7 @@ export default function ClubAnnouncementsPage({ params }: { params: Promise<{ sl
 
         {isOwner && showCreateForm && (
           <div className="mb-6 bg-white border border-gray-200 rounded-lg shadow-sm p-6">
-            <h2 className="text-xl font-semibold mb-4">Create Announcement</h2>
+            <h2 className="text-xl font-semibold mb-4 text-black">Create Announcement</h2>
             <form onSubmit={handleCreate} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-2">Title</label>
@@ -211,7 +224,7 @@ export default function ClubAnnouncementsPage({ params }: { params: Promise<{ sl
 
         {announcements.length === 0 ? (
           <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-8 text-center">
-            <p className="text-gray-600">No announcements yet.</p>
+            <p className="text-black">No announcements yet.</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -222,8 +235,8 @@ export default function ClubAnnouncementsPage({ params }: { params: Promise<{ sl
                   key={announcement.id}
                   className="bg-white border border-gray-200 rounded-lg shadow-sm p-6"
                 >
-                  <h3 className="text-xl font-semibold mb-2">{announcement.title}</h3>
-                  <p className="text-gray-700 whitespace-pre-wrap mb-4">{announcement.body}</p>
+                  <h3 className="text-xl font-semibold mb-2 text-black">{announcement.title}</h3>
+                  <p className="text-black whitespace-pre-wrap mb-4">{announcement.body}</p>
                   <div className="flex items-center justify-between text-sm text-gray-500">
                     <span>{formatRelativeTime(announcement.inserted_at)}</span>
                     {relatedGame && (

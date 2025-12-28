@@ -146,6 +146,29 @@ export const Footer: React.FC<FooterProps> = ({ activeTab, setActiveTab }) => {
           Feed
         </span>
       </button>
+      <button
+        onClick={() => {
+          triggerHaptic("light");
+          setActiveTab(Tab.Portal);
+        }}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "transparent",
+          border: "none",
+          cursor: "pointer",
+          padding: "4px 16px", // Reduced from 8px 16px
+          color: activeTab === Tab.Portal ? "#c1b400" : "#666666",
+          transition: "color 0.2s",
+        }}
+      >
+        <span style={{ fontSize: 20, marginBottom: 2 }}>📤</span> {/* Upload/Portal icon */}
+        <span style={{ fontSize: 10, fontWeight: activeTab === Tab.Portal ? 700 : 400 }}> {/* Reduced from 12px */}
+          Portal
+        </span>
+      </button>
       </div>
       
       {/* Visit /Catwalk Button - Thin and long */}

@@ -88,6 +88,12 @@ export function PortalTab() {
     missedReward: number;
     missingActions: string[];
   } | null>(null);
+  
+  // Auto-engage preferences state
+  const [autoEngageEnabled, setAutoEngageEnabled] = useState(false);
+  const [signerUuid, setSignerUuid] = useState<string | null>(null);
+  const [bonusMultiplier, setBonusMultiplier] = useState(1.0);
+  const [bulkEngaging, setBulkEngaging] = useState(false);
 
   const isCreator = userFid && CATWALK_CREATOR_FIDS.includes(userFid);
 
@@ -95,6 +101,7 @@ export function PortalTab() {
   useEffect(() => {
     if (userFid) {
       fetchClaimStatus();
+      fetchAutoEngagePrefs();
       
       // Auto-poll every 5 minutes to detect new casts
       const pollInterval = setInterval(() => {
@@ -108,6 +115,82 @@ export function PortalTab() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userFid]);
+
+  // Fetch auto-engage preferences
+  const fetchAutoEngagePrefs = async () => {
+    if (!userFid) return;
+    try {
+      const res = await fetch(`/api/portal/engage/preferences?fid=${userFid}`);
+      if (res.ok) {
+        const data = await res.json();
+        setAutoEngageEnabled(data.autoEngageEnabled || false);
+        setSignerUuid(data.signerUuid || null);
+        setBonusMultiplier(data.bonusMultiplier || 1.0);
+      }
+    } catch (err) {
+      console.log("[PortalTab] Error fetching auto-engage prefs:", err);
+    }
+  };
+
+  // Handle bulk like & recast all
+  const handleBulkEngage = async () => {
+    if (!userFid || !signerUuid) {
+      setError("Please enable auto-engage to use this feature");
+      return;
+    }
+
+    // Get all casts that have missing likes or recasts
+    const castsToEngage: { hash: string; missingActions: string[] }[] = [];
+    
+    for (const opportunity of engagementOpportunities) {
+      const missingActions = opportunity.availableActions
+        .filter(a => a.type === "like" || a.type === "recast")
+        .map(a => a.type);
+      if (missingActions.length > 0) {
+        castsToEngage.push({ hash: opportunity.castHash, missingActions });
+      }
+    }
+
+    if (castsToEngage.length === 0) {
+      setSuccess("No casts need likes or recasts!");
+      return;
+    }
+
+    try {
+      setBulkEngaging(true);
+      setError(null);
+      triggerHaptic("medium");
+
+      const res = await fetch("/api/portal/engage/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fid: userFid,
+          signerUuid,
+          castHashes: castsToEngage.map(c => c.hash),
+          actions: ["like", "recast"],
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Bulk engage failed");
+      }
+
+      setSuccess(`✅ Liked & recasted ${data.summary.successful} casts! Refresh to claim rewards.`);
+      triggerHaptic("heavy");
+      
+      // Refresh opportunities after a moment
+      setTimeout(() => fetchClaimStatus(), 2000);
+    } catch (err: any) {
+      console.error("[PortalTab] Bulk engage error:", err);
+      setError(err.message || "Failed to bulk engage");
+      triggerHaptic("rigid");
+    } finally {
+      setBulkEngaging(false);
+    }
+  };
 
   const fetchClaimStatus = async () => {
     if (!userFid) return;
@@ -854,6 +937,86 @@ export function PortalTab() {
               </div>
             </div>
           )}
+
+          {/* Auto-Engage Section */}
+          <div
+            style={{
+              background: "#1a0a1a",
+              border: "2px solid #ff00ff",
+              borderRadius: 12,
+              padding: "20px",
+              marginBottom: 24,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <h2
+                style={{
+                  color: "#ff00ff",
+                  fontSize: 18,
+                  fontWeight: 700,
+                }}
+              >
+                ⚡ Quick Actions
+              </h2>
+              {bonusMultiplier > 1 && (
+                <span style={{
+                  background: "#ff00ff",
+                  color: "#000",
+                  padding: "4px 8px",
+                  borderRadius: 4,
+                  fontSize: 11,
+                  fontWeight: 700,
+                }}>
+                  +10% BONUS
+                </span>
+              )}
+            </div>
+            
+            {/* Like & Recast All Button */}
+            <button
+              onClick={handleBulkEngage}
+              disabled={bulkEngaging || !signerUuid || engagementOpportunities.length === 0}
+              style={{
+                width: "100%",
+                padding: "14px 20px",
+                background: signerUuid ? "#ff00ff" : "#333",
+                color: signerUuid ? "#000" : "#666",
+                border: "none",
+                borderRadius: 8,
+                fontSize: 16,
+                fontWeight: 700,
+                cursor: (bulkEngaging || !signerUuid || engagementOpportunities.length === 0) ? "not-allowed" : "pointer",
+                opacity: bulkEngaging ? 0.6 : 1,
+                marginBottom: 16,
+              }}
+            >
+              {bulkEngaging ? "⏳ Liking & Recasting..." : signerUuid ? "❤️🔁 Like & Recast All Casts" : "🔒 Enable Auto-Engage First"}
+            </button>
+
+            {/* Auto-Engage Toggle Info */}
+            <div style={{
+              background: "#0a0a0a",
+              border: "1px solid #ff00ff",
+              borderRadius: 8,
+              padding: "12px",
+            }}>
+              <p style={{ color: "#ff00ff", fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+                🎁 Auto Like & Recast (Coming Soon)
+              </p>
+              <p style={{ color: "#999", fontSize: 12, lineHeight: 1.4, marginBottom: 8 }}>
+                Enable auto-engagement to automatically like & recast new casts in /catwalk within 5 minutes of posting.
+              </p>
+              <p style={{ color: "#ff00ff", fontSize: 12, fontWeight: 600 }}>
+                ✨ Earn 10% bonus CATWALK on all rewards when enabled!
+              </p>
+              
+              {!signerUuid && (
+                <p style={{ color: "#ff9500", fontSize: 11, marginTop: 8, fontStyle: "italic" }}>
+                  ⚠️ Requires Neynar signer authorization (contact @plantsnft to enable)
+                </p>
+              )}
+            </div>
+          </div>
 
           {/* Engagement Opportunities Section */}
           <div

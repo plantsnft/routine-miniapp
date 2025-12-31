@@ -174,8 +174,36 @@ export async function POST(request: Request) {
       claimedTypes.push(claim.engagement_type);
     }
 
+    // Check for auto-engage bonus multiplier
+    let bonusMultiplier = 1.0;
+    try {
+      const prefsRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/user_engage_preferences?fid=eq.${fid}&limit=1`,
+        {
+          method: "GET",
+          headers: SUPABASE_HEADERS,
+        }
+      );
+      if (prefsRes.ok) {
+        const prefs = await prefsRes.json() as any[];
+        if (prefs.length > 0 && prefs[0].auto_engage_enabled) {
+          bonusMultiplier = parseFloat(prefs[0].bonus_multiplier) || 1.1;
+          console.log(`[Engagement Claim] Auto-engage bonus: ${bonusMultiplier}x`);
+        }
+      }
+    } catch (err) {
+      console.log("[Engagement Claim] Could not check bonus multiplier:", err);
+    }
+
+    // Apply bonus if eligible
+    if (bonusMultiplier > 1) {
+      const bonusAmount = (totalRewardAmount * BigInt(Math.round((bonusMultiplier - 1) * 100))) / 100n;
+      totalRewardAmount += bonusAmount;
+      console.log(`[Engagement Claim] Applied ${((bonusMultiplier - 1) * 100).toFixed(0)}% bonus: +${Number(bonusAmount / (10n ** 18n))} CATWALK`);
+    }
+
     console.log(`[Engagement Claim] Claiming ${claimedTypes.length} actions: ${claimedTypes.join(', ')}`);
-    console.log(`[Engagement Claim] Total reward: ${Number(totalRewardAmount / (10n ** 18n))} CATWALK`);
+    console.log(`[Engagement Claim] Total reward: ${Number(totalRewardAmount / (10n ** 18n))} CATWALK (${bonusMultiplier > 1 ? `includes ${((bonusMultiplier - 1) * 100).toFixed(0)}% bonus` : 'no bonus'})`);
 
     // Get user's wallet address from FID
     const user = await getNeynarUser(fid);
@@ -323,6 +351,8 @@ export async function POST(request: Request) {
       engagementTypes: claimedTypes,
       claimedCount: claimedTypes.length,
       rewardAmount: totalRewardTokens,
+      bonusApplied: bonusMultiplier > 1,
+      bonusMultiplier: bonusMultiplier,
       transactionHash: transactionHash,
       basescanUrl: `https://basescan.org/tx/${transactionHash}`,
       claimedAt: updateData.claimed_at,

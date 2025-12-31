@@ -402,23 +402,41 @@ export function PortalTab() {
         >
           {success}
           {transactionUrl && (
-            <div style={{ marginTop: 8 }}>
-              <a
-                href={transactionUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  color: "#000000",
-                  textDecoration: "underline",
-                  fontWeight: 700,
-                }}
-                onClick={(e) => {
+            <div style={{ marginTop: 10 }}>
+              <button
+                onClick={async (e) => {
+                  e.preventDefault();
                   e.stopPropagation();
                   triggerHaptic("light");
+                  try {
+                    // Use Mini App SDK to open URL (works better in Farcaster client)
+                    if (actions?.openUrl) {
+                      await actions.openUrl(transactionUrl);
+                    } else {
+                      window.open(transactionUrl, "_blank", "noopener,noreferrer");
+                    }
+                  } catch (err) {
+                    console.error("Error opening URL:", err);
+                    window.open(transactionUrl, "_blank", "noopener,noreferrer");
+                  }
+                }}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  padding: "10px 16px",
+                  background: "#000000",
+                  color: "#00ff00",
+                  border: "2px solid #000000",
+                  borderRadius: 6,
+                  fontSize: 14,
+                  fontWeight: 700,
+                  textAlign: "center",
+                  cursor: "pointer",
+                  textDecoration: "none",
                 }}
               >
                 📜 View Transaction on BaseScan →
-              </a>
+              </button>
             </div>
           )}
         </div>

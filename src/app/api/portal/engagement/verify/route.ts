@@ -82,120 +82,7 @@ export async function POST(request: Request) {
       console.error("[Engagement Verify] Error fetching claimed engagements:", dbErr);
     }
 
-    // Step 2: Get user's existing engagements from Neynar (what they've done, even if not claimed)
-    const userEngagements = new Map<string, Set<string>>(); // castHash -> Set<"like"|"comment"|"recast">
-
-    try {
-      // Get user's likes
-      const likesResponse = await fetch(
-        `https://api.neynar.com/v2/farcaster/reaction/user?fid=${fid}&reaction_type=like&limit=100`,
-        {
-          headers: {
-            "x-api-key": apiKey,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      if (likesResponse.ok) {
-        const likesData = await likesResponse.json() as any;
-        const likes = likesData.reactions || likesData.result?.reactions || likesData.result || [];
-        console.log(`[Engagement Verify] Found ${likes.length} likes from Neynar`);
-        
-        for (const like of likes) {
-          const cast = like.cast || like;
-          const castHash = cast.hash;
-          const parentUrl = cast.parent_url || cast.parentUrl;
-          const castTimestamp = cast.timestamp ? parseInt(cast.timestamp) : 0;
-          
-          // Only include likes from catwalk channel in last 30 days
-          if (castHash && parentUrl === CATWALK_CHANNEL_PARENT_URL && castTimestamp >= thirtyDaysAgo) {
-            if (!userEngagements.has(castHash)) {
-              userEngagements.set(castHash, new Set());
-            }
-            userEngagements.get(castHash)!.add("like");
-          }
-        }
-      } else {
-        const errorText = await likesResponse.text();
-        console.error(`[Engagement Verify] Likes API error: ${likesResponse.status}`, errorText);
-      }
-
-      // Get user's recasts
-      const recastsResponse = await fetch(
-        `https://api.neynar.com/v2/farcaster/reaction/user?fid=${fid}&reaction_type=recast&limit=100`,
-        {
-          headers: {
-            "x-api-key": apiKey,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      if (recastsResponse.ok) {
-        const recastsData = await recastsResponse.json() as any;
-        const recasts = recastsData.reactions || recastsData.result?.reactions || recastsData.result || [];
-        console.log(`[Engagement Verify] Found ${recasts.length} recasts from Neynar`);
-        
-        for (const recast of recasts) {
-          const cast = recast.cast || recast;
-          const castHash = cast.hash;
-          const parentUrl = cast.parent_url || cast.parentUrl;
-          const castTimestamp = cast.timestamp ? parseInt(cast.timestamp) : 0;
-          
-          // Only include recasts from catwalk channel in last 30 days
-          if (castHash && parentUrl === CATWALK_CHANNEL_PARENT_URL && castTimestamp >= thirtyDaysAgo) {
-            if (!userEngagements.has(castHash)) {
-              userEngagements.set(castHash, new Set());
-            }
-            userEngagements.get(castHash)!.add("recast");
-          }
-        }
-      } else {
-        const errorText = await recastsResponse.text();
-        console.error(`[Engagement Verify] Recasts API error: ${recastsResponse.status}`, errorText);
-      }
-
-      // Get user's comments
-      const userCastsResponse = await fetch(
-        `https://api.neynar.com/v2/farcaster/cast/user?fid=${fid}&limit=100`,
-        {
-          headers: {
-            "x-api-key": apiKey,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      if (userCastsResponse.ok) {
-        const userCastsData = await userCastsResponse.json() as any;
-        const userCasts = userCastsData.result?.casts || [];
-        console.log(`[Engagement Verify] Found ${userCasts.length} user casts from Neynar`);
-        
-        for (const cast of userCasts) {
-          const parentUrl = cast.parent_url || cast.parentUrl;
-          const parentHash = cast.parent_hash;
-          const castTimestamp = cast.timestamp ? parseInt(cast.timestamp) : 0;
-          
-          // Only include comments from catwalk channel in last 30 days
-          if (parentHash && parentUrl === CATWALK_CHANNEL_PARENT_URL && castTimestamp >= thirtyDaysAgo) {
-            if (!userEngagements.has(parentHash)) {
-              userEngagements.set(parentHash, new Set());
-            }
-            userEngagements.get(parentHash)!.add("comment");
-          }
-        }
-      } else {
-        const errorText = await userCastsResponse.text();
-        console.error(`[Engagement Verify] User casts API error: ${userCastsResponse.status}`, errorText);
-      }
-    } catch (err) {
-      console.error("[Engagement Verify] Error fetching user engagements:", err);
-    }
-
-    console.log(`[Engagement Verify] User has ${userEngagements.size} casts they've engaged with (from Neynar)`);
-
-    // Step 3: Get all casts from /catwalk channel in last 30 days
+    // Step 2: Get all casts from /catwalk channel in last 30 days
     const channelCasts: any[] = [];
     let cursor: string | null = null;
     let hasMore = true;
@@ -219,7 +106,14 @@ export async function POST(request: Request) {
         if (!feedResponse.ok) break;
 
         const feedData = await feedResponse.json() as any;
-        const casts = feedData.casts || feedData.result?.casts || [];
+        const casts = feedData.casts || feedData.result?.casts || feedData.result?.feed || [];
+        
+        console.log(`[Engagement Verify] Page ${pageCount}: Got ${casts.length} casts from feed API`);
+        
+        if (casts.length === 0) {
+          console.log(`[Engagement Verify] No casts returned, stopping pagination`);
+          break;
+        }
         
         // Filter casts from last 30 days
         const recentCasts = casts.filter((c: any) => {
@@ -227,12 +121,16 @@ export async function POST(request: Request) {
           return castTimestamp >= thirtyDaysAgo;
         });
 
+        console.log(`[Engagement Verify] Page ${pageCount}: ${recentCasts.length} casts within 30 days`);
         channelCasts.push(...recentCasts);
         cursor = feedData.next?.cursor || null;
         hasMore = !!cursor && recentCasts.length === 100;
         
         // Stop if we've gone past 30 days
-        if (recentCasts.length < 100) break;
+        if (recentCasts.length < 100) {
+          console.log(`[Engagement Verify] Reached end of 30-day window, stopping`);
+          break;
+        }
       } catch (err) {
         console.error("[Engagement Verify] Error fetching channel feed:", err);
         break;
@@ -241,8 +139,76 @@ export async function POST(request: Request) {
 
     console.log(`[Engagement Verify] Found ${channelCasts.length} casts from last 30 days`);
 
-    // Step 4: For each cast, determine what actions user can still do
-    // Show opportunities for actions they haven't done OR haven't claimed yet
+    // Step 3: For each cast, check user's engagement by fetching cast details
+    // This is more reliable than trying to get user's reaction history
+    const userEngagements = new Map<string, Set<string>>(); // castHash -> Set<"like"|"comment"|"recast">
+    
+    // Process casts in batches to check reactions
+    for (let i = 0; i < Math.min(channelCasts.length, 50); i++) { // Limit to 50 for performance
+      const cast = channelCasts[i];
+      const castHash = cast.hash;
+      if (!castHash) continue;
+
+      const castTimestamp = cast.timestamp ? parseInt(cast.timestamp) : 0;
+      
+      // Skip if cast is older than 30 days
+      if (castTimestamp < thirtyDaysAgo) continue;
+
+      try {
+        // Fetch cast details which includes reactions
+        const castResponse = await fetch(
+          `https://api.neynar.com/v2/farcaster/cast?identifier=${castHash}&type=hash`,
+          {
+            headers: {
+              "x-api-key": apiKey,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        if (castResponse.ok) {
+          const castData = await castResponse.json() as any;
+          const castDetails = castData.cast || castData.result?.cast || cast;
+          
+          // Check for likes
+          const likes = castDetails.reactions?.likes || [];
+          const hasLiked = likes.some((like: any) => like.fid === fid);
+          if (hasLiked) {
+            if (!userEngagements.has(castHash)) {
+              userEngagements.set(castHash, new Set());
+            }
+            userEngagements.get(castHash)!.add("like");
+          }
+
+          // Check for recasts
+          const recasts = castDetails.reactions?.recasts || [];
+          const hasRecasted = recasts.some((recast: any) => recast.fid === fid);
+          if (hasRecasted) {
+            if (!userEngagements.has(castHash)) {
+              userEngagements.set(castHash, new Set());
+            }
+            userEngagements.get(castHash)!.add("recast");
+          }
+
+          // Check for comments/replies
+          const replies = castDetails.replies?.casts || [];
+          const hasCommented = replies.some((reply: any) => reply.author?.fid === fid);
+          if (hasCommented) {
+            if (!userEngagements.has(castHash)) {
+              userEngagements.set(castHash, new Set());
+            }
+            userEngagements.get(castHash)!.add("comment");
+          }
+        }
+      } catch (castErr) {
+        console.error(`[Engagement Verify] Error checking cast ${castHash}:`, castErr);
+        // Continue with next cast
+      }
+    }
+
+    console.log(`[Engagement Verify] User has engaged with ${userEngagements.size} casts`);
+
+    // Step 4: Build opportunities list
     for (const cast of channelCasts) {
       const castHash = cast.hash;
       if (!castHash) continue;
@@ -257,17 +223,17 @@ export async function POST(request: Request) {
       
       const availableActions: Array<{ type: "like" | "comment" | "recast"; rewardAmount: number }> = [];
 
-      // Show like if: user hasn't done it yet (don't show if they've done it AND claimed it)
+      // Show like if: user hasn't done it yet OR user did it but hasn't claimed it
       if (!userHasDone.has("like") || (userHasDone.has("like") && !userHasClaimed.has("like"))) {
         availableActions.push({ type: "like", rewardAmount: ENGAGEMENT_REWARDS.like });
       }
       
-      // Show recast if: user hasn't done it yet (don't show if they've done it AND claimed it)
+      // Show recast if: user hasn't done it yet OR user did it but hasn't claimed it
       if (!userHasDone.has("recast") || (userHasDone.has("recast") && !userHasClaimed.has("recast"))) {
         availableActions.push({ type: "recast", rewardAmount: ENGAGEMENT_REWARDS.recast });
       }
       
-      // Show comment if: user hasn't done it yet (don't show if they've done it AND claimed it)
+      // Show comment if: user hasn't done it yet OR user did it but hasn't claimed it
       if (!userHasDone.has("comment") || (userHasDone.has("comment") && !userHasClaimed.has("comment"))) {
         availableActions.push({ type: "comment", rewardAmount: ENGAGEMENT_REWARDS.comment });
       }

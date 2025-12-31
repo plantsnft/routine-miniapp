@@ -178,6 +178,8 @@ export async function POST(request: Request) {
     const userEngagements = new Map<string, Set<string>>(); // castHash -> Set<"like"|"comment"|"recast">
     const processedCastHashes = new Set<string>(); // Track which casts we've already processed
     
+    console.log(`[Engagement Verify] Checking engagement for ${channelCasts.length} casts, user FID: ${fid}`);
+    
     // Process ALL casts to check reactions (need to check all to filter correctly)
     for (let i = 0; i < channelCasts.length; i++) {
       const cast = channelCasts[i];
@@ -222,9 +224,38 @@ export async function POST(request: Request) {
           const castData = await castResponse.json() as any;
           const castDetails = castData.cast || castData.result?.cast || cast;
           
-          // Check for likes - reactions.likes is an array of user objects with fid
-          const likes = castDetails.reactions?.likes || [];
-          const hasLiked = Array.isArray(likes) && likes.some((like: any) => {
+          // Log structure for first few casts to understand API response format
+          if (i < 3) {
+            console.log(`[Engagement Verify] Sample cast ${i} structure:`, {
+              castHash,
+              hasReactions: !!castDetails.reactions,
+              reactionsKeys: castDetails.reactions ? Object.keys(castDetails.reactions) : [],
+              reactionsStructure: castDetails.reactions ? {
+                likesType: typeof castDetails.reactions.likes,
+                likesIsArray: Array.isArray(castDetails.reactions.likes),
+                likesLength: Array.isArray(castDetails.reactions.likes) ? castDetails.reactions.likes.length : 'N/A',
+                likesSample: Array.isArray(castDetails.reactions.likes) && castDetails.reactions.likes.length > 0 ? castDetails.reactions.likes[0] : null,
+                recastsType: typeof castDetails.reactions.recasts,
+                recastsIsArray: Array.isArray(castDetails.reactions.recasts),
+                recastsLength: Array.isArray(castDetails.reactions.recasts) ? castDetails.reactions.recasts.length : 'N/A',
+              } : null,
+              hasReplies: !!castDetails.replies,
+              repliesKeys: castDetails.replies ? Object.keys(castDetails.replies) : [],
+            });
+          }
+          
+          // Check for likes - reactions.likes might be an array or an object with count
+          let likes: any[] = [];
+          if (castDetails.reactions?.likes) {
+            if (Array.isArray(castDetails.reactions.likes)) {
+              likes = castDetails.reactions.likes;
+            } else if (castDetails.reactions.likes.fids && Array.isArray(castDetails.reactions.likes.fids)) {
+              // Sometimes it's { fids: [123, 456], count: 2 }
+              likes = castDetails.reactions.likes.fids.map((fid: number) => ({ fid }));
+            }
+          }
+          
+          const hasLiked = likes.some((like: any) => {
             const likeFid = like.fid || like.user?.fid || like.author?.fid;
             return likeFid === fid;
           });
@@ -236,9 +267,18 @@ export async function POST(request: Request) {
             console.log(`[Engagement Verify] User ${fid} has liked cast ${castHash}`);
           }
 
-          // Check for recasts - reactions.recasts is an array of user objects with fid
-          const recasts = castDetails.reactions?.recasts || [];
-          const hasRecasted = Array.isArray(recasts) && recasts.some((recast: any) => {
+          // Check for recasts - reactions.recasts might be an array or an object with count
+          let recasts: any[] = [];
+          if (castDetails.reactions?.recasts) {
+            if (Array.isArray(castDetails.reactions.recasts)) {
+              recasts = castDetails.reactions.recasts;
+            } else if (castDetails.reactions.recasts.fids && Array.isArray(castDetails.reactions.recasts.fids)) {
+              // Sometimes it's { fids: [123, 456], count: 2 }
+              recasts = castDetails.reactions.recasts.fids.map((fid: number) => ({ fid }));
+            }
+          }
+          
+          const hasRecasted = recasts.some((recast: any) => {
             const recastFid = recast.fid || recast.user?.fid || recast.author?.fid;
             return recastFid === fid;
           });

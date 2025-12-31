@@ -11,7 +11,9 @@ const TOKEN_ADDRESS = "0xa5eb1cAD0dFC1c4f8d4f84f995aeDA9a7A047B07"; // CATWALK t
 const BASE_RPC_URL = process.env.BASE_RPC_URL || "https://mainnet.base.org";
 const REWARD_SIGNER_PRIVATE_KEY = process.env.REWARD_SIGNER_PRIVATE_KEY || process.env.PRIVATE_KEY || "";
 const TOKEN_DECIMALS = 18n;
-const CREATOR_REWARD_AMOUNT = 500_000n * (10n ** TOKEN_DECIMALS); // 500,000 CATWALK tokens
+
+// Creator reward: 1,000,000 CATWALK per cast
+const CREATOR_REWARD_PER_CAST = 1_000_000n * (10n ** TOKEN_DECIMALS);
 
 const SUPABASE_HEADERS = {
   apikey: SUPABASE_SERVICE_ROLE,
@@ -57,13 +59,15 @@ function collectWalletAddresses(fid: number, user: any): string[] {
     }
   };
 
-  maybeAdd(user.custody_address);
-
+  // Prioritize verified ETH addresses (Warpcast integrated wallet)
   if (Array.isArray(user.verified_addresses?.eth_addresses)) {
     for (const verified of user.verified_addresses.eth_addresses) {
       maybeAdd(verified);
     }
   }
+
+  // Fallback to custody address
+  maybeAdd(user.custody_address);
 
   if (Array.isArray((user as any)?.wallets)) {
     for (const wallet of (user as any).wallets) {
@@ -86,20 +90,20 @@ function collectWalletAddresses(fid: number, user: any): string[] {
 }
 
 /**
- * Claim creator reward (after verification)
+ * Claim creator reward for a specific cast
  * POST /api/portal/creator/claim
- * Body: { fid: number }
+ * Body: { fid: number, castHash: string }
  * 
  * This endpoint:
  * 1. Verifies the claim exists and is eligible
  * 2. Gets the user's wallet address from FID
- * 3. Sends ERC20 transfer transaction
+ * 3. Sends ERC20 transfer transaction (1M CATWALK)
  * 4. Stores transaction hash in database
  */
 export async function POST(request: Request) {
   try {
     const body = await request.json() as any;
-    const { fid } = body;
+    const { fid, castHash } = body;
 
     if (!fid || typeof fid !== "number") {
       return NextResponse.json(
@@ -108,9 +112,18 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!castHash || typeof castHash !== "string") {
+      return NextResponse.json(
+        { error: "castHash is required and must be a string" },
+        { status: 400 }
+      );
+    }
+
+    console.log(`[Creator Claim] Processing claim for FID ${fid}, cast ${castHash.substring(0, 10)}...`);
+
     // Check if claim exists and is verified but not yet claimed
     const checkRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/creator_claims?fid=eq.${fid}&limit=1`,
+      `${SUPABASE_URL}/rest/v1/creator_claims?fid=eq.${fid}&cast_hash=eq.${castHash}&limit=1`,
       {
         method: "GET",
         headers: SUPABASE_HEADERS,
@@ -124,7 +137,7 @@ export async function POST(request: Request) {
     const existing = await checkRes.json() as any;
     if (!existing || existing.length === 0) {
       return NextResponse.json(
-        { error: "No verified claim found. Please verify first." },
+        { error: "No verified claim found for this cast. Please verify first." },
         { status: 404 }
       );
     }
@@ -133,13 +146,12 @@ export async function POST(request: Request) {
     if (claim.claimed_at) {
       return NextResponse.json(
         {
-          error: "Reward already claimed",
-          isEligible: true,
+          error: "Reward already claimed for this cast",
           hasClaimed: true,
           castHash: claim.cast_hash,
-          rewardAmount: parseFloat(claim.reward_amount || "500000"),
+          rewardAmount: 1_000_000,
           transactionHash: claim.transaction_hash || undefined,
-          verifiedAt: claim.verified_at,
+          basescanUrl: claim.transaction_hash ? `https://basescan.org/tx/${claim.transaction_hash}` : undefined,
         },
         { status: 400 }
       );
@@ -162,9 +174,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Use the first available wallet address (prefer custody address)
+    // Use the first available wallet address (prefer verified ETH address)
     const recipientAddress = walletAddresses[0] as `0x${string}`;
-    console.log(`[Creator Claim] Sending ${CREATOR_REWARD_AMOUNT.toString()} tokens to ${recipientAddress}`);
+    console.log(`[Creator Claim] Sending 1,000,000 CATWALK to ${recipientAddress}`);
 
     // Check if signer private key is configured
     if (!REWARD_SIGNER_PRIVATE_KEY) {
@@ -191,7 +203,7 @@ export async function POST(request: Request) {
     const transferData = encodeFunctionData({
       abi: ERC20_ABI,
       functionName: "transfer",
-      args: [recipientAddress, CREATOR_REWARD_AMOUNT],
+      args: [recipientAddress, CREATOR_REWARD_PER_CAST],
     });
 
     // Send transaction
@@ -201,24 +213,27 @@ export async function POST(request: Request) {
         to: TOKEN_ADDRESS as `0x${string}`,
         data: transferData,
       });
-      console.log(`[Creator Claim] Transaction sent: ${transactionHash}`);
+      console.log(`[Creator Claim] ✅ Transaction sent: ${transactionHash}`);
     } catch (txError: any) {
-      console.error("[Creator Claim] Transaction failed:", txError);
+      console.error("[Creator Claim] ❌ Transaction failed:", txError);
       return NextResponse.json(
         { error: `Transaction failed: ${txError.message || "Unknown error"}` },
         { status: 500 }
       );
     }
 
-    // Wait for transaction receipt (optional, but good for confirmation)
+    // Wait for transaction receipt
     try {
       const receipt = await publicClient.waitForTransactionReceipt({
         hash: transactionHash as `0x${string}`,
       });
-      console.log(`[Creator Claim] Transaction confirmed in block ${receipt.blockNumber}`);
+      console.log(`[Creator Claim] ✅ Transaction confirmed in block ${receipt.blockNumber}`);
     } catch (waitError) {
-      console.warn("[Creator Claim] Could not wait for receipt (non-critical):", waitError);
-      // Continue anyway - transaction was sent
+      console.error("[Creator Claim] ❌ Failed to confirm transaction receipt:", waitError);
+      return NextResponse.json(
+        { error: `Transaction sent but failed to confirm: ${transactionHash}` },
+        { status: 500 }
+      );
     }
 
     // Update claim with claimed_at timestamp and transaction hash
@@ -228,7 +243,7 @@ export async function POST(request: Request) {
     };
 
     const updateRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/creator_claims?fid=eq.${fid}`,
+      `${SUPABASE_URL}/rest/v1/creator_claims?fid=eq.${fid}&cast_hash=eq.${castHash}`,
       {
         method: "PATCH",
         headers: {
@@ -244,28 +259,28 @@ export async function POST(request: Request) {
       console.error("[Creator Claim] Error updating claim:", errorText);
       // Transaction was sent but DB update failed - return success with warning
       return NextResponse.json({
-        isEligible: true,
+        success: true,
         hasClaimed: true,
         castHash: claim.cast_hash,
-        rewardAmount: parseFloat(claim.reward_amount || "500000"),
+        rewardAmount: 1_000_000,
         transactionHash: transactionHash,
-        verifiedAt: claim.verified_at,
+        basescanUrl: `https://basescan.org/tx/${transactionHash}`,
         claimedAt: new Date().toISOString(),
         warning: "Transaction sent but database update failed. Transaction hash saved.",
       });
     }
 
-    const updated = await updateRes.json() as any;
-    const updatedClaim = updated && updated.length > 0 ? updated[0] : { ...claim, ...updateData };
+    const basescanUrl = `https://basescan.org/tx/${transactionHash}`;
+    console.log(`[Creator Claim] BaseScan: ${basescanUrl}`);
 
     return NextResponse.json({
-      isEligible: true,
+      success: true,
       hasClaimed: true,
-      castHash: updatedClaim.cast_hash,
-      rewardAmount: parseFloat(updatedClaim.reward_amount || "500000"),
+      castHash: claim.cast_hash,
+      rewardAmount: 1_000_000,
       transactionHash: transactionHash,
-      verifiedAt: updatedClaim.verified_at,
-      claimedAt: updatedClaim.claimed_at,
+      basescanUrl,
+      claimedAt: new Date().toISOString(),
     });
   } catch (error: any) {
     console.error("[Creator Claim] Error:", error);

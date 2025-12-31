@@ -10,10 +10,28 @@ const SUPABASE_HEADERS = {
   "Content-Type": "application/json",
 };
 
+// Creator reward: 1,000,000 CATWALK per cast
+const CREATOR_REWARD_PER_CAST = 1_000_000;
+
+interface CreatorCast {
+  castHash: string;
+  castUrl: string;
+  text?: string;
+  timestamp: number;
+  rewardAmount: number;
+  hasClaimed: boolean;
+  transactionHash?: string;
+  verifiedAt?: string;
+  claimedAt?: string;
+}
+
 /**
- * Verify that a creator has posted to the Catwalk channel
+ * Verify creator casts in the /catwalk channel
  * POST /api/portal/creator/verify
  * Body: { fid: number }
+ * 
+ * Returns ALL casts from the user in /catwalk channel from last 15 days
+ * Each cast can be claimed for 1,000,000 CATWALK tokens
  */
 export async function POST(request: Request) {
   try {
@@ -27,171 +45,202 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if already verified/claimed
+    const apiKey = process.env.NEYNAR_API_KEY || "";
+    const fifteenDaysAgo = Math.floor(Date.now() / 1000) - (15 * 24 * 60 * 60);
+    
+    // Step 1: Get existing claims from database
+    const existingClaims = new Map<string, any>(); // castHash -> claim data
+    
     try {
-      const existingRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/creator_claims?fid=eq.${fid}&limit=1`,
+      const claimedRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/creator_claims?fid=eq.${fid}`,
         {
           method: "GET",
           headers: SUPABASE_HEADERS,
         }
       );
 
-      if (existingRes.ok) {
-        const existing = await existingRes.json() as any;
-        if (existing && existing.length > 0) {
-          return NextResponse.json({
-            isEligible: true,
-            hasClaimed: !!existing[0].claimed_at,
-            castHash: existing[0].cast_hash,
-            rewardAmount: parseFloat(existing[0].reward_amount || "500000"),
-            transactionHash: existing[0].transaction_hash || undefined,
-            verifiedAt: existing[0].verified_at,
-          });
+      if (claimedRes.ok) {
+        const claimedData = await claimedRes.json() as any;
+        for (const claim of claimedData) {
+          if (claim.cast_hash) {
+            existingClaims.set(claim.cast_hash, claim);
+          }
         }
       }
-    } catch (err) {
-      console.error("[Creator Verify] Error checking existing claim:", err);
+      console.log(`[Creator Verify] User FID ${fid} has ${existingClaims.size} existing claims in database`);
+    } catch (dbErr) {
+      console.error("[Creator Verify] Error fetching existing claims:", dbErr);
     }
 
-    // Fetch casts from Catwalk channel and find user's cast from last 30 days
-    let castFound = null;
-    const thirtyDaysAgo = Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60); // 30 days in seconds
+    // Step 2: Fetch ALL user's casts from /catwalk channel from last 15 days
+    const userCasts: any[] = [];
+    let cursor: string | null = null;
+    let hasMore = true;
+    let pageCount = 0;
+    const maxPages = 10;
 
-    try {
-      // First, try to get user's casts directly (more efficient)
-      const userCastsResponse = await fetch(
-        `https://api.neynar.com/v2/farcaster/cast/user?fid=${fid}&limit=100`,
-        {
+    while (hasMore && pageCount < maxPages) {
+      pageCount++;
+      try {
+        // Fetch channel feed and filter by user's FID
+        const url = cursor
+          ? `https://api.neynar.com/v2/farcaster/feed?feed_type=filter&filter_type=parent_url&parent_url=${encodeURIComponent(CATWALK_CHANNEL_PARENT_URL)}&limit=100&cursor=${cursor}`
+          : `https://api.neynar.com/v2/farcaster/feed?feed_type=filter&filter_type=parent_url&parent_url=${encodeURIComponent(CATWALK_CHANNEL_PARENT_URL)}&limit=100`;
+
+        const feedResponse = await fetch(url, {
           headers: {
-            "x-api-key": process.env.NEYNAR_API_KEY || "",
+            "x-api-key": apiKey,
             "Content-Type": "application/json",
           },
+        });
+
+        if (!feedResponse.ok) {
+          console.error(`[Creator Verify] Feed API error: ${feedResponse.status}`);
+          break;
         }
-      );
 
-      if (userCastsResponse.ok) {
-        const userCastsData = await userCastsResponse.json() as any;
-        const userCasts = userCastsData.result?.casts || [];
+        const feedData = await feedResponse.json() as any;
+        const casts = feedData.casts || feedData.result?.casts || [];
+        
+        console.log(`[Creator Verify] Page ${pageCount}: Got ${casts.length} casts from feed`);
+        
+        if (casts.length === 0) break;
 
-        // Find the most recent cast in /catwalk channel from last 30 days
-        for (const cast of userCasts) {
-          const castTimestamp = cast.timestamp ? parseInt(cast.timestamp) : 0;
-          
-          // Check if cast is in catwalk channel and within last 30 days
-          if (
-            cast.parent_url === CATWALK_CHANNEL_PARENT_URL &&
-            castTimestamp >= thirtyDaysAgo
-          ) {
-            castFound = cast;
-            break; // Use most recent (first in list)
-          }
-        }
-      }
-
-      // Fallback: If not found, search channel feed
-      if (!castFound) {
-        const feedResponse = await fetch(
-          `https://api.neynar.com/v2/farcaster/feed?feed_type=filter&filter_type=parent_url&parent_url=${encodeURIComponent(CATWALK_CHANNEL_PARENT_URL)}&limit=100`,
-          {
-            headers: {
-              "x-api-key": process.env.NEYNAR_API_KEY || "",
-              "Content-Type": "application/json",
-            },
-          }
-        );
-
-        if (feedResponse.ok) {
-          const feedData = await feedResponse.json() as any;
-          const feedCasts = feedData.casts || feedData.result?.casts || [];
-
-          // Find the most recent cast by this user within last 30 days
-          for (const cast of feedCasts) {
-            const castTimestamp = cast.timestamp ? parseInt(cast.timestamp) : 0;
-            
-            if (
-              cast.author?.fid === fid &&
-              cast.parent_url === CATWALK_CHANNEL_PARENT_URL &&
-              castTimestamp >= thirtyDaysAgo
-            ) {
-              castFound = cast;
-              break;
+        // Filter for user's casts within 15 days
+        let foundOldCast = false;
+        for (const cast of casts) {
+          // Parse timestamp
+          let castTimestamp = 0;
+          if (cast.timestamp) {
+            if (typeof cast.timestamp === 'number') {
+              castTimestamp = cast.timestamp;
+            } else if (typeof cast.timestamp === 'string') {
+              const parsed = parseInt(cast.timestamp);
+              if (!isNaN(parsed) && parsed > 1000000000) {
+                castTimestamp = parsed;
+              } else {
+                const date = new Date(cast.timestamp);
+                if (!isNaN(date.getTime())) {
+                  castTimestamp = Math.floor(date.getTime() / 1000);
+                }
+              }
             }
           }
+
+          // Check if too old
+          if (castTimestamp < fifteenDaysAgo) {
+            foundOldCast = true;
+            continue;
+          }
+
+          // Check if this is user's cast
+          const authorFid = cast.author?.fid;
+          if (authorFid === fid) {
+            userCasts.push({
+              ...cast,
+              parsedTimestamp: castTimestamp,
+            });
+          }
         }
-      }
 
-      if (!castFound) {
-        return NextResponse.json(
-          {
-            error: "No cast found in /catwalk channel from the last 30 days",
-            isEligible: false,
-          },
-          { status: 404 }
-        );
-      }
-
-      // Verify the cast is actually in the channel
-      if (castFound.parent_url !== CATWALK_CHANNEL_PARENT_URL) {
-        return NextResponse.json(
-          {
-            error: "Cast is not in the /catwalk channel",
-            isEligible: false,
-          },
-          { status: 400 }
-        );
-      }
-
-      // Store verification in database
-      const claimData = {
-        fid: fid,
-        cast_hash: castFound.hash,
-        reward_amount: 500000, // 500k CATWALK
-        verified_at: new Date().toISOString(),
-      };
-
-      const insertRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/creator_claims`,
-        {
-          method: "POST",
-          headers: {
-            ...SUPABASE_HEADERS,
-            Prefer: "resolution=merge-duplicates,return=representation",
-          },
-          body: JSON.stringify([claimData]),
+        cursor = feedData.next?.cursor || null;
+        hasMore = !!cursor && !foundOldCast;
+        
+        // If we found old casts, we've gone past the 15-day window
+        if (foundOldCast) {
+          console.log(`[Creator Verify] Reached end of 15-day window`);
         }
-      );
-
-      if (!insertRes.ok) {
-        const errorText = await insertRes.text();
-        console.error("[Creator Verify] Error inserting claim:", errorText);
-        throw new Error("Failed to store verification");
+      } catch (err) {
+        console.error("[Creator Verify] Error fetching feed:", err);
+        break;
       }
-
-      const inserted = await insertRes.json() as any;
-      const claim = inserted && inserted.length > 0 ? inserted[0] : claimData;
-
-      return NextResponse.json({
-        isEligible: true,
-        hasClaimed: false,
-        castHash: claim.cast_hash,
-        rewardAmount: parseFloat(claim.reward_amount || "500000"),
-        verifiedAt: claim.verified_at,
-      });
-    } catch (apiError: any) {
-      console.error("[Creator Verify] Neynar API error:", apiError);
-      return NextResponse.json(
-        {
-          error: apiError.message || "Failed to verify creator cast",
-          isEligible: false,
-        },
-        { status: 500 }
-      );
     }
+
+    console.log(`[Creator Verify] Found ${userCasts.length} casts from user FID ${fid} in last 15 days`);
+
+    // Step 3: Build response with claimable status
+    const creatorCasts: CreatorCast[] = [];
+    
+    for (const cast of userCasts) {
+      const castHash = cast.hash;
+      if (!castHash) continue;
+
+      const existingClaim = existingClaims.get(castHash);
+      const hasClaimed = existingClaim?.claimed_at != null;
+      
+      // Store in database if not already stored
+      if (!existingClaim) {
+        try {
+          await fetch(
+            `${SUPABASE_URL}/rest/v1/creator_claims`,
+            {
+              method: "POST",
+              headers: {
+                ...SUPABASE_HEADERS,
+                Prefer: "resolution=ignore-duplicates",
+              },
+              body: JSON.stringify({
+                fid,
+                cast_hash: castHash,
+                reward_amount: CREATOR_REWARD_PER_CAST,
+                verified_at: new Date().toISOString(),
+              }),
+            }
+          );
+          console.log(`[Creator Verify] Stored new cast ${castHash.substring(0, 10)}...`);
+        } catch (insertErr) {
+          console.error(`[Creator Verify] Error storing cast ${castHash}:`, insertErr);
+        }
+      }
+
+      const author = cast.author || {};
+      creatorCasts.push({
+        castHash,
+        castUrl: `https://warpcast.com/${author.username || 'unknown'}/${castHash}`,
+        text: cast.text?.substring(0, 150) || "",
+        timestamp: cast.parsedTimestamp || 0,
+        rewardAmount: CREATOR_REWARD_PER_CAST,
+        hasClaimed,
+        transactionHash: existingClaim?.transaction_hash || undefined,
+        verifiedAt: existingClaim?.verified_at || new Date().toISOString(),
+        claimedAt: existingClaim?.claimed_at || undefined,
+      });
+    }
+
+    // Sort by timestamp (newest first)
+    creatorCasts.sort((a, b) => b.timestamp - a.timestamp);
+
+    // Calculate totals
+    const claimableCasts = creatorCasts.filter(c => !c.hasClaimed);
+    const claimedCasts = creatorCasts.filter(c => c.hasClaimed);
+    const totalClaimableReward = claimableCasts.length * CREATOR_REWARD_PER_CAST;
+    const totalClaimedReward = claimedCasts.length * CREATOR_REWARD_PER_CAST;
+
+    console.log(`[Creator Verify] Summary:`, {
+      totalCasts: creatorCasts.length,
+      claimableCasts: claimableCasts.length,
+      claimedCasts: claimedCasts.length,
+      totalClaimableReward,
+      totalClaimedReward,
+    });
+
+    return NextResponse.json({
+      fid,
+      creatorCasts,
+      claimableCasts,
+      claimedCasts,
+      totalCasts: creatorCasts.length,
+      claimableCount: claimableCasts.length,
+      claimedCount: claimedCasts.length,
+      totalClaimableReward,
+      totalClaimedReward,
+      rewardPerCast: CREATOR_REWARD_PER_CAST,
+    });
   } catch (error: any) {
     console.error("[Creator Verify] Error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to verify creator" },
+      { error: error.message || "Failed to verify creator casts" },
       { status: 500 }
     );
   }

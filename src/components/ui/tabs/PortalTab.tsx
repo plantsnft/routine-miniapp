@@ -47,7 +47,7 @@ interface EngagementOpportunitiesResponse {
 }
 
 export function PortalTab() {
-  const { context } = useMiniApp();
+  const { context, actions } = useMiniApp();
   const { triggerHaptic } = useHapticFeedback();
   const userFid = context?.user?.fid;
 
@@ -559,10 +559,23 @@ export function PortalTab() {
                         ))}
                       </div>
 
-                      <a
-                        href={opportunity.castUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        onClick={async () => {
+                          triggerHaptic("light");
+                          try {
+                            // Use Mini App SDK to open in native client (minimizes mini app)
+                            if (actions?.openUrl) {
+                              await actions.openUrl(opportunity.castUrl);
+                            } else {
+                              // Fallback to window.open if SDK not available
+                              window.open(opportunity.castUrl, "_blank", "noopener,noreferrer");
+                            }
+                          } catch (err) {
+                            console.error("Error opening cast URL:", err);
+                            // Fallback to window.open on error
+                            window.open(opportunity.castUrl, "_blank", "noopener,noreferrer");
+                          }
+                        }}
                         style={{
                           display: "block",
                           width: "100%",
@@ -574,13 +587,11 @@ export function PortalTab() {
                           fontSize: 14,
                           fontWeight: 700,
                           textAlign: "center",
-                          textDecoration: "none",
                           cursor: "pointer",
                         }}
-                        onClick={() => triggerHaptic("light")}
                       >
                         Open Cast in Warpcast
-                      </a>
+                      </button>
                     </div>
                   ))}
                 </div>

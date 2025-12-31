@@ -94,20 +94,29 @@ function getWarpcastWalletAddress(fid: number, user: any): string | null {
 /**
  * Claim engagement reward (after verification)
  * POST /api/portal/engagement/claim
- * Body: { fid: number, castHash: string, engagementType: 'like' | 'comment' | 'recast' }
+ * Body: { fid: number, castHash: string, engagementTypes: ['like', 'comment', 'recast'] }
+ *       OR { fid: number, castHash: string, engagementType: 'like' } (backwards compatible)
  * 
  * This endpoint:
- * 1. Verifies the claim exists and is eligible
+ * 1. Verifies the claim(s) exist and are eligible
  * 2. Gets the user's wallet address from FID
- * 3. Sends ERC20 transfer transaction
- * 4. Stores transaction hash in database
+ * 3. Sends ONE ERC20 transfer transaction for the total amount
+ * 4. Stores transaction hash in database for all claims
  */
 export async function POST(request: Request) {
   try {
     const body = await request.json() as any;
-    const { fid, castHash, engagementType } = body;
+    const { fid, castHash, engagementType, engagementTypes: rawEngagementTypes } = body;
 
-    console.log(`[Engagement Claim] Request: fid=${fid}, castHash=${castHash}, type=${engagementType}`);
+    // Support both single engagementType and array of engagementTypes
+    let engagementTypes: string[] = [];
+    if (rawEngagementTypes && Array.isArray(rawEngagementTypes)) {
+      engagementTypes = rawEngagementTypes.filter((t: string) => ["like", "comment", "recast"].includes(t));
+    } else if (engagementType && ["like", "comment", "recast"].includes(engagementType)) {
+      engagementTypes = [engagementType];
+    }
+
+    console.log(`[Engagement Claim] Request: fid=${fid}, castHash=${castHash}, types=${engagementTypes.join(',')}`);
 
     if (!fid || typeof fid !== "number") {
       return NextResponse.json(
@@ -123,16 +132,17 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!engagementType || !["like", "comment", "recast"].includes(engagementType)) {
+    if (engagementTypes.length === 0) {
       return NextResponse.json(
-        { error: "engagementType must be 'like', 'comment', or 'recast'" },
+        { error: "engagementType or engagementTypes array is required" },
         { status: 400 }
       );
     }
 
-    // Check if claim exists and is verified but not yet claimed
+    // Check ALL claims for this cast that are verified but not yet claimed
+    const typeFilter = engagementTypes.map(t => `engagement_type.eq.${t}`).join(',');
     const checkRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/engagement_claims?fid=eq.${fid}&cast_hash=eq.${castHash}&engagement_type=eq.${engagementType}&limit=1`,
+      `${SUPABASE_URL}/rest/v1/engagement_claims?fid=eq.${fid}&cast_hash=eq.${castHash}&or=(${typeFilter})&claimed_at=is.null`,
       {
         method: "GET",
         headers: SUPABASE_HEADERS,
@@ -145,30 +155,27 @@ export async function POST(request: Request) {
       throw new Error("Failed to check claim status");
     }
 
-    const existing = await checkRes.json() as any;
-    console.log(`[Engagement Claim] Existing claims found: ${existing?.length || 0}`);
+    const unclaimedClaims = await checkRes.json() as any[];
+    console.log(`[Engagement Claim] Unclaimed claims found: ${unclaimedClaims?.length || 0}`);
 
-    if (!existing || existing.length === 0) {
+    if (!unclaimedClaims || unclaimedClaims.length === 0) {
       return NextResponse.json(
-        { error: "No verified engagement claim found. Please verify first." },
+        { error: "No verified unclaimed engagements found for this cast." },
         { status: 404 }
       );
     }
 
-    const claim = existing[0];
-    if (claim.claimed_at) {
-      return NextResponse.json(
-        {
-          error: "Reward already claimed for this engagement",
-          castHash: claim.cast_hash,
-          engagementType: claim.engagement_type,
-          rewardAmount: parseFloat(claim.reward_amount || "0"),
-          transactionHash: claim.transaction_hash || undefined,
-          claimedAt: claim.claimed_at,
-        },
-        { status: 400 }
-      );
+    // Calculate total reward amount
+    let totalRewardAmount = 0n;
+    const claimedTypes: string[] = [];
+    for (const claim of unclaimedClaims) {
+      const rewardForType = ENGAGEMENT_REWARDS[claim.engagement_type] || 0n;
+      totalRewardAmount += rewardForType;
+      claimedTypes.push(claim.engagement_type);
     }
+
+    console.log(`[Engagement Claim] Claiming ${claimedTypes.length} actions: ${claimedTypes.join(', ')}`);
+    console.log(`[Engagement Claim] Total reward: ${Number(totalRewardAmount / (10n ** 18n))} CATWALK`);
 
     // Get user's wallet address from FID
     const user = await getNeynarUser(fid);
@@ -190,9 +197,8 @@ export async function POST(request: Request) {
 
     // Use the Warpcast wallet address
     const recipientAddress = walletAddress as `0x${string}`;
-    const rewardAmount = ENGAGEMENT_REWARDS[engagementType] || ENGAGEMENT_REWARDS.like;
     
-    console.log(`[Engagement Claim] Sending ${rewardAmount.toString()} tokens to ${recipientAddress} for ${engagementType}`);
+    console.log(`[Engagement Claim] Sending ${totalRewardAmount.toString()} tokens to ${recipientAddress} for ${claimedTypes.join(', ')}`);
 
     // Check if signer private key is configured
     if (!REWARD_SIGNER_PRIVATE_KEY) {
@@ -219,14 +225,14 @@ export async function POST(request: Request) {
     const transferData = encodeFunctionData({
       abi: ERC20_ABI,
       functionName: "transfer",
-      args: [recipientAddress, rewardAmount],
+      args: [recipientAddress, totalRewardAmount],
     });
 
     // Log signer address for debugging
     console.log(`[Engagement Claim] Signer address: ${account.address}`);
     console.log(`[Engagement Claim] Token contract: ${TOKEN_ADDRESS}`);
     console.log(`[Engagement Claim] Recipient: ${recipientAddress}`);
-    console.log(`[Engagement Claim] Amount: ${rewardAmount.toString()} (${Number(rewardAmount / (10n ** 18n))} CATWALK)`);
+    console.log(`[Engagement Claim] Amount: ${totalRewardAmount.toString()} (${Number(totalRewardAmount / (10n ** 18n))} CATWALK)`);
 
     // Send transaction
     let transactionHash: string;
@@ -275,53 +281,51 @@ export async function POST(request: Request) {
       );
     }
 
-    // Update claim with claimed_at timestamp and transaction hash
+    // Update ALL claims with claimed_at timestamp and transaction hash
     const updateData = {
       claimed_at: new Date().toISOString(),
       transaction_hash: transactionHash,
     };
 
-    const updateRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/engagement_claims?id=eq.${claim.id}`,
-      {
-        method: "PATCH",
-        headers: {
-          ...SUPABASE_HEADERS,
-          Prefer: "return=representation",
-        },
-        body: JSON.stringify(updateData),
-      }
-    );
+    // Update each claim in the database
+    let updateErrors = 0;
+    for (const claim of unclaimedClaims) {
+      const updateRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/engagement_claims?id=eq.${claim.id}`,
+        {
+          method: "PATCH",
+          headers: {
+            ...SUPABASE_HEADERS,
+            Prefer: "return=representation",
+          },
+          body: JSON.stringify(updateData),
+        }
+      );
 
-    if (!updateRes.ok) {
-      const errorText = await updateRes.text();
-      console.error("[Engagement Claim] Error updating claim:", errorText);
-      // Transaction was sent but DB update failed - return success with warning
-      return NextResponse.json({
-        success: true,
-        castHash: claim.cast_hash,
-        engagementType: claim.engagement_type,
-        rewardAmount: parseFloat(claim.reward_amount || "0"),
-        transactionHash: transactionHash,
-        claimedAt: new Date().toISOString(),
-        warning: "Transaction sent but database update failed. Transaction hash saved.",
-      });
+      if (!updateRes.ok) {
+        const errorText = await updateRes.text();
+        console.error(`[Engagement Claim] Error updating claim ${claim.id}:`, errorText);
+        updateErrors++;
+      }
     }
 
-    const updated = await updateRes.json() as any;
-    const updatedClaim = updated && updated.length > 0 ? updated[0] : { ...claim, ...updateData };
+    if (updateErrors > 0) {
+      console.warn(`[Engagement Claim] ${updateErrors} claims failed to update in database`);
+    }
 
-    console.log(`[Engagement Claim] ✅ SUCCESS! Sent ${Number(rewardAmount / (10n ** 18n))} CATWALK to ${recipientAddress}`);
+    const totalRewardTokens = Number(totalRewardAmount / (10n ** 18n));
+    console.log(`[Engagement Claim] ✅ SUCCESS! Sent ${totalRewardTokens} CATWALK to ${recipientAddress}`);
     console.log(`[Engagement Claim] BaseScan: https://basescan.org/tx/${transactionHash}`);
 
     return NextResponse.json({
       success: true,
-      castHash: updatedClaim.cast_hash,
-      engagementType: updatedClaim.engagement_type,
-      rewardAmount: parseFloat(updatedClaim.reward_amount || "0"),
+      castHash: castHash,
+      engagementTypes: claimedTypes,
+      claimedCount: claimedTypes.length,
+      rewardAmount: totalRewardTokens,
       transactionHash: transactionHash,
       basescanUrl: `https://basescan.org/tx/${transactionHash}`,
-      claimedAt: updatedClaim.claimed_at,
+      claimedAt: updateData.claimed_at,
     });
   } catch (error: any) {
     console.error("[Engagement Claim] Error:", error);

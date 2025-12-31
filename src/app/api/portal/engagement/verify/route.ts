@@ -59,22 +59,46 @@ export async function POST(request: Request) {
 
       if (likesResponse.ok) {
         const likesData = await likesResponse.json() as any;
-        const likes = likesData.reactions || likesData.result?.reactions || [];
+        console.log(`[Engagement Verify] Likes API response structure:`, {
+          hasReactions: !!likesData.reactions,
+          hasResult: !!likesData.result,
+          reactionsLength: likesData.reactions?.length || 0,
+          resultReactionsLength: likesData.result?.reactions?.length || 0,
+        });
+        
+        const likes = likesData.reactions || likesData.result?.reactions || likesData.result || [];
+        console.log(`[Engagement Verify] Found ${likes.length} total likes`);
         
         for (const like of likes) {
-          const castTimestamp = like.cast?.timestamp ? parseInt(like.cast.timestamp) : 0;
+          const cast = like.cast || like;
+          const castTimestamp = cast.timestamp ? parseInt(cast.timestamp) : 0;
+          const parentUrl = cast.parent_url || cast.parentUrl;
+          
+          console.log(`[Engagement Verify] Checking like:`, {
+            castHash: cast.hash,
+            parentUrl,
+            castTimestamp,
+            thirtyDaysAgo,
+            isInChannel: parentUrl === CATWALK_CHANNEL_PARENT_URL,
+            isRecent: castTimestamp >= thirtyDaysAgo,
+          });
+          
           if (
-            like.cast?.parent_url === CATWALK_CHANNEL_PARENT_URL &&
+            parentUrl === CATWALK_CHANNEL_PARENT_URL &&
             castTimestamp >= thirtyDaysAgo
           ) {
             verifiedEngagements.push({
-              castHash: like.cast.hash,
+              castHash: cast.hash,
               engagementType: "like",
               rewardAmount: ENGAGEMENT_REWARDS.like,
               castTimestamp,
             });
+            console.log(`[Engagement Verify] Added like engagement for cast ${cast.hash}`);
           }
         }
+      } else {
+        const errorText = await likesResponse.text();
+        console.error(`[Engagement Verify] Likes API error: ${likesResponse.status}`, errorText);
       }
 
       // Get user's recasts
@@ -90,22 +114,36 @@ export async function POST(request: Request) {
 
       if (recastsResponse.ok) {
         const recastsData = await recastsResponse.json() as any;
-        const recasts = recastsData.reactions || recastsData.result?.reactions || [];
+        console.log(`[Engagement Verify] Recasts API response:`, {
+          hasReactions: !!recastsData.reactions,
+          hasResult: !!recastsData.result,
+          reactionsLength: recastsData.reactions?.length || 0,
+        });
+        
+        const recasts = recastsData.reactions || recastsData.result?.reactions || recastsData.result || [];
+        console.log(`[Engagement Verify] Found ${recasts.length} total recasts`);
         
         for (const recast of recasts) {
-          const castTimestamp = recast.cast?.timestamp ? parseInt(recast.cast.timestamp) : 0;
+          const cast = recast.cast || recast;
+          const castTimestamp = cast.timestamp ? parseInt(cast.timestamp) : 0;
+          const parentUrl = cast.parent_url || cast.parentUrl;
+          
           if (
-            recast.cast?.parent_url === CATWALK_CHANNEL_PARENT_URL &&
+            parentUrl === CATWALK_CHANNEL_PARENT_URL &&
             castTimestamp >= thirtyDaysAgo
           ) {
             verifiedEngagements.push({
-              castHash: recast.cast.hash,
+              castHash: cast.hash,
               engagementType: "recast",
               rewardAmount: ENGAGEMENT_REWARDS.recast,
               castTimestamp,
             });
+            console.log(`[Engagement Verify] Added recast engagement for cast ${cast.hash}`);
           }
         }
+      } else {
+        const errorText = await recastsResponse.text();
+        console.error(`[Engagement Verify] Recasts API error: ${recastsResponse.status}`, errorText);
       }
 
       // Get user's casts (to find comments/replies)
@@ -122,12 +160,14 @@ export async function POST(request: Request) {
       if (userCastsResponse.ok) {
         const userCastsData = await userCastsResponse.json() as any;
         const userCasts = userCastsData.result?.casts || [];
+        console.log(`[Engagement Verify] Found ${userCasts.length} user casts`);
         
         for (const cast of userCasts) {
           const castTimestamp = cast.timestamp ? parseInt(cast.timestamp) : 0;
+          const parentUrl = cast.parent_url || cast.parentUrl;
           // Check if this is a comment/reply to a /catwalk channel cast
           if (
-            cast.parent_url === CATWALK_CHANNEL_PARENT_URL &&
+            parentUrl === CATWALK_CHANNEL_PARENT_URL &&
             castTimestamp >= thirtyDaysAgo &&
             cast.parent_hash // This indicates it's a reply/comment
           ) {
@@ -137,12 +177,18 @@ export async function POST(request: Request) {
               rewardAmount: ENGAGEMENT_REWARDS.comment,
               castTimestamp,
             });
+            console.log(`[Engagement Verify] Added comment engagement for cast ${cast.parent_hash}`);
           }
         }
+      } else {
+        const errorText = await userCastsResponse.text();
+        console.error(`[Engagement Verify] User casts API error: ${userCastsResponse.status}`, errorText);
       }
     } catch (userEngagementErr) {
       console.error("[Engagement Verify] Error fetching user engagement history:", userEngagementErr);
     }
+
+    console.log(`[Engagement Verify] After Strategy 1, found ${verifiedEngagements.length} engagements`);
 
     // Strategy 2: Fallback - Fetch all channel casts with pagination (last 30 days)
     // This ensures we don't miss any engagements
@@ -262,6 +308,7 @@ export async function POST(request: Request) {
     }, new Map<string, typeof verifiedEngagements[0]>());
 
     const finalEngagements = Array.from(uniqueEngagements.values());
+    console.log(`[Engagement Verify] Final unique engagements: ${finalEngagements.length}`);
 
     // Store verified engagements in database (upsert - don't duplicate)
     for (const engagement of finalEngagements) {

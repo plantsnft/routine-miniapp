@@ -82,6 +82,7 @@ export function PortalTab() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingClaim, setPendingClaim] = useState<{
     castHash: string;
+    castUrl: string;
     actionTypes: string[];
     totalReward: number;
     missedReward: number;
@@ -431,7 +432,37 @@ export function PortalTab() {
             
             <div style={{ marginBottom: 16, padding: 12, background: "#000", borderRadius: 8, border: "1px solid #ff4444" }}>
               {pendingClaim.missingActions.map((action) => (
-                <div key={action} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <button
+                  key={action}
+                  onClick={async () => {
+                    triggerHaptic("light");
+                    setShowConfirmModal(false);
+                    setPendingClaim(null);
+                    // Open the cast in Warpcast so user can complete the action
+                    try {
+                      if (actions?.openUrl) {
+                        await actions.openUrl(pendingClaim.castUrl);
+                      } else {
+                        window.open(pendingClaim.castUrl, "_blank", "noopener,noreferrer");
+                      }
+                    } catch (err) {
+                      console.error("Error opening cast URL:", err);
+                      window.open(pendingClaim.castUrl, "_blank", "noopener,noreferrer");
+                    }
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    marginBottom: 8,
+                    width: "100%",
+                    padding: "10px 12px",
+                    background: "#1a0a0a",
+                    border: "1px solid #ff4444",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                  }}
+                >
                   <span style={{ color: "#ff4444", fontSize: 16 }}>✗</span>
                   <span style={{ color: "#ff4444", fontSize: 14, textTransform: "capitalize" }}>
                     {action === "like" && "❤️ Like"}
@@ -439,9 +470,12 @@ export function PortalTab() {
                     {action === "comment" && "💬 Comment"}
                   </span>
                   <span style={{ color: "#ff4444", fontSize: 12, marginLeft: "auto" }}>
-                    -{action === "like" ? "1,000" : action === "recast" ? "2,000" : "5,000"} CATWALK
+                    -{action === "like" ? "1,000" : action === "recast" ? "2,000" : "5,000"}
                   </span>
-                </div>
+                  <span style={{ color: "#ffaa00", fontSize: 11, fontWeight: 600 }}>
+                    TAP TO DO →
+                  </span>
+                </button>
               ))}
             </div>
             
@@ -736,6 +770,7 @@ export function PortalTab() {
                       // Show custom confirmation modal
                       setPendingClaim({
                         castHash: reward.castHash,
+                        castUrl: reward.castUrl,
                         actionTypes,
                         totalReward,
                         missedReward,

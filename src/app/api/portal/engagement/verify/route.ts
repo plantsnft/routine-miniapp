@@ -176,12 +176,14 @@ export async function POST(request: Request) {
     // Step 3: For each cast, check user's engagement by fetching cast details
     // This is more reliable than trying to get user's reaction history
     const userEngagements = new Map<string, Set<string>>(); // castHash -> Set<"like"|"comment"|"recast">
+    const processedCastHashes = new Set<string>(); // Track which casts we've already processed
     
     // Process ALL casts to check reactions (need to check all to filter correctly)
     for (let i = 0; i < channelCasts.length; i++) {
       const cast = channelCasts[i];
       const castHash = cast.hash;
-      if (!castHash) continue;
+      if (!castHash || processedCastHashes.has(castHash)) continue;
+      processedCastHashes.add(castHash);
 
       // Parse timestamp (handle both Unix seconds and ISO strings)
       let castTimestamp = 0;
@@ -262,6 +264,9 @@ export async function POST(request: Request) {
               likes: likes.map((l: any) => ({ fid: l.fid })),
               recasts: recasts.map((r: any) => ({ fid: r.fid })),
               replies: replies.map((r: any) => ({ fid: r.author?.fid })),
+              parentUrl: castDetails.parent_url || castDetails.parentUrl,
+              timestamp: castTimestamp,
+              fifteenDaysAgo,
             });
           }
         }
@@ -273,6 +278,65 @@ export async function POST(request: Request) {
 
     console.log(`[Engagement Verify] User has engaged with ${userEngagements.size} casts`);
     console.log(`[Engagement Verify] Sample engaged casts:`, Array.from(userEngagements.entries()).slice(0, 5).map(([hash, actions]) => ({ hash, actions: Array.from(actions) })));
+
+    // Step 3.5: Check for any engaged casts that might not be in the channel feed
+    // This handles cases where user engaged with casts that aren't in the current feed
+    const engagedCastHashes = Array.from(userEngagements.keys());
+    const feedCastHashes = new Set(channelCasts.map(c => c.hash).filter(Boolean));
+    
+    // Find engaged casts that aren't in the feed
+    const missingCasts = engagedCastHashes.filter(hash => !feedCastHashes.has(hash) && !processedCastHashes.has(hash));
+    console.log(`[Engagement Verify] Found ${missingCasts.length} engaged casts not in feed, checking them...`);
+    
+    // Fetch details for missing casts to check if they're from catwalk channel and within time window
+    for (const castHash of missingCasts.slice(0, 20)) { // Limit to 20 to avoid too many API calls
+      try {
+        const castResponse = await fetch(
+          `https://api.neynar.com/v2/farcaster/cast?identifier=${castHash}&type=hash`,
+          {
+            headers: {
+              "x-api-key": apiKey,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        if (castResponse.ok) {
+          const castData = await castResponse.json() as any;
+          const castDetails = castData.cast || castData.result?.cast;
+          
+          if (castDetails) {
+            const parentUrl = castDetails.parent_url || castDetails.parentUrl;
+            let castTimestamp = 0;
+            if (castDetails.timestamp) {
+              if (typeof castDetails.timestamp === 'number') {
+                castTimestamp = castDetails.timestamp;
+              } else if (typeof castDetails.timestamp === 'string') {
+                const parsed = parseInt(castDetails.timestamp);
+                if (!isNaN(parsed) && parsed > 1000000000) {
+                  castTimestamp = parsed;
+                } else {
+                  const date = new Date(castDetails.timestamp);
+                  if (!isNaN(date.getTime())) {
+                    castTimestamp = Math.floor(date.getTime() / 1000);
+                  }
+                }
+              }
+            }
+            
+            // Only include if it's from catwalk channel and within 30 days
+            if (parentUrl === CATWALK_CHANNEL_PARENT_URL && castTimestamp >= thirtyDaysAgo) {
+              // Add to channelCasts so it gets processed in the opportunities/claimable logic
+              channelCasts.push(castDetails);
+              processedCastHashes.add(castHash);
+              console.log(`[Engagement Verify] Added missing cast ${castHash} to processing list (timestamp: ${castTimestamp}, 15 days ago: ${fifteenDaysAgo})`);
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`[Engagement Verify] Error fetching missing cast ${castHash}:`, err);
+      }
+    }
 
     // Step 4: Build claimable rewards list (actions done but not claimed, from last 15 days)
     const claimableRewards: Array<{
@@ -288,7 +352,7 @@ export async function POST(request: Request) {
       }>;
     }> = [];
 
-    // Step 5: Build opportunities list
+    // Step 5: Build opportunities and claimable rewards lists
     for (const cast of channelCasts) {
       const castHash = cast.hash;
       if (!castHash) continue;

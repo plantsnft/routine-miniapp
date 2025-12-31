@@ -139,8 +139,8 @@ export function PortalTab() {
         }
       }
 
-      // Auto-fetch engagement opportunities
-      console.log("[PortalTab] Fetching engagement opportunities...");
+      // Auto-fetch engagement opportunities AND claimable rewards
+      console.log("[PortalTab] Fetching engagement opportunities and claimable rewards...");
       try {
         const verifyEngRes = await fetch("/api/portal/engagement/verify", {
           method: "POST",
@@ -150,9 +150,21 @@ export function PortalTab() {
 
         if (verifyEngRes.ok) {
           const verifyEngData = await verifyEngRes.json() as EngagementOpportunitiesResponse;
+          
+          // Set opportunities (actions not yet done)
           if (verifyEngData.opportunities && verifyEngData.opportunities.length > 0) {
             console.log(`[PortalTab] Found ${verifyEngData.opportunities.length} engagement opportunities!`);
             setEngagementOpportunities(verifyEngData.opportunities);
+          } else {
+            setEngagementOpportunities([]);
+          }
+          
+          // Set claimable rewards (actions done but not claimed)
+          if (verifyEngData.claimableRewards && verifyEngData.claimableRewards.length > 0) {
+            console.log(`[PortalTab] Found ${verifyEngData.claimableRewards.length} claimable rewards! Total: ${verifyEngData.totalClaimableReward}`);
+            setClaimableRewards(verifyEngData.claimableRewards);
+          } else {
+            setClaimableRewards([]);
           }
         }
       } catch (verifyEngErr) {

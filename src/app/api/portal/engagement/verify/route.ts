@@ -115,13 +115,46 @@ export async function POST(request: Request) {
           break;
         }
         
+        // Debug: Check first cast's timestamp format
+        if (pageCount === 1 && casts.length > 0) {
+          const firstCast = casts[0];
+          console.log(`[Engagement Verify] Sample cast timestamp:`, {
+            raw: firstCast.timestamp,
+            type: typeof firstCast.timestamp,
+            parsed: firstCast.timestamp ? parseInt(firstCast.timestamp) : null,
+            thirtyDaysAgo,
+            now: Math.floor(Date.now() / 1000),
+          });
+        }
+        
         // Filter casts from last 30 days
+        // Timestamps might be in seconds (Unix) or ISO string format
         const recentCasts = casts.filter((c: any) => {
-          const castTimestamp = c.timestamp ? parseInt(c.timestamp) : 0;
+          let castTimestamp = 0;
+          
+          if (c.timestamp) {
+            // Try parsing as Unix timestamp (seconds)
+            if (typeof c.timestamp === 'number') {
+              castTimestamp = c.timestamp;
+            } else if (typeof c.timestamp === 'string') {
+              // Try parsing as Unix timestamp string
+              const parsed = parseInt(c.timestamp);
+              if (!isNaN(parsed) && parsed > 1000000000) { // Valid Unix timestamp
+                castTimestamp = parsed;
+              } else {
+                // Try parsing as ISO date string
+                const date = new Date(c.timestamp);
+                if (!isNaN(date.getTime())) {
+                  castTimestamp = Math.floor(date.getTime() / 1000);
+                }
+              }
+            }
+          }
+          
           return castTimestamp >= thirtyDaysAgo;
         });
 
-        console.log(`[Engagement Verify] Page ${pageCount}: ${recentCasts.length} casts within 30 days`);
+        console.log(`[Engagement Verify] Page ${pageCount}: ${recentCasts.length} casts within 30 days (out of ${casts.length} total)`);
         channelCasts.push(...recentCasts);
         cursor = feedData.next?.cursor || null;
         hasMore = !!cursor && recentCasts.length === 100;
@@ -149,7 +182,23 @@ export async function POST(request: Request) {
       const castHash = cast.hash;
       if (!castHash) continue;
 
-      const castTimestamp = cast.timestamp ? parseInt(cast.timestamp) : 0;
+      // Parse timestamp (handle both Unix seconds and ISO strings)
+      let castTimestamp = 0;
+      if (cast.timestamp) {
+        if (typeof cast.timestamp === 'number') {
+          castTimestamp = cast.timestamp;
+        } else if (typeof cast.timestamp === 'string') {
+          const parsed = parseInt(cast.timestamp);
+          if (!isNaN(parsed) && parsed > 1000000000) {
+            castTimestamp = parsed;
+          } else {
+            const date = new Date(cast.timestamp);
+            if (!isNaN(date.getTime())) {
+              castTimestamp = Math.floor(date.getTime() / 1000);
+            }
+          }
+        }
+      }
       
       // Skip if cast is older than 30 days
       if (castTimestamp < thirtyDaysAgo) continue;
@@ -213,7 +262,23 @@ export async function POST(request: Request) {
       const castHash = cast.hash;
       if (!castHash) continue;
 
-      const castTimestamp = cast.timestamp ? parseInt(cast.timestamp) : 0;
+      // Parse timestamp (handle both Unix seconds and ISO strings)
+      let castTimestamp = 0;
+      if (cast.timestamp) {
+        if (typeof cast.timestamp === 'number') {
+          castTimestamp = cast.timestamp;
+        } else if (typeof cast.timestamp === 'string') {
+          const parsed = parseInt(cast.timestamp);
+          if (!isNaN(parsed) && parsed > 1000000000) {
+            castTimestamp = parsed;
+          } else {
+            const date = new Date(cast.timestamp);
+            if (!isNaN(date.getTime())) {
+              castTimestamp = Math.floor(date.getTime() / 1000);
+            }
+          }
+        }
+      }
       
       // Skip if cast is older than 30 days
       if (castTimestamp < thirtyDaysAgo) continue;

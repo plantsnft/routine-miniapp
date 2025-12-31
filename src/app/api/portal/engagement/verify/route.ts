@@ -249,6 +249,21 @@ export async function POST(request: Request) {
             }
             userEngagements.get(castHash)!.add("comment");
           }
+
+          // Debug logging for specific cast
+          if (castHash === "0x434eb8b10efec6595860755550367d660994dec6") {
+            console.log(`[Engagement Verify] Debug cast 0x434eb8b10efec6595860755550367d660994dec6:`, {
+              hasLiked,
+              hasRecasted,
+              hasCommented,
+              likesCount: likes.length,
+              recastsCount: recasts.length,
+              repliesCount: replies.length,
+              likes: likes.map((l: any) => ({ fid: l.fid })),
+              recasts: recasts.map((r: any) => ({ fid: r.fid })),
+              replies: replies.map((r: any) => ({ fid: r.author?.fid })),
+            });
+          }
         }
       } catch (castErr) {
         console.error(`[Engagement Verify] Error checking cast ${castHash}:`, castErr);
@@ -257,6 +272,7 @@ export async function POST(request: Request) {
     }
 
     console.log(`[Engagement Verify] User has engaged with ${userEngagements.size} casts`);
+    console.log(`[Engagement Verify] Sample engaged casts:`, Array.from(userEngagements.entries()).slice(0, 5).map(([hash, actions]) => ({ hash, actions: Array.from(actions) })));
 
     // Step 4: Build claimable rewards list (actions done but not claimed, from last 15 days)
     const claimableRewards: Array<{
@@ -329,6 +345,18 @@ export async function POST(request: Request) {
           const author = cast.author || {};
           const castUrl = `https://warpcast.com/${author.username || 'unknown'}/${castHash}`;
           
+          console.log(`[Engagement Verify] Found claimable reward for cast ${castHash}:`, {
+            castHash,
+            author: author.username,
+            claimableActions: claimableActions.map(a => a.type),
+            hasLiked,
+            hasLikedAndClaimed,
+            hasRecasted,
+            hasRecastedAndClaimed,
+            hasCommented,
+            hasCommentedAndClaimed,
+          });
+          
           claimableRewards.push({
             castHash,
             castUrl,
@@ -385,6 +413,14 @@ export async function POST(request: Request) {
     // Sort by timestamp (newest first)
     opportunities.sort((a, b) => b.timestamp - a.timestamp);
     claimableRewards.sort((a, b) => b.timestamp - a.timestamp);
+
+    console.log(`[Engagement Verify] Summary:`, {
+      opportunities: opportunities.length,
+      claimableRewards: claimableRewards.length,
+      totalClaimableReward: claimableRewards.reduce((sum, reward) => {
+        return sum + reward.claimableActions.reduce((actionSum, action) => actionSum + action.rewardAmount, 0);
+      }, 0),
+    });
 
     return NextResponse.json({
       eligibleCount: opportunities.length,

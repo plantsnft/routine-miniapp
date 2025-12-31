@@ -26,6 +26,26 @@ interface EngagementClaimStatus {
   }>;
 }
 
+interface EngagementOpportunity {
+  castHash: string;
+  castUrl: string;
+  authorUsername?: string;
+  authorDisplayName?: string;
+  text?: string;
+  timestamp: number;
+  availableActions: Array<{
+    type: "like" | "comment" | "recast";
+    rewardAmount: number;
+  }>;
+}
+
+interface EngagementOpportunitiesResponse {
+  eligibleCount: number;
+  opportunities: EngagementOpportunity[];
+  totalReward: number;
+  error?: string;
+}
+
 export function PortalTab() {
   const { context } = useMiniApp();
   const { triggerHaptic } = useHapticFeedback();
@@ -33,6 +53,7 @@ export function PortalTab() {
 
   const [creatorClaimStatus, setCreatorClaimStatus] = useState<CreatorClaimStatus | null>(null);
   const [engagementClaimStatus, setEngagementClaimStatus] = useState<EngagementClaimStatus | null>(null);
+  const [engagementOpportunities, setEngagementOpportunities] = useState<EngagementOpportunity[]>([]);
   const [loading, setLoading] = useState(true);
   const [verifying, setVerifying] = useState(false);
   const [claiming, setClaiming] = useState(false);
@@ -101,28 +122,24 @@ export function PortalTab() {
         }
       }
 
-      // Auto-verify engagement if no engagement data exists
-      if (!statusData.engagement || statusData.engagement.eligibleCount === 0) {
-        console.log("[PortalTab] No engagement data found, attempting auto-verify...");
-        try {
-          const verifyEngRes = await fetch("/api/portal/engagement/verify", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ fid: userFid }),
-          });
+      // Auto-fetch engagement opportunities
+      console.log("[PortalTab] Fetching engagement opportunities...");
+      try {
+        const verifyEngRes = await fetch("/api/portal/engagement/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fid: userFid }),
+        });
 
-          if (verifyEngRes.ok) {
-            const verifyEngData = await verifyEngRes.json();
-            if (verifyEngData.eligibleCount > 0) {
-              console.log(`[PortalTab] Auto-verified ${verifyEngData.eligibleCount} engagement(s)!`);
-              setEngagementClaimStatus(verifyEngData);
-              setSuccess(`Found ${verifyEngData.eligibleCount} eligible engagement(s)!`);
-            }
+        if (verifyEngRes.ok) {
+          const verifyEngData = await verifyEngRes.json() as EngagementOpportunitiesResponse;
+          if (verifyEngData.opportunities && verifyEngData.opportunities.length > 0) {
+            console.log(`[PortalTab] Found ${verifyEngData.opportunities.length} engagement opportunities!`);
+            setEngagementOpportunities(verifyEngData.opportunities);
           }
-        } catch (verifyEngErr) {
-          // Silent fail - user might not have any engagements
-          console.log("[PortalTab] Auto-verify engagement failed (expected if no engagements):", verifyEngErr);
         }
+      } catch (verifyEngErr) {
+        console.log("[PortalTab] Error fetching opportunities:", verifyEngErr);
       }
     } catch (err: any) {
       console.error("[PortalTab] Error fetching claim status:", err);
@@ -216,16 +233,15 @@ export function PortalTab() {
         body: JSON.stringify({ fid: userFid }),
       });
 
-      const data = await res.json();
+      const data = await res.json() as EngagementOpportunitiesResponse;
 
       if (!res.ok) {
         throw new Error(data.error || "Verification failed");
       }
 
-      setSuccess(`Found ${data.eligibleCount} eligible engagement(s)!`);
-      setEngagementClaimStatus(data);
+      setSuccess(`Found ${data.opportunities.length} engagement opportunity(s)!`);
+      setEngagementOpportunities(data.opportunities);
       triggerHaptic("heavy");
-      setTimeout(() => fetchClaimStatus(), 1000);
     } catch (err: any) {
       console.error("[PortalTab] Error verifying engagement:", err);
       setError(err.message || "Failed to verify engagement");
@@ -480,123 +496,95 @@ export function PortalTab() {
               💬 Engagement Rewards
             </h2>
             <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 12, lineHeight: 1.6 }}>
-              Like, comment, or recast posts in the /catwalk channel to earn rewards. All engagements from the last 30 days are shown below.
+              Like, comment, or recast posts in the /catwalk channel to earn rewards. Click on any cast below to engage and earn tokens.
             </p>
             <p style={{ color: "#999999", fontSize: 12, marginBottom: 20, lineHeight: 1.4 }}>
-              Click &quot;Verify Engagement&quot; to find all your eligible engagements. New engagements are detected automatically.
+              All casts from the last 30 days are shown. Complete the actions to claim your rewards.
             </p>
 
-            {engagementClaimStatus ? (
-              <>
-                {engagementClaimStatus.eligibleCount > 0 ? (
-                  <div style={{ marginBottom: 16 }}>
-                    <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 12, fontWeight: 600 }}>
-                      <strong>{engagementClaimStatus.eligibleCount}</strong> unclaimed engagement(s) from the last 30 days
-                    </p>
-                    <p style={{ color: "#999999", fontSize: 12, marginBottom: 16 }}>
-                      Click &quot;Claim&quot; on each engagement to receive your reward.
-                    </p>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: "400px", overflowY: "auto" }}>
-                      {engagementClaimStatus.claims
-                        .filter((claim) => !claim.claimed)
-                        .sort((a, b) => {
-                          // Sort by engagement type: comment first, then recast, then like
-                          const order = { comment: 0, recast: 1, like: 2 };
-                          return (order[a.engagementType as keyof typeof order] || 3) - (order[b.engagementType as keyof typeof order] || 3);
-                        })
-                        .map((claim) => (
+            {engagementOpportunities.length > 0 ? (
+              <div style={{ marginBottom: 16 }}>
+                <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 12, fontWeight: 600 }}>
+                  <strong>{engagementOpportunities.length}</strong> engagement opportunity(s) available
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: "500px", overflowY: "auto" }}>
+                  {engagementOpportunities.map((opportunity) => (
+                    <div
+                      key={opportunity.castHash}
+                      style={{
+                        background: "#000000",
+                        border: "2px solid #c1b400",
+                        borderRadius: 8,
+                        padding: "16px",
+                      }}
+                    >
+                      <div style={{ marginBottom: 12 }}>
+                        <p style={{ color: "#ffffff", fontSize: 14, fontWeight: 600, margin: "0 0 4px 0" }}>
+                          {opportunity.authorDisplayName || opportunity.authorUsername || "Unknown"}
+                        </p>
+                        {opportunity.text && (
+                          <p style={{ color: "#999999", fontSize: 12, margin: "0 0 8px 0", lineHeight: 1.4 }}>
+                            {opportunity.text}
+                          </p>
+                        )}
+                      </div>
+                      
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+                        {opportunity.availableActions.map((action) => (
                           <div
-                            key={`${claim.castHash}-${claim.engagementType}`}
+                            key={action.type}
                             style={{
-                              background: "#000000",
-                              border: "1px solid #c1b400",
-                              borderRadius: 8,
-                              padding: "12px",
                               display: "flex",
                               justifyContent: "space-between",
                               alignItems: "center",
+                              padding: "8px 12px",
+                              background: "#1a1a1a",
+                              borderRadius: 6,
                             }}
                           >
-                            <div>
-                              <div style={{ flex: 1 }}>
-                                <p style={{ color: "#ffffff", fontSize: 14, fontWeight: 600, margin: 0 }}>
-                                  {claim.engagementType === "like" && "❤️ Like"}
-                                  {claim.engagementType === "comment" && "💬 Comment"}
-                                  {claim.engagementType === "recast" && "🔁 Recast"}
-                                </p>
-                                <p
-                                  style={{
-                                    color: "#999999",
-                                    fontSize: 12,
-                                    margin: "4px 0 0 0",
-                                    fontFamily: "monospace",
-                                  }}
-                                >
-                                  {claim.castHash.substring(0, 16)}...
-                                </p>
-                                <p style={{ color: "#c1b400", fontSize: 12, margin: "4px 0 0 0", fontWeight: 600 }}>
-                                  {claim.rewardAmount.toLocaleString()} CATWALK
-                                </p>
-                              </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ fontSize: 16 }}>
+                                {action.type === "like" && "❤️"}
+                                {action.type === "comment" && "💬"}
+                                {action.type === "recast" && "🔁"}
+                              </span>
+                              <span style={{ color: "#ffffff", fontSize: 14, textTransform: "capitalize" }}>
+                                {action.type}
+                              </span>
                             </div>
-                            <button
-                              onClick={() => handleClaimEngagement(claim.castHash, claim.engagementType)}
-                              disabled={claiming}
-                              style={{
-                                padding: "8px 16px",
-                                background: "#c1b400",
-                                color: "#000000",
-                                border: "none",
-                                borderRadius: 6,
-                                fontSize: 12,
-                                fontWeight: 700,
-                                cursor: claiming ? "not-allowed" : "pointer",
-                                opacity: claiming ? 0.6 : 1,
-                              }}
-                            >
-                              Claim
-                            </button>
+                            <span style={{ color: "#c1b400", fontSize: 14, fontWeight: 600 }}>
+                              +{action.rewardAmount.toLocaleString()} CATWALK
+                            </span>
                           </div>
                         ))}
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    onClick={handleVerifyEngagement}
-                    disabled={verifying}
-                    style={{
-                      width: "100%",
-                      padding: "12px 24px",
-                      background: "#c1b400",
-                      color: "#000000",
-                      border: "2px solid #000000",
-                      borderRadius: 8,
-                      fontSize: 16,
-                      fontWeight: 700,
-                      cursor: verifying ? "not-allowed" : "pointer",
-                      opacity: verifying ? 0.6 : 1,
-                    }}
-                  >
-                    {verifying ? "Verifying..." : "Verify Engagement"}
-                  </button>
-                )}
+                      </div>
 
-                {engagementClaimStatus.claimedCount > 0 && (
-                  <div
-                    style={{
-                      background: "#000000",
-                      border: "2px solid #00ff00",
-                      borderRadius: 8,
-                      padding: "12px",
-                      marginTop: 16,
-                    }}
-                  >
-                    <p style={{ color: "#00ff00", fontSize: 14, fontWeight: 700, margin: 0 }}>
-                      ✅ {engagementClaimStatus.claimedCount} reward(s) claimed
-                    </p>
-                  </div>
-                )}
-              </>
+                      <a
+                        href={opportunity.castUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: "block",
+                          width: "100%",
+                          padding: "10px 16px",
+                          background: "#c1b400",
+                          color: "#000000",
+                          border: "none",
+                          borderRadius: 6,
+                          fontSize: 14,
+                          fontWeight: 700,
+                          textAlign: "center",
+                          textDecoration: "none",
+                          cursor: "pointer",
+                        }}
+                        onClick={() => triggerHaptic("light")}
+                      >
+                        Open Cast in Warpcast
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              </div>
             ) : (
               <button
                 onClick={handleVerifyEngagement}
@@ -614,7 +602,7 @@ export function PortalTab() {
                   opacity: verifying ? 0.6 : 1,
                 }}
               >
-                {verifying ? "Verifying..." : "Verify Engagement"}
+                {verifying ? "Loading Opportunities..." : "Find Engagement Opportunities"}
               </button>
             )}
           </div>

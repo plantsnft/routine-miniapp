@@ -173,8 +173,8 @@ export async function POST(request: Request) {
 
     console.log(`[Engagement Verify] Found ${channelCasts.length} casts from last 30 days`);
 
-    // Step 3: For each cast, check user's engagement by fetching cast details
-    // This is more reliable than trying to get user's reaction history
+    // Step 3: For each cast, check user's engagement using Neynar's reactions API
+    // Use the proper Neynar API endpoint: /v2/farcaster/reactions/cast
     const userEngagements = new Map<string, Set<string>>(); // castHash -> Set<"like"|"comment"|"recast">
     const processedCastHashes = new Set<string>(); // Track which casts we've already processed
     
@@ -209,7 +209,55 @@ export async function POST(request: Request) {
       if (castTimestamp < thirtyDaysAgo) continue;
 
       try {
-        // Fetch cast details which includes reactions
+        // Use Neynar's reactions API endpoint to get all reactions for this cast
+        // This is more reliable than parsing cast details
+        const reactionsResponse = await fetch(
+          `https://api.neynar.com/v2/farcaster/reactions/cast?cast_hash=${castHash}&reaction_type=all`,
+          {
+            headers: {
+              "x-api-key": apiKey,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        let hasLiked = false;
+        let hasRecasted = false;
+        
+        if (reactionsResponse.ok) {
+          const reactionsData = await reactionsResponse.json() as any;
+          const reactions = reactionsData.reactions || reactionsData.result?.reactions || [];
+          
+          // Check if user has liked or recasted
+          for (const reaction of reactions) {
+            const reactionFid = reaction.fid || reaction.user?.fid || reaction.author?.fid;
+            if (reactionFid === fid) {
+              if (reaction.reaction_type === 'like' || reaction.type === 'like') {
+                hasLiked = true;
+              } else if (reaction.reaction_type === 'recast' || reaction.type === 'recast') {
+                hasRecasted = true;
+              }
+            }
+          }
+          
+          if (i < 3) {
+            console.log(`[Engagement Verify] Cast ${i} reactions:`, {
+              castHash: castHash.substring(0, 10),
+              totalReactions: reactions.length,
+              userLiked: hasLiked,
+              userRecasted: hasRecasted,
+              reactionsSample: reactions.slice(0, 3).map((r: any) => ({ 
+                fid: r.fid || r.user?.fid, 
+                type: r.reaction_type || r.type 
+              })),
+            });
+          }
+        } else {
+          console.error(`[Engagement Verify] Failed to fetch reactions for ${castHash}: ${reactionsResponse.status}`);
+        }
+
+        // Check for comments/replies - fetch cast details for replies
+        let hasCommented = false;
         const castResponse = await fetch(
           `https://api.neynar.com/v2/farcaster/cast?identifier=${castHash}&type=hash`,
           {
@@ -220,137 +268,76 @@ export async function POST(request: Request) {
           }
         );
 
-        if (!castResponse.ok) {
-          console.error(`[Engagement Verify] Failed to fetch cast ${castHash}: ${castResponse.status}`);
-          continue;
+        if (castResponse.ok) {
+          const castData = await castResponse.json() as any;
+          const castDetails = castData.cast || castData.result?.cast;
+          
+          if (castDetails) {
+            const replies = castDetails.replies?.casts || [];
+            hasCommented = Array.isArray(replies) && replies.some((reply: any) => {
+              const replyFid = reply.author?.fid || reply.fid;
+              return replyFid === fid;
+            });
+          }
         }
 
-        const castData = await castResponse.json() as any;
-        const castDetails = castData.cast || castData.result?.cast || cast;
-        
-        if (!castDetails) {
-          console.error(`[Engagement Verify] No cast details found for ${castHash}`);
-          continue;
-        }
-        
-        // Log structure for first few casts to understand API response format
-        if (i < 3) {
-          console.log(`[Engagement Verify] Sample cast ${i} (${castHash.substring(0, 10)}...):`, {
-            castHash,
-            hasReactions: !!castDetails.reactions,
-            reactionsKeys: castDetails.reactions ? Object.keys(castDetails.reactions) : [],
-            reactionsStructure: castDetails.reactions ? {
-              likesType: typeof castDetails.reactions.likes,
-              likesIsArray: Array.isArray(castDetails.reactions.likes),
-              likesValue: castDetails.reactions.likes,
-              recastsType: typeof castDetails.reactions.recasts,
-              recastsIsArray: Array.isArray(castDetails.reactions.recasts),
-              recastsValue: castDetails.reactions.recasts,
-            } : null,
-            hasReplies: !!castDetails.replies,
-            repliesKeys: castDetails.replies ? Object.keys(castDetails.replies) : [],
-            repliesCastsLength: castDetails.replies?.casts?.length || 0,
-          });
-        }
-        
-        // Check for likes - Neynar API might return different formats
-        let likes: any[] = [];
-        if (castDetails.reactions?.likes) {
-          if (Array.isArray(castDetails.reactions.likes)) {
-            likes = castDetails.reactions.likes;
-          } else if (castDetails.reactions.likes.fids && Array.isArray(castDetails.reactions.likes.fids)) {
-            // Format: { fids: [123, 456], count: 2 }
-            likes = castDetails.reactions.likes.fids.map((fid: number) => ({ fid }));
-          } else if (typeof castDetails.reactions.likes === 'object') {
-            // Try to extract fids from any object structure
-            const fids = castDetails.reactions.likes.fids || castDetails.reactions.likes.user_fids || [];
-            if (Array.isArray(fids)) {
-              likes = fids.map((fid: number) => ({ fid }));
+        // Store detected engagements
+        if (hasLiked || hasRecasted || hasCommented) {
+          if (!userEngagements.has(castHash)) {
+            userEngagements.set(castHash, new Set());
+          }
+          if (hasLiked) {
+            userEngagements.get(castHash)!.add("like");
+            console.log(`[Engagement Verify] ✓ User ${fid} has liked cast ${castHash.substring(0, 10)}...`);
+          }
+          if (hasRecasted) {
+            userEngagements.get(castHash)!.add("recast");
+            console.log(`[Engagement Verify] ✓ User ${fid} has recasted cast ${castHash.substring(0, 10)}...`);
+          }
+          if (hasCommented) {
+            userEngagements.get(castHash)!.add("comment");
+            console.log(`[Engagement Verify] ✓ User ${fid} has commented on cast ${castHash.substring(0, 10)}...`);
+          }
+          
+          // Store in Supabase if not already stored (for history tracking)
+          // This helps us track what users have done even if they haven't claimed yet
+          for (const engagementType of ["like", "recast", "comment"] as const) {
+            const hasEngagement = engagementType === "like" ? hasLiked : 
+                                 engagementType === "recast" ? hasRecasted : hasCommented;
+            
+            if (hasEngagement) {
+              // Check if already stored
+              const existingCheck = await fetch(
+                `${SUPABASE_URL}/rest/v1/engagement_claims?fid=eq.${fid}&cast_hash=eq.${castHash}&engagement_type=eq.${engagementType}`,
+                {
+                  method: "GET",
+                  headers: SUPABASE_HEADERS,
+                }
+              );
+              
+              if (existingCheck.ok) {
+                const existing = await existingCheck.json() as any;
+                if (existing.length === 0) {
+                  // Store as verified but not claimed
+                  await fetch(
+                    `${SUPABASE_URL}/rest/v1/engagement_claims`,
+                    {
+                      method: "POST",
+                      headers: SUPABASE_HEADERS,
+                      body: JSON.stringify({
+                        fid,
+                        cast_hash: castHash,
+                        engagement_type: engagementType,
+                        reward_amount: ENGAGEMENT_REWARDS[engagementType],
+                        verified_at: new Date().toISOString(),
+                      }),
+                    }
+                  );
+                  console.log(`[Engagement Verify] Stored ${engagementType} for cast ${castHash.substring(0, 10)}...`);
+                }
+              }
             }
           }
-        }
-        
-        const hasLiked = likes.some((like: any) => {
-          const likeFid = like.fid || like.user?.fid || like.author?.fid;
-          const matches = likeFid === fid;
-          if (matches && i < 3) {
-            console.log(`[Engagement Verify] Found like match: likeFid=${likeFid}, userFid=${fid}`);
-          }
-          return matches;
-        });
-        if (hasLiked) {
-          if (!userEngagements.has(castHash)) {
-            userEngagements.set(castHash, new Set());
-          }
-          userEngagements.get(castHash)!.add("like");
-          console.log(`[Engagement Verify] ✓ User ${fid} has liked cast ${castHash.substring(0, 10)}...`);
-        }
-
-        // Check for recasts
-        let recasts: any[] = [];
-        if (castDetails.reactions?.recasts) {
-          if (Array.isArray(castDetails.reactions.recasts)) {
-            recasts = castDetails.reactions.recasts;
-          } else if (castDetails.reactions.recasts.fids && Array.isArray(castDetails.reactions.recasts.fids)) {
-            recasts = castDetails.reactions.recasts.fids.map((fid: number) => ({ fid }));
-          } else if (typeof castDetails.reactions.recasts === 'object') {
-            const fids = castDetails.reactions.recasts.fids || castDetails.reactions.recasts.user_fids || [];
-            if (Array.isArray(fids)) {
-              recasts = fids.map((fid: number) => ({ fid }));
-            }
-          }
-        }
-        
-        const hasRecasted = recasts.some((recast: any) => {
-          const recastFid = recast.fid || recast.user?.fid || recast.author?.fid;
-          const matches = recastFid === fid;
-          if (matches && i < 3) {
-            console.log(`[Engagement Verify] Found recast match: recastFid=${recastFid}, userFid=${fid}`);
-          }
-          return matches;
-        });
-        if (hasRecasted) {
-          if (!userEngagements.has(castHash)) {
-            userEngagements.set(castHash, new Set());
-          }
-          userEngagements.get(castHash)!.add("recast");
-          console.log(`[Engagement Verify] ✓ User ${fid} has recasted cast ${castHash.substring(0, 10)}...`);
-        }
-
-        // Check for comments/replies
-        const replies = castDetails.replies?.casts || [];
-        const hasCommented = Array.isArray(replies) && replies.some((reply: any) => {
-          const replyFid = reply.author?.fid || reply.fid;
-          const matches = replyFid === fid;
-          if (matches && i < 3) {
-            console.log(`[Engagement Verify] Found comment match: replyFid=${replyFid}, userFid=${fid}`);
-          }
-          return matches;
-        });
-        if (hasCommented) {
-          if (!userEngagements.has(castHash)) {
-            userEngagements.set(castHash, new Set());
-          }
-          userEngagements.get(castHash)!.add("comment");
-          console.log(`[Engagement Verify] ✓ User ${fid} has commented on cast ${castHash.substring(0, 10)}...`);
-        }
-
-        // Debug logging for specific cast
-        if (castHash === "0x434eb8b10efec6595860755550367d660994dec6") {
-          console.log(`[Engagement Verify] Debug cast 0x434eb8b10efec6595860755550367d660994dec6:`, {
-            hasLiked,
-            hasRecasted,
-            hasCommented,
-            likesCount: likes.length,
-            recastsCount: recasts.length,
-            repliesCount: replies.length,
-            likes: likes.map((l: any) => ({ fid: l.fid })),
-            recasts: recasts.map((r: any) => ({ fid: r.fid })),
-            replies: replies.map((r: any) => ({ fid: r.author?.fid })),
-            parentUrl: castDetails.parent_url || castDetails.parentUrl,
-            timestamp: castTimestamp,
-            fifteenDaysAgo,
-          });
         }
       } catch (castErr) {
         console.error(`[Engagement Verify] Error checking cast ${castHash}:`, castErr);

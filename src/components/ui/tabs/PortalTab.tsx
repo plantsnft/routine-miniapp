@@ -604,12 +604,35 @@ export function PortalTab() {
                   const totalReward = reward.claimableActions.reduce((sum, a) => sum + a.rewardAmount, 0);
                   const actionTypes = reward.claimableActions.map(a => a.type);
                   
+                  // All possible actions with their rewards
+                  const allActions = [
+                    { type: "like" as const, emoji: "❤️", reward: 1000 },
+                    { type: "recast" as const, emoji: "🔁", reward: 2000 },
+                    { type: "comment" as const, emoji: "💬", reward: 5000 },
+                  ];
+                  
+                  // Calculate missing actions and their total reward
+                  const missingActions = allActions.filter(a => !actionTypes.includes(a.type));
+                  const missedReward = missingActions.reduce((sum, a) => sum + a.reward, 0);
+                  const hasMissingActions = missingActions.length > 0;
+                  
+                  const handleClaimClick = () => {
+                    if (hasMissingActions) {
+                      const missingNames = missingActions.map(a => a.type).join(", ");
+                      const confirmed = window.confirm(
+                        `⚠️ You haven't ${missingNames.includes("like") ? "liked" : ""}${missingNames.includes("recast") ? (missingNames.includes("like") ? ", recasted" : "recasted") : ""}${missingNames.includes("comment") ? (missingNames.includes("like") || missingNames.includes("recast") ? ", or commented on" : "commented on") : ""} this cast!\n\nYou'll miss out on ${missedReward.toLocaleString()} CATWALK.\n\nClaim ${totalReward.toLocaleString()} CATWALK now anyway?`
+                      );
+                      if (!confirmed) return;
+                    }
+                    handleClaimAllEngagements(reward.castHash, actionTypes);
+                  };
+                  
                   return (
                     <div
                       key={reward.castHash}
                       style={{
                         background: "#000000",
-                        border: "2px solid #00ff00",
+                        border: hasMissingActions ? "2px solid #ffaa00" : "2px solid #00ff00",
                         borderRadius: 8,
                         padding: "12px",
                       }}
@@ -633,29 +656,30 @@ export function PortalTab() {
                         padding: "8px 10px",
                         background: "#0a2a0a",
                         borderRadius: 6,
-                        border: "1px solid #00ff00",
+                        border: hasMissingActions ? "1px solid #ffaa00" : "1px solid #00ff00",
                       }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          {reward.claimableActions.map((action) => (
-                            <div key={action.type} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                              <span style={{ fontSize: 14 }}>
-                                {action.type === "like" && "❤️"}
-                                {action.type === "comment" && "💬"}
-                                {action.type === "recast" && "🔁"}
-                              </span>
-                              <span style={{ color: "#00ff00", fontSize: 11 }}>✓</span>
-                            </div>
-                          ))}
+                          {allActions.map((action) => {
+                            const isCompleted = actionTypes.includes(action.type);
+                            return (
+                              <div key={action.type} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                <span style={{ fontSize: 14 }}>{action.emoji}</span>
+                                <span style={{ color: isCompleted ? "#00ff00" : "#ff4444", fontSize: 11 }}>
+                                  {isCompleted ? "✓" : "✗"}
+                                </span>
+                              </div>
+                            );
+                          })}
                           <span style={{ color: "#ff9500", fontSize: 13, fontWeight: 700, marginLeft: 8 }}>
                             +{totalReward.toLocaleString()}
                           </span>
                         </div>
                         <button
-                          onClick={() => handleClaimAllEngagements(reward.castHash, actionTypes)}
+                          onClick={handleClaimClick}
                           disabled={claiming}
                           style={{
                             padding: "6px 14px",
-                            background: "#00ff00",
+                            background: hasMissingActions ? "#ffaa00" : "#00ff00",
                             color: "#000000",
                             border: "none",
                             borderRadius: 4,

@@ -77,6 +77,16 @@ export function PortalTab() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [transactionUrl, setTransactionUrl] = useState<string | null>(null);
+  
+  // Confirmation modal state
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [pendingClaim, setPendingClaim] = useState<{
+    castHash: string;
+    actionTypes: string[];
+    totalReward: number;
+    missedReward: number;
+    missingActions: string[];
+  } | null>(null);
 
   const isCreator = userFid && CATWALK_CREATOR_FIDS.includes(userFid);
 
@@ -379,6 +389,111 @@ export function PortalTab() {
         Earn CATWALK for posting and engaging in /catwalk
       </p>
 
+      {/* Confirmation Modal for Incomplete Claims */}
+      {showConfirmModal && pendingClaim && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0, 0, 0, 0.85)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: 20,
+          }}
+          onClick={() => {
+            setShowConfirmModal(false);
+            setPendingClaim(null);
+          }}
+        >
+          <div
+            style={{
+              background: "#1a1a1a",
+              border: "3px solid #ffaa00",
+              borderRadius: 12,
+              padding: 24,
+              maxWidth: 340,
+              width: "100%",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ color: "#ffaa00", fontSize: 20, fontWeight: 700, marginBottom: 16, textAlign: "center" }}>
+              ⚠️ Incomplete Actions
+            </h3>
+            
+            <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 16, lineHeight: 1.5 }}>
+              You haven&apos;t completed all actions for this cast:
+            </p>
+            
+            <div style={{ marginBottom: 16, padding: 12, background: "#000", borderRadius: 8, border: "1px solid #ff4444" }}>
+              {pendingClaim.missingActions.map((action) => (
+                <div key={action} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <span style={{ color: "#ff4444", fontSize: 16 }}>✗</span>
+                  <span style={{ color: "#ff4444", fontSize: 14, textTransform: "capitalize" }}>
+                    {action === "like" && "❤️ Like"}
+                    {action === "recast" && "🔁 Recast"}
+                    {action === "comment" && "💬 Comment"}
+                  </span>
+                  <span style={{ color: "#ff4444", fontSize: 12, marginLeft: "auto" }}>
+                    -{action === "like" ? "1,000" : action === "recast" ? "2,000" : "5,000"} CATWALK
+                  </span>
+                </div>
+              ))}
+            </div>
+            
+            <p style={{ color: "#ff9500", fontSize: 16, fontWeight: 700, textAlign: "center", marginBottom: 20 }}>
+              You&apos;ll miss out on {pendingClaim.missedReward.toLocaleString()} CATWALK!
+            </p>
+            
+            <div style={{ display: "flex", gap: 12 }}>
+              <button
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  setPendingClaim(null);
+                }}
+                style={{
+                  flex: 1,
+                  padding: "12px 16px",
+                  background: "transparent",
+                  color: "#ffffff",
+                  border: "2px solid #666",
+                  borderRadius: 8,
+                  fontSize: 14,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Go Back
+              </button>
+              <button
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  handleClaimAllEngagements(pendingClaim.castHash, pendingClaim.actionTypes);
+                  setPendingClaim(null);
+                }}
+                style={{
+                  flex: 1,
+                  padding: "12px 16px",
+                  background: "#ffaa00",
+                  color: "#000000",
+                  border: "none",
+                  borderRadius: 8,
+                  fontSize: 14,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Claim {pendingClaim.totalReward.toLocaleString()}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Error/Success Messages */}
       {error && (
         <div
@@ -618,11 +733,17 @@ export function PortalTab() {
                   
                   const handleClaimClick = () => {
                     if (hasMissingActions) {
-                      const missingNames = missingActions.map(a => a.type).join(", ");
-                      const confirmed = window.confirm(
-                        `⚠️ You haven't ${missingNames.includes("like") ? "liked" : ""}${missingNames.includes("recast") ? (missingNames.includes("like") ? ", recasted" : "recasted") : ""}${missingNames.includes("comment") ? (missingNames.includes("like") || missingNames.includes("recast") ? ", or commented on" : "commented on") : ""} this cast!\n\nYou'll miss out on ${missedReward.toLocaleString()} CATWALK.\n\nClaim ${totalReward.toLocaleString()} CATWALK now anyway?`
-                      );
-                      if (!confirmed) return;
+                      // Show custom confirmation modal
+                      setPendingClaim({
+                        castHash: reward.castHash,
+                        actionTypes,
+                        totalReward,
+                        missedReward,
+                        missingActions: missingActions.map(a => a.type),
+                      });
+                      setShowConfirmModal(true);
+                      triggerHaptic("warning");
+                      return;
                     }
                     handleClaimAllEngagements(reward.castHash, actionTypes);
                   };

@@ -302,7 +302,13 @@ export function PortalTab() {
         throw new Error(data.error || "Claim failed");
       }
 
-      setSuccess(`Successfully claimed reward for ${engagementType}!`);
+      // Show success with BaseScan link if available
+      const basescanUrl = data.basescanUrl || (data.transactionHash ? `https://basescan.org/tx/${data.transactionHash}` : null);
+      if (basescanUrl) {
+        setSuccess(`✅ Claimed ${data.rewardAmount?.toLocaleString() || ''} CATWALK! View on BaseScan: ${basescanUrl}`);
+      } else {
+        setSuccess(`Successfully claimed reward for ${engagementType}!`);
+      }
       triggerHaptic("heavy");
       
       // Refresh opportunities and claimable rewards

@@ -221,6 +221,12 @@ export async function POST(request: Request) {
       args: [recipientAddress, rewardAmount],
     });
 
+    // Log signer address for debugging
+    console.log(`[Engagement Claim] Signer address: ${account.address}`);
+    console.log(`[Engagement Claim] Token contract: ${TOKEN_ADDRESS}`);
+    console.log(`[Engagement Claim] Recipient: ${recipientAddress}`);
+    console.log(`[Engagement Claim] Amount: ${rewardAmount.toString()} (${Number(rewardAmount / (10n ** 18n))} CATWALK)`);
+
     // Send transaction
     let transactionHash: string;
     try {
@@ -228,24 +234,44 @@ export async function POST(request: Request) {
         to: TOKEN_ADDRESS as `0x${string}`,
         data: transferData,
       });
-      console.log(`[Engagement Claim] Transaction sent: ${transactionHash}`);
+      console.log(`[Engagement Claim] ✅ Transaction sent: ${transactionHash}`);
     } catch (txError: any) {
-      console.error("[Engagement Claim] Transaction failed:", txError);
+      console.error("[Engagement Claim] ❌ Transaction FAILED:", txError.message || txError);
+      console.error("[Engagement Claim] Full error:", JSON.stringify(txError, null, 2));
       return NextResponse.json(
         { error: `Transaction failed: ${txError.message || "Unknown error"}` },
         { status: 500 }
       );
     }
 
-    // Wait for transaction receipt (optional, but good for confirmation)
+    // Wait for transaction receipt - REQUIRED to confirm success
+    let receipt;
     try {
-      const receipt = await publicClient.waitForTransactionReceipt({
+      receipt = await publicClient.waitForTransactionReceipt({
         hash: transactionHash as `0x${string}`,
+        timeout: 60_000, // 60 second timeout
       });
-      console.log(`[Engagement Claim] Transaction confirmed in block ${receipt.blockNumber}`);
-    } catch (waitError) {
-      console.warn("[Engagement Claim] Could not wait for receipt (non-critical):", waitError);
-      // Continue anyway - transaction was sent
+      console.log(`[Engagement Claim] ✅ Transaction confirmed in block ${receipt.blockNumber}`);
+      console.log(`[Engagement Claim] Transaction status: ${receipt.status}`);
+      
+      if (receipt.status === 'reverted') {
+        console.error(`[Engagement Claim] ❌ Transaction REVERTED!`);
+        return NextResponse.json(
+          { error: "Transaction was reverted. The signer wallet may not have enough CATWALK tokens." },
+          { status: 500 }
+        );
+      }
+    } catch (waitError: any) {
+      console.error("[Engagement Claim] ❌ Failed to confirm transaction:", waitError.message || waitError);
+      // Don't update database if we can't confirm the transaction
+      return NextResponse.json(
+        { 
+          error: "Transaction sent but could not be confirmed. Please check BaseScan manually.",
+          transactionHash: transactionHash,
+          basescanUrl: `https://basescan.org/tx/${transactionHash}`,
+        },
+        { status: 500 }
+      );
     }
 
     // Update claim with claimed_at timestamp and transaction hash
@@ -284,12 +310,16 @@ export async function POST(request: Request) {
     const updated = await updateRes.json() as any;
     const updatedClaim = updated && updated.length > 0 ? updated[0] : { ...claim, ...updateData };
 
+    console.log(`[Engagement Claim] ✅ SUCCESS! Sent ${Number(rewardAmount / (10n ** 18n))} CATWALK to ${recipientAddress}`);
+    console.log(`[Engagement Claim] BaseScan: https://basescan.org/tx/${transactionHash}`);
+
     return NextResponse.json({
       success: true,
       castHash: updatedClaim.cast_hash,
       engagementType: updatedClaim.engagement_type,
       rewardAmount: parseFloat(updatedClaim.reward_amount || "0"),
       transactionHash: transactionHash,
+      basescanUrl: `https://basescan.org/tx/${transactionHash}`,
       claimedAt: updatedClaim.claimed_at,
     });
   } catch (error: any) {

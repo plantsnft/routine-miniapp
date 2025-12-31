@@ -176,8 +176,8 @@ export async function POST(request: Request) {
     // This is more reliable than trying to get user's reaction history
     const userEngagements = new Map<string, Set<string>>(); // castHash -> Set<"like"|"comment"|"recast">
     
-    // Process casts in batches to check reactions
-    for (let i = 0; i < Math.min(channelCasts.length, 50); i++) { // Limit to 50 for performance
+    // Process ALL casts to check reactions (need to check all to filter correctly)
+    for (let i = 0; i < channelCasts.length; i++) {
       const cast = channelCasts[i];
       const castHash = cast.hash;
       if (!castHash) continue;
@@ -286,20 +286,35 @@ export async function POST(request: Request) {
       const userHasDone = userEngagements.get(castHash) || new Set<string>();
       const userHasClaimed = claimedEngagements.get(castHash) || new Set<string>();
       
+      // Check if user has done AND claimed all 3 actions - if so, skip this cast entirely
+      const hasLiked = userHasDone.has("like");
+      const hasLikedAndClaimed = hasLiked && userHasClaimed.has("like");
+      
+      const hasRecasted = userHasDone.has("recast");
+      const hasRecastedAndClaimed = hasRecasted && userHasClaimed.has("recast");
+      
+      const hasCommented = userHasDone.has("comment");
+      const hasCommentedAndClaimed = hasCommented && userHasClaimed.has("comment");
+
+      // If user has done AND claimed all 3 actions, don't show this cast
+      if (hasLikedAndClaimed && hasRecastedAndClaimed && hasCommentedAndClaimed) {
+        continue; // Skip this cast - user has completed all actions
+      }
+      
       const availableActions: Array<{ type: "like" | "comment" | "recast"; rewardAmount: number }> = [];
 
       // Show like if: user hasn't done it yet OR user did it but hasn't claimed it
-      if (!userHasDone.has("like") || (userHasDone.has("like") && !userHasClaimed.has("like"))) {
+      if (!hasLiked || (hasLiked && !hasLikedAndClaimed)) {
         availableActions.push({ type: "like", rewardAmount: ENGAGEMENT_REWARDS.like });
       }
       
       // Show recast if: user hasn't done it yet OR user did it but hasn't claimed it
-      if (!userHasDone.has("recast") || (userHasDone.has("recast") && !userHasClaimed.has("recast"))) {
+      if (!hasRecasted || (hasRecasted && !hasRecastedAndClaimed)) {
         availableActions.push({ type: "recast", rewardAmount: ENGAGEMENT_REWARDS.recast });
       }
       
       // Show comment if: user hasn't done it yet OR user did it but hasn't claimed it
-      if (!userHasDone.has("comment") || (userHasDone.has("comment") && !userHasClaimed.has("comment"))) {
+      if (!hasCommented || (hasCommented && !hasCommentedAndClaimed)) {
         availableActions.push({ type: "comment", rewardAmount: ENGAGEMENT_REWARDS.comment });
       }
 

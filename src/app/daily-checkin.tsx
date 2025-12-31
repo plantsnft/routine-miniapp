@@ -35,6 +35,8 @@ export default function DailyCheckin() {
   // Prompt to add mini-app on first load (one-time only)
   useEffect(() => {
     // Only prompt once per session, and only if not already added
+    if (typeof window === 'undefined') return;
+    
     const hasPrompted = sessionStorage.getItem('catwalk-miniapp-prompted');
     if (!added && !hasPrompted && actions) {
       // Small delay to ensure smooth page load

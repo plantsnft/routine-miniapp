@@ -222,34 +222,46 @@ export async function POST(request: Request) {
           const castData = await castResponse.json() as any;
           const castDetails = castData.cast || castData.result?.cast || cast;
           
-          // Check for likes
+          // Check for likes - reactions.likes is an array of user objects with fid
           const likes = castDetails.reactions?.likes || [];
-          const hasLiked = likes.some((like: any) => like.fid === fid);
+          const hasLiked = Array.isArray(likes) && likes.some((like: any) => {
+            const likeFid = like.fid || like.user?.fid || like.author?.fid;
+            return likeFid === fid;
+          });
           if (hasLiked) {
             if (!userEngagements.has(castHash)) {
               userEngagements.set(castHash, new Set());
             }
             userEngagements.get(castHash)!.add("like");
+            console.log(`[Engagement Verify] User ${fid} has liked cast ${castHash}`);
           }
 
-          // Check for recasts
+          // Check for recasts - reactions.recasts is an array of user objects with fid
           const recasts = castDetails.reactions?.recasts || [];
-          const hasRecasted = recasts.some((recast: any) => recast.fid === fid);
+          const hasRecasted = Array.isArray(recasts) && recasts.some((recast: any) => {
+            const recastFid = recast.fid || recast.user?.fid || recast.author?.fid;
+            return recastFid === fid;
+          });
           if (hasRecasted) {
             if (!userEngagements.has(castHash)) {
               userEngagements.set(castHash, new Set());
             }
             userEngagements.get(castHash)!.add("recast");
+            console.log(`[Engagement Verify] User ${fid} has recasted cast ${castHash}`);
           }
 
-          // Check for comments/replies
+          // Check for comments/replies - replies.casts is an array of cast objects
           const replies = castDetails.replies?.casts || [];
-          const hasCommented = replies.some((reply: any) => reply.author?.fid === fid);
+          const hasCommented = Array.isArray(replies) && replies.some((reply: any) => {
+            const replyFid = reply.author?.fid || reply.fid;
+            return replyFid === fid;
+          });
           if (hasCommented) {
             if (!userEngagements.has(castHash)) {
               userEngagements.set(castHash, new Set());
             }
             userEngagements.get(castHash)!.add("comment");
+            console.log(`[Engagement Verify] User ${fid} has commented on cast ${castHash}`);
           }
 
           // Debug logging for specific cast
@@ -391,10 +403,12 @@ export async function POST(request: Request) {
       const hasCommented = userHasDone.has("comment");
       const hasCommentedAndClaimed = hasCommented && userHasClaimed.has("comment");
 
-      // Check for claimable rewards (actions done but not claimed, from last 15 days)
+      // Check for claimable rewards (actions done but not claimed, from last 15 days ONLY)
+      // Only include casts from last 15 days for claimable rewards
       if (castTimestamp >= fifteenDaysAgo) {
         const claimableActions: Array<{ type: "like" | "comment" | "recast"; rewardAmount: number }> = [];
         
+        // Only add to claimable if user has DONE the action but NOT claimed it
         if (hasLiked && !hasLikedAndClaimed) {
           claimableActions.push({ type: "like", rewardAmount: ENGAGEMENT_REWARDS.like });
         }
@@ -419,6 +433,9 @@ export async function POST(request: Request) {
             hasRecastedAndClaimed,
             hasCommented,
             hasCommentedAndClaimed,
+            castTimestamp,
+            fifteenDaysAgo,
+            isWithin15Days: castTimestamp >= fifteenDaysAgo,
           });
           
           claimableRewards.push({
@@ -440,22 +457,22 @@ export async function POST(request: Request) {
       
       const availableActions: Array<{ type: "like" | "comment" | "recast"; rewardAmount: number }> = [];
 
-      // Show like if: user hasn't done it yet OR user did it but hasn't claimed it
-      if (!hasLiked || (hasLiked && !hasLikedAndClaimed)) {
+      // Show like if: user hasn't done it yet (don't show if they've done it - that goes to claimable rewards)
+      if (!hasLiked) {
         availableActions.push({ type: "like", rewardAmount: ENGAGEMENT_REWARDS.like });
       }
       
-      // Show recast if: user hasn't done it yet OR user did it but hasn't claimed it
-      if (!hasRecasted || (hasRecasted && !hasRecastedAndClaimed)) {
+      // Show recast if: user hasn't done it yet (don't show if they've done it - that goes to claimable rewards)
+      if (!hasRecasted) {
         availableActions.push({ type: "recast", rewardAmount: ENGAGEMENT_REWARDS.recast });
       }
       
-      // Show comment if: user hasn't done it yet OR user did it but hasn't claimed it
-      if (!hasCommented || (hasCommented && !hasCommentedAndClaimed)) {
+      // Show comment if: user hasn't done it yet (don't show if they've done it - that goes to claimable rewards)
+      if (!hasCommented) {
         availableActions.push({ type: "comment", rewardAmount: ENGAGEMENT_REWARDS.comment });
       }
 
-      // Only include casts where user can still do at least one action
+      // Only include casts where user can still do at least one action (haven't done it yet)
       if (availableActions.length > 0) {
         const author = cast.author || {};
         const castUrl = `https://warpcast.com/${author.username || 'unknown'}/${castHash}`;

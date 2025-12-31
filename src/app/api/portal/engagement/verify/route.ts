@@ -79,6 +79,9 @@ export async function POST(request: Request) {
         }
       }
       console.log(`[Engagement Verify] User has claimed ${claimedEngagements.size} unique cast engagements`);
+      if (claimedEngagements.size > 0) {
+        console.log(`[Engagement Verify] Claimed cast hashes (first 10):`, Array.from(claimedEngagements.keys()).slice(0, 10));
+      }
     } catch (dbErr) {
       console.error("[Engagement Verify] Error fetching claimed engagements:", dbErr);
     }
@@ -515,6 +518,17 @@ export async function POST(request: Request) {
         }
         if (hasCommented && !hasCommentedAndClaimed) {
           claimableActions.push({ type: "comment", rewardAmount: ENGAGEMENT_REWARDS.comment });
+        }
+
+        // Log why cast is NOT claimable (for debugging)
+        if (claimableActions.length === 0 && userHasDone.size > 0) {
+          console.log(`[Engagement Verify] Cast ${castHash.substring(0, 12)} has engagements but NONE claimable:`, {
+            done: Array.from(userHasDone),
+            claimed: Array.from(userHasClaimed),
+            hasLiked, hasLikedAndClaimed,
+            hasRecasted, hasRecastedAndClaimed,
+            hasCommented, hasCommentedAndClaimed,
+          });
         }
 
         if (claimableActions.length > 0) {

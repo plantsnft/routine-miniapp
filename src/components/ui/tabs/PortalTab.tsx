@@ -742,7 +742,7 @@ export function PortalTab() {
                         missingActions: missingActions.map(a => a.type),
                       });
                       setShowConfirmModal(true);
-                      triggerHaptic("warning");
+                      triggerHaptic("rigid");
                       return;
                     }
                     handleClaimAllEngagements(reward.castHash, actionTypes);

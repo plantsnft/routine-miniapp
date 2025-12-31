@@ -3,31 +3,27 @@
 import { useState, useEffect } from "react";
 import { useMiniApp } from "@neynar/react";
 import { useHapticFeedback } from "~/hooks/useHapticFeedback";
+import { CATWALK_CREATOR_FIDS } from "~/lib/constants";
 
-interface CreatorCast {
-  castHash: string;
-  castUrl: string;
-  text?: string;
-  timestamp: number;
-  rewardAmount: number;
+interface CreatorClaimStatus {
+  isEligible: boolean;
   hasClaimed: boolean;
+  castHash?: string;
+  rewardAmount?: number;
   transactionHash?: string;
   verifiedAt?: string;
-  claimedAt?: string;
 }
 
-interface CreatorVerifyResponse {
-  fid: number;
-  creatorCasts: CreatorCast[];
-  claimableCasts: CreatorCast[];
-  claimedCasts: CreatorCast[];
-  totalCasts: number;
-  claimableCount: number;
+interface EngagementClaimStatus {
+  eligibleCount: number;
   claimedCount: number;
-  totalClaimableReward: number;
-  totalClaimedReward: number;
-  rewardPerCast: number;
-  error?: string;
+  totalReward: number;
+  claims: Array<{
+    castHash: string;
+    engagementType: "like" | "comment" | "recast";
+    rewardAmount: number;
+    claimed: boolean;
+  }>;
 }
 
 interface EngagementOpportunity {
@@ -71,34 +67,29 @@ export function PortalTab() {
   const { triggerHaptic } = useHapticFeedback();
   const userFid = context?.user?.fid;
 
-  // Creator casts state
-  const [creatorCasts, setCreatorCasts] = useState<CreatorCast[]>([]);
-  const [claimableCreatorCasts, setClaimableCreatorCasts] = useState<CreatorCast[]>([]);
-  const [creatorTotalClaimable, setCreatorTotalClaimable] = useState(0);
-  
-  // Engagement state
+  const [creatorClaimStatus, setCreatorClaimStatus] = useState<CreatorClaimStatus | null>(null);
+  const [engagementClaimStatus, setEngagementClaimStatus] = useState<EngagementClaimStatus | null>(null);
   const [engagementOpportunities, setEngagementOpportunities] = useState<EngagementOpportunity[]>([]);
   const [claimableRewards, setClaimableRewards] = useState<ClaimableReward[]>([]);
-  
-  // UI state
   const [loading, setLoading] = useState(true);
   const [verifying, setVerifying] = useState(false);
   const [claiming, setClaiming] = useState(false);
-  const [claimingCast, setClaimingCast] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [transactionUrl, setTransactionUrl] = useState<string | null>(null);
 
-  // Fetch all data on mount
+  const isCreator = userFid && CATWALK_CREATOR_FIDS.includes(userFid);
+
+  // Fetch claim status on mount and auto-poll every 5 minutes
   useEffect(() => {
     if (userFid) {
-      fetchAllData();
+      fetchClaimStatus();
       
-      // Auto-poll every 5 minutes
+      // Auto-poll every 5 minutes to detect new casts
       const pollInterval = setInterval(() => {
-        console.log("[PortalTab] Auto-polling for updates...");
-        fetchAllData();
-      }, 5 * 60 * 1000);
+        console.log("[PortalTab] Auto-polling for new claims...");
+        fetchClaimStatus();
+      }, 5 * 60 * 1000); // 5 minutes
 
       return () => clearInterval(pollInterval);
     } else {
@@ -107,68 +98,135 @@ export function PortalTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userFid]);
 
-  const fetchAllData = async () => {
+  const fetchClaimStatus = async () => {
     if (!userFid) return;
 
     try {
       setLoading(true);
       setError(null);
 
-      // Fetch creator casts and engagement opportunities in parallel
-      const [creatorRes, engagementRes] = await Promise.all([
-        fetch("/api/portal/creator/verify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ fid: userFid }),
-        }),
-        fetch("/api/portal/engagement/verify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ fid: userFid }),
-        }),
-      ]);
-
-      // Process creator data
-      if (creatorRes.ok) {
-        const creatorData = await creatorRes.json() as CreatorVerifyResponse;
-        setCreatorCasts(creatorData.creatorCasts || []);
-        setClaimableCreatorCasts(creatorData.claimableCasts || []);
-        setCreatorTotalClaimable(creatorData.totalClaimableReward || 0);
-        console.log(`[PortalTab] Found ${creatorData.claimableCount} claimable creator casts worth ${creatorData.totalClaimableReward} CATWALK`);
-      } else {
-        console.log("[PortalTab] Creator verify returned non-OK status");
+      // First check status
+      const statusRes = await fetch(`/api/portal/status?fid=${userFid}`);
+      if (!statusRes.ok) {
+        throw new Error("Failed to fetch claim status");
       }
 
-      // Process engagement data
-      if (engagementRes.ok) {
-        const engagementData = await engagementRes.json() as EngagementOpportunitiesResponse;
-        setEngagementOpportunities(engagementData.opportunities || []);
-        setClaimableRewards(engagementData.claimableRewards || []);
-        console.log(`[PortalTab] Found ${engagementData.claimableCount} claimable engagement rewards`);
+      const statusData = await statusRes.json();
+      setCreatorClaimStatus(statusData.creator || null);
+      setEngagementClaimStatus(statusData.engagement || null);
+
+      // If no creator claim exists yet, try to auto-verify
+      // This allows claims to become available within 5 minutes of posting
+      if (isCreator && !statusData.creator) {
+        console.log("[PortalTab] No claim found, attempting auto-verify...");
+        try {
+          const verifyRes = await fetch("/api/portal/creator/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ fid: userFid }),
+          });
+
+          if (verifyRes.ok) {
+            const verifyData = await verifyRes.json();
+            if (verifyData.isEligible) {
+              console.log("[PortalTab] Auto-verified new cast!");
+              setCreatorClaimStatus(verifyData);
+              setSuccess("New cast detected! You can now claim your reward.");
+            }
+          }
+        } catch (verifyErr) {
+          // Silent fail - user might not have posted yet
+          console.log("[PortalTab] Auto-verify failed (expected if no new cast):", verifyErr);
+        }
+      }
+
+      // Auto-fetch engagement opportunities AND claimable rewards
+      console.log("[PortalTab] Fetching engagement opportunities and claimable rewards...");
+      try {
+        const verifyEngRes = await fetch("/api/portal/engagement/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fid: userFid }),
+        });
+
+        if (verifyEngRes.ok) {
+          const verifyEngData = await verifyEngRes.json() as EngagementOpportunitiesResponse;
+          
+          // Set opportunities (actions not yet done)
+          if (verifyEngData.opportunities && verifyEngData.opportunities.length > 0) {
+            console.log(`[PortalTab] Found ${verifyEngData.opportunities.length} engagement opportunities!`);
+            setEngagementOpportunities(verifyEngData.opportunities);
+          } else {
+            setEngagementOpportunities([]);
+          }
+          
+          // Set claimable rewards (actions done but not claimed)
+          if (verifyEngData.claimableRewards && verifyEngData.claimableRewards.length > 0) {
+            console.log(`[PortalTab] Found ${verifyEngData.claimableRewards.length} claimable rewards! Total: ${verifyEngData.totalClaimableReward}`);
+            setClaimableRewards(verifyEngData.claimableRewards);
+          } else {
+            setClaimableRewards([]);
+          }
+        }
+      } catch (verifyEngErr) {
+        console.log("[PortalTab] Error fetching opportunities:", verifyEngErr);
       }
     } catch (err: any) {
-      console.error("[PortalTab] Error fetching data:", err);
-      setError(err.message || "Failed to load data");
+      console.error("[PortalTab] Error fetching claim status:", err);
+      setError(err.message || "Failed to load claim status");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleClaimCreatorCast = async (castHash: string) => {
-    if (!userFid || claimingCast) return;
+  const handleVerifyCreator = async () => {
+    if (!userFid || !isCreator) return;
 
     try {
-      setClaimingCast(castHash);
+      setVerifying(true);
+      setError(null);
+      setSuccess(null);
+      triggerHaptic("medium");
+
+      const res = await fetch("/api/portal/creator/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fid: userFid }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Verification failed");
+      }
+
+      setSuccess("Creator cast verified successfully!");
+      setCreatorClaimStatus(data);
+      triggerHaptic("heavy");
+      // Refresh status after a moment
+      setTimeout(() => fetchClaimStatus(), 1000);
+    } catch (err: any) {
+      console.error("[PortalTab] Error verifying creator:", err);
+      setError(err.message || "Failed to verify creator cast");
+      triggerHaptic("rigid");
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const handleClaimCreator = async () => {
+    if (!userFid || !creatorClaimStatus?.isEligible || creatorClaimStatus.hasClaimed) return;
+
+    try {
       setClaiming(true);
       setError(null);
       setSuccess(null);
-      setTransactionUrl(null);
       triggerHaptic("medium");
 
       const res = await fetch("/api/portal/creator/claim", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fid: userFid, castHash }),
+        body: JSON.stringify({ fid: userFid }),
       });
 
       const data = await res.json();
@@ -177,59 +235,12 @@ export function PortalTab() {
         throw new Error(data.error || "Claim failed");
       }
 
-      // Show success with BaseScan link
-      setSuccess(`✅ Claimed 1,000,000 CATWALK for your cast!`);
-      if (data.basescanUrl) {
-        setTransactionUrl(data.basescanUrl);
-      }
+      setSuccess(`Successfully claimed ${data.rewardAmount?.toLocaleString()} CATWALK tokens!`);
+      setCreatorClaimStatus(data);
       triggerHaptic("heavy");
-
-      // Refresh data
-      setTimeout(() => fetchAllData(), 1000);
+      setTimeout(() => fetchClaimStatus(), 1000);
     } catch (err: any) {
       console.error("[PortalTab] Error claiming creator reward:", err);
-      setError(err.message || "Failed to claim reward");
-      triggerHaptic("rigid");
-    } finally {
-      setClaiming(false);
-      setClaimingCast(null);
-    }
-  };
-
-  const handleClaimEngagement = async (castHash: string, engagementType: string) => {
-    if (!userFid || claiming) return;
-
-    try {
-      setClaiming(true);
-      setError(null);
-      setSuccess(null);
-      setTransactionUrl(null);
-      triggerHaptic("medium");
-
-      const res = await fetch("/api/portal/engagement/claim", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fid: userFid, castHash, engagementType }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Claim failed");
-      }
-
-      // Show success with BaseScan link
-      const basescanUrl = data.basescanUrl || (data.transactionHash ? `https://basescan.org/tx/${data.transactionHash}` : null);
-      setSuccess(`✅ Claimed ${data.rewardAmount?.toLocaleString() || ''} CATWALK!`);
-      if (basescanUrl) {
-        setTransactionUrl(basescanUrl);
-      }
-      triggerHaptic("heavy");
-      
-      // Refresh data
-      setTimeout(() => fetchAllData(), 1000);
-    } catch (err: any) {
-      console.error("[PortalTab] Error claiming engagement reward:", err);
       setError(err.message || "Failed to claim reward");
       triggerHaptic("rigid");
     } finally {
@@ -271,10 +282,61 @@ export function PortalTab() {
     }
   };
 
-  const formatDate = (timestamp: number) => {
-    if (!timestamp) return "";
-    const date = new Date(timestamp * 1000);
-    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const handleClaimEngagement = async (castHash: string, engagementType: string) => {
+    if (!userFid) return;
+
+    try {
+      setClaiming(true);
+      setError(null);
+      setSuccess(null);
+      triggerHaptic("medium");
+
+      const res = await fetch("/api/portal/engagement/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fid: userFid, castHash, engagementType }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Claim failed");
+      }
+
+      // Show success with BaseScan link if available
+      const basescanUrl = data.basescanUrl || (data.transactionHash ? `https://basescan.org/tx/${data.transactionHash}` : null);
+      if (basescanUrl) {
+        setSuccess(`✅ Claimed ${data.rewardAmount?.toLocaleString() || ''} CATWALK!`);
+        setTransactionUrl(basescanUrl);
+      } else {
+        setSuccess(`Successfully claimed reward for ${engagementType}!`);
+        setTransactionUrl(null);
+      }
+      triggerHaptic("heavy");
+      
+      // Refresh opportunities and claimable rewards
+      setTimeout(async () => {
+        await fetchClaimStatus();
+        if (userFid) {
+          const verifyRes = await fetch("/api/portal/engagement/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ fid: userFid }),
+          });
+          if (verifyRes.ok) {
+            const verifyData = await verifyRes.json() as EngagementOpportunitiesResponse;
+            setEngagementOpportunities(verifyData.opportunities || []);
+            setClaimableRewards(verifyData.claimableRewards || []);
+          }
+        }
+      }, 1000);
+    } catch (err: any) {
+      console.error("[PortalTab] Error claiming engagement reward:", err);
+      setError(err.message || "Failed to claim reward");
+      triggerHaptic("rigid");
+    } finally {
+      setClaiming(false);
+    }
   };
 
   if (!userFid) {
@@ -292,20 +354,26 @@ export function PortalTab() {
       <h1
         style={{
           color: "#c1b400",
-          fontSize: 28,
+          fontSize: 22,
           fontWeight: 900,
           marginBottom: 8,
           textAlign: "center",
+          background: "rgba(0, 0, 0, 0.85)",
+          padding: "12px 16px",
+          borderRadius: 8,
         }}
       >
-        🎁 Creator Portal
+        Creator Portal
       </h1>
       <p
         style={{
-          color: "#999999",
-          fontSize: 14,
+          color: "#ffffff",
+          fontSize: 13,
           textAlign: "center",
-          marginBottom: 32,
+          marginBottom: 24,
+          background: "rgba(0, 0, 0, 0.75)",
+          padding: "8px 12px",
+          borderRadius: 6,
         }}
       >
         Earn CATWALK for posting and engaging in /catwalk
@@ -347,6 +415,7 @@ export function PortalTab() {
                   e.stopPropagation();
                   triggerHaptic("light");
                   try {
+                    // Use Mini App SDK to open URL (works better in Farcaster client)
                     if (actions?.openUrl) {
                       await actions.openUrl(transactionUrl);
                     } else {
@@ -369,6 +438,7 @@ export function PortalTab() {
                   fontWeight: 700,
                   textAlign: "center",
                   cursor: "pointer",
+                  textDecoration: "none",
                 }}
               >
                 📜 View Transaction on BaseScan →
@@ -380,16 +450,16 @@ export function PortalTab() {
 
       {loading ? (
         <div style={{ textAlign: "center", padding: "40px", color: "#ffffff" }}>
-          <p>Loading rewards...</p>
+          <p>Loading claim status...</p>
         </div>
       ) : (
         <>
-          {/* CREATOR REWARDS SECTION - 1M CATWALK per cast */}
-          {claimableCreatorCasts.length > 0 && (
+          {/* Creator Claim Section */}
+          {isCreator && (
             <div
               style={{
-                background: "#1a0a2a",
-                border: "3px solid #c1b400",
+                background: "#1a1a1a",
+                border: "2px solid #c1b400",
                 borderRadius: 12,
                 padding: "24px",
                 marginBottom: 24,
@@ -398,127 +468,138 @@ export function PortalTab() {
               <h2
                 style={{
                   color: "#c1b400",
-                  fontSize: 22,
+                  fontSize: 20,
                   fontWeight: 700,
-                  marginBottom: 8,
+                  marginBottom: 16,
                 }}
               >
-                🐱 CREATOR REWARDS
+                🐱 Creator Reward
               </h2>
-              <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 8, lineHeight: 1.6 }}>
-                Claim <strong style={{ color: "#c1b400" }}>1,000,000 CATWALK</strong> for each cast you&apos;ve made in /catwalk!
+              <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 12, lineHeight: 1.6 }}>
+                Verify that you&apos;ve posted to the /catwalk channel and claim 500,000 CATWALK tokens.
               </p>
-              <p style={{ color: "#999999", fontSize: 12, marginBottom: 16, lineHeight: 1.4 }}>
-                Casts from the last 15 days are eligible. You have {claimableCreatorCasts.length} cast(s) to claim.
+              <p style={{ color: "#999999", fontSize: 12, marginBottom: 20, lineHeight: 1.4 }}>
+                Claims are available for casts posted in the last 30 days. New casts are detected automatically within 5 minutes.
               </p>
-              
-              <div style={{ 
-                background: "#000", 
-                padding: "12px 16px", 
-                borderRadius: 8, 
-                marginBottom: 16,
-                border: "1px solid #c1b400",
-              }}>
-                <p style={{ color: "#c1b400", fontSize: 18, fontWeight: 700, margin: 0 }}>
-                  Total Claimable: {creatorTotalClaimable.toLocaleString()} CATWALK
-                </p>
-              </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: "400px", overflowY: "auto" }}>
-                {claimableCreatorCasts.map((cast) => (
-                  <div
-                    key={cast.castHash}
-                    style={{
-                      background: "#000000",
-                      border: "2px solid #c1b400",
-                      borderRadius: 8,
-                      padding: "16px",
-                    }}
-                  >
-                    <div style={{ marginBottom: 12 }}>
-                      <p style={{ color: "#999999", fontSize: 12, margin: "0 0 4px 0" }}>
-                        Posted {formatDate(cast.timestamp)}
-                      </p>
-                      {cast.text && (
-                        <p style={{ color: "#ffffff", fontSize: 14, margin: "0 0 8px 0", lineHeight: 1.4 }}>
-                          {cast.text}
-                        </p>
-                      )}
-                    </div>
-                    
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ color: "#c1b400", fontSize: 16, fontWeight: 700 }}>
-                        +1,000,000 CATWALK
-                      </span>
-                      <button
-                        onClick={() => handleClaimCreatorCast(cast.castHash)}
-                        disabled={claiming || claimingCast === cast.castHash}
+              {creatorClaimStatus?.hasClaimed ? (
+                <div
+                  style={{
+                    background: "#000000",
+                    border: "2px solid #00ff00",
+                    borderRadius: 8,
+                    padding: "16px",
+                    marginBottom: 16,
+                  }}
+                >
+                  <p style={{ color: "#00ff00", fontSize: 16, fontWeight: 700, marginBottom: 8 }}>
+                    ✅ Reward Claimed
+                  </p>
+                  <p style={{ color: "#ffffff", fontSize: 14 }}>
+                    You&apos;ve already claimed {creatorClaimStatus.rewardAmount?.toLocaleString()} CATWALK tokens.
+                  </p>
+                  {creatorClaimStatus.transactionHash && (
+                    <div style={{ marginTop: 8 }}>
+                      <a
+                        href={`https://basescan.org/tx/${creatorClaimStatus.transactionHash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         style={{
-                          padding: "10px 20px",
-                          background: "#c1b400",
-                          color: "#000000",
-                          border: "none",
-                          borderRadius: 6,
-                          fontSize: 14,
-                          fontWeight: 700,
-                          cursor: claiming ? "not-allowed" : "pointer",
-                          opacity: claiming ? 0.6 : 1,
+                          color: "#c1b400",
+                          fontSize: 12,
+                          textDecoration: "underline",
+                          display: "block",
                         }}
                       >
-                        {claimingCast === cast.castHash ? "CLAIMING..." : "CLAIM"}
-                      </button>
+                        View on BaseScan: {creatorClaimStatus.transactionHash.substring(0, 10)}...
+                        {creatorClaimStatus.transactionHash.substring(creatorClaimStatus.transactionHash.length - 8)}
+                      </a>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  )}
+                </div>
+              ) : creatorClaimStatus?.isEligible ? (
+                <div
+                  style={{
+                    background: "#000000",
+                    border: "2px solid #c1b400",
+                    borderRadius: 8,
+                    padding: "16px",
+                    marginBottom: 16,
+                  }}
+                >
+                  <p style={{ color: "#c1b400", fontSize: 16, fontWeight: 700, marginBottom: 8 }}>
+                    ✅ Verification Complete
+                  </p>
+                  <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 16 }}>
+                    You&apos;re eligible to claim {creatorClaimStatus.rewardAmount?.toLocaleString()} CATWALK tokens!
+                  </p>
+                  <button
+                    onClick={handleClaimCreator}
+                    disabled={claiming}
+                    style={{
+                      width: "100%",
+                      padding: "12px 24px",
+                      background: "#c1b400",
+                      color: "#000000",
+                      border: "2px solid #000000",
+                      borderRadius: 8,
+                      fontSize: 16,
+                      fontWeight: 700,
+                      cursor: claiming ? "not-allowed" : "pointer",
+                      opacity: claiming ? 0.6 : 1,
+                    }}
+                  >
+                    {claiming ? "Claiming..." : `Claim ${creatorClaimStatus.rewardAmount?.toLocaleString()} CATWALK`}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={handleVerifyCreator}
+                  disabled={verifying}
+                  style={{
+                    width: "100%",
+                    padding: "12px 24px",
+                    background: "#c1b400",
+                    color: "#000000",
+                    border: "2px solid #000000",
+                    borderRadius: 8,
+                    fontSize: 16,
+                    fontWeight: 700,
+                    cursor: verifying ? "not-allowed" : "pointer",
+                    opacity: verifying ? 0.6 : 1,
+                  }}
+                >
+                  {verifying ? "Verifying..." : "Verify Creator Cast"}
+                </button>
+              )}
             </div>
           )}
 
-          {/* Show claimed creator casts summary */}
-          {creatorCasts.length > 0 && claimableCreatorCasts.length === 0 && (
-            <div
-              style={{
-                background: "#1a1a1a",
-                border: "2px solid #333",
-                borderRadius: 12,
-                padding: "24px",
-                marginBottom: 24,
-              }}
-            >
-              <h2 style={{ color: "#999", fontSize: 18, fontWeight: 700, marginBottom: 12 }}>
-                🐱 Creator Rewards
-              </h2>
-              <p style={{ color: "#666", fontSize: 14, margin: 0 }}>
-                You&apos;ve claimed all available creator rewards! Post more to /catwalk to earn 1M CATWALK per cast.
-              </p>
-            </div>
-          )}
-
-          {/* ENGAGEMENT CLAIM REWARDS SECTION */}
+          {/* CLAIM REWARDS SECTION - AT THE TOP */}
           {claimableRewards.length > 0 && (
             <div
               style={{
                 background: "#0a1a0a",
-                border: "3px solid #00ff00",
-                borderRadius: 12,
-                padding: "24px",
-                marginBottom: 24,
+                border: "2px solid #00ff00",
+                borderRadius: 10,
+                padding: "16px",
+                marginBottom: 20,
               }}
             >
               <h2
                 style={{
                   color: "#00ff00",
-                  fontSize: 22,
+                  fontSize: 18,
                   fontWeight: 700,
-                  marginBottom: 8,
+                  marginBottom: 6,
                 }}
               >
                 💰 ENGAGEMENT REWARDS
               </h2>
-              <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 16, lineHeight: 1.6 }}>
+              <p style={{ color: "#ffffff", fontSize: 12, marginBottom: 12, lineHeight: 1.5 }}>
                 You&apos;ve completed these actions! Click &quot;Claim&quot; to receive your CATWALK tokens.
               </p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: "400px", overflowY: "auto" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: "400px", overflowY: "auto" }}>
                 {claimableRewards.map((reward) => (
                   <div
                     key={reward.castHash}
@@ -526,58 +607,59 @@ export function PortalTab() {
                       background: "#000000",
                       border: "2px solid #00ff00",
                       borderRadius: 8,
-                      padding: "16px",
+                      padding: "12px",
                     }}
                   >
-                    <div style={{ marginBottom: 12 }}>
-                      <p style={{ color: "#ffffff", fontSize: 14, fontWeight: 600, margin: "0 0 4px 0" }}>
+                    <div style={{ marginBottom: 8 }}>
+                      <p style={{ color: "#ffffff", fontSize: 13, fontWeight: 600, margin: "0 0 2px 0" }}>
                         {reward.authorDisplayName || reward.authorUsername || "Unknown"}
                       </p>
                       {reward.text && (
-                        <p style={{ color: "#999999", fontSize: 12, margin: "0 0 8px 0", lineHeight: 1.4 }}>
+                        <p style={{ color: "#999999", fontSize: 11, margin: "0 0 6px 0", lineHeight: 1.3 }}>
                           {reward.text}
                         </p>
                       )}
                     </div>
                     
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                       {reward.claimableActions.map((action) => (
                         <div
                           key={action.type}
                           style={{
                             display: "flex",
-                            justifyContent: "space-between",
                             alignItems: "center",
-                            padding: "10px 14px",
+                            justifyContent: "space-between",
+                            padding: "6px 10px",
                             background: "#0a2a0a",
-                            borderRadius: 6,
+                            borderRadius: 4,
                             border: "1px solid #00ff00",
                           }}
                         >
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <span style={{ fontSize: 18 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ fontSize: 14 }}>
                               {action.type === "like" && "❤️"}
                               {action.type === "comment" && "💬"}
                               {action.type === "recast" && "🔁"}
                             </span>
-                            <span style={{ color: "#00ff00", fontSize: 14, fontWeight: 600, textTransform: "capitalize" }}>
-                              {action.type} ✓
+                            <span style={{ color: "#00ff00", fontSize: 12, fontWeight: 600, textTransform: "capitalize" }}>
+                              {action.type}
                             </span>
+                            <span style={{ color: "#00ff00", fontSize: 11 }}>✓</span>
                           </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                            <span style={{ color: "#00ff00", fontSize: 14, fontWeight: 700 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ color: "#ff9500", fontSize: 12, fontWeight: 700 }}>
                               +{action.rewardAmount.toLocaleString()}
                             </span>
                             <button
                               onClick={() => handleClaimEngagement(reward.castHash, action.type)}
                               disabled={claiming}
                               style={{
-                                padding: "8px 16px",
+                                padding: "4px 12px",
                                 background: "#00ff00",
                                 color: "#000000",
                                 border: "none",
-                                borderRadius: 6,
-                                fontSize: 14,
+                                borderRadius: 4,
+                                fontSize: 12,
                                 fontWeight: 700,
                                 cursor: claiming ? "not-allowed" : "pointer",
                                 opacity: claiming ? 0.6 : 1,
@@ -682,13 +764,16 @@ export function PortalTab() {
                         onClick={async () => {
                           triggerHaptic("light");
                           try {
+                            // Use Mini App SDK to open in native client (minimizes mini app)
                             if (actions?.openUrl) {
                               await actions.openUrl(opportunity.castUrl);
                             } else {
+                              // Fallback to window.open if SDK not available
                               window.open(opportunity.castUrl, "_blank", "noopener,noreferrer");
                             }
                           } catch (err) {
                             console.error("Error opening cast URL:", err);
+                            // Fallback to window.open on error
                             window.open(opportunity.castUrl, "_blank", "noopener,noreferrer");
                           }
                         }}
@@ -732,6 +817,7 @@ export function PortalTab() {
                 {verifying ? "Loading Opportunities..." : "Find Engagement Opportunities"}
               </button>
             )}
+
           </div>
         </>
       )}

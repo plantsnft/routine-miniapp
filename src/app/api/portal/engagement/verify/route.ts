@@ -240,14 +240,61 @@ export async function POST(request: Request) {
         const hasLiked = viewerContext.liked === true;
         const hasRecasted = viewerContext.recasted === true;
         
-        // Check comments/replies - need to check replies array for user's FID
-        let hasCommented = false;
-        const replies = castDetails.replies?.casts || [];
-        if (Array.isArray(replies)) {
-          hasCommented = replies.some((reply: any) => {
-            const replyFid = reply.author?.fid || reply.fid;
-            return replyFid === fid;
-          });
+        // Check comments/replies
+        // First check viewer_context.replied if available, otherwise check replies array
+        let hasCommented = viewerContext.replied === true;
+        
+        // If viewer_context doesn't have replied, check replies array
+        // Note: replies.casts might not include all replies, so we might need to fetch them separately
+        if (!hasCommented) {
+          const replies = castDetails.replies?.casts || castDetails.direct_replies || [];
+          if (Array.isArray(replies) && replies.length > 0) {
+            hasCommented = replies.some((reply: any) => {
+              const replyFid = reply.author?.fid || reply.fid;
+              return replyFid === fid;
+            });
+          }
+        }
+        
+        // If still no comment detected and cast has replies, fetch replies separately
+        // This is needed because the main cast endpoint might not include all replies
+        if (!hasCommented && (castDetails.replies?.count > 0 || castDetails.reply_count > 0)) {
+          try {
+            // Fetch replies to this cast using the thread endpoint
+            const repliesResponse = await fetch(
+              `https://api.neynar.com/v2/farcaster/cast/conversation?identifier=${castHash}&type=hash&reply_depth=1&include_chronological_parent_casts=false&viewer_fid=${fid}&limit=50`,
+              {
+                headers: {
+                  "x-api-key": apiKey,
+                  "Content-Type": "application/json",
+                },
+              }
+            );
+            
+            if (repliesResponse.ok) {
+              const repliesData = await repliesResponse.json() as any;
+              const conversation = repliesData.conversation || {};
+              const directReplies = conversation.cast?.direct_replies || [];
+              
+              if (Array.isArray(directReplies)) {
+                hasCommented = directReplies.some((reply: any) => {
+                  const replyFid = reply.author?.fid || reply.fid;
+                  return replyFid === fid;
+                });
+              }
+              
+              if (i < 3) {
+                console.log(`[Engagement Verify] Cast ${i} conversation check:`, {
+                  directRepliesCount: directReplies.length,
+                  hasCommented,
+                  repliesFids: directReplies.slice(0, 5).map((r: any) => r.author?.fid || r.fid),
+                });
+              }
+            }
+          } catch (convErr) {
+            // Ignore conversation fetch errors, continue with what we have
+            console.error(`[Engagement Verify] Conversation fetch error for ${castHash}:`, convErr);
+          }
         }
         
         // Log for first few casts to debug
@@ -258,7 +305,7 @@ export async function POST(request: Request) {
             hasLiked,
             hasRecasted,
             hasCommented,
-            repliesCount: replies.length,
+            repliesCount: castDetails.replies?.count || castDetails.reply_count || 0,
             likesCount: castDetails.reactions?.likes_count || castDetails.reactions?.likes?.length || 0,
             recastsCount: castDetails.reactions?.recasts_count || castDetails.reactions?.recasts?.length || 0,
           });

@@ -39,10 +39,26 @@ interface EngagementOpportunity {
   }>;
 }
 
+interface ClaimableReward {
+  castHash: string;
+  castUrl: string;
+  authorUsername?: string;
+  authorDisplayName?: string;
+  text?: string;
+  timestamp: number;
+  claimableActions: Array<{
+    type: "like" | "comment" | "recast";
+    rewardAmount: number;
+  }>;
+}
+
 interface EngagementOpportunitiesResponse {
   eligibleCount: number;
   opportunities: EngagementOpportunity[];
   totalReward: number;
+  claimableCount: number;
+  claimableRewards: ClaimableReward[];
+  totalClaimableReward: number;
   error?: string;
 }
 
@@ -54,6 +70,7 @@ export function PortalTab() {
   const [creatorClaimStatus, setCreatorClaimStatus] = useState<CreatorClaimStatus | null>(null);
   const [engagementClaimStatus, setEngagementClaimStatus] = useState<EngagementClaimStatus | null>(null);
   const [engagementOpportunities, setEngagementOpportunities] = useState<EngagementOpportunity[]>([]);
+  const [claimableRewards, setClaimableRewards] = useState<ClaimableReward[]>([]);
   const [loading, setLoading] = useState(true);
   const [verifying, setVerifying] = useState(false);
   const [claiming, setClaiming] = useState(false);
@@ -240,7 +257,8 @@ export function PortalTab() {
       }
 
       setSuccess(`Found ${data.opportunities.length} engagement opportunity(s)!`);
-      setEngagementOpportunities(data.opportunities);
+      setEngagementOpportunities(data.opportunities || []);
+      setClaimableRewards(data.claimableRewards || []);
       triggerHaptic("heavy");
     } catch (err: any) {
       console.error("[PortalTab] Error verifying engagement:", err);
@@ -274,7 +292,23 @@ export function PortalTab() {
 
       setSuccess(`Successfully claimed reward for ${engagementType}!`);
       triggerHaptic("heavy");
-      setTimeout(() => fetchClaimStatus(), 1000);
+      
+      // Refresh opportunities and claimable rewards
+      setTimeout(async () => {
+        await fetchClaimStatus();
+        if (userFid) {
+          const verifyRes = await fetch("/api/portal/engagement/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ fid: userFid }),
+          });
+          if (verifyRes.ok) {
+            const verifyData = await verifyRes.json() as EngagementOpportunitiesResponse;
+            setEngagementOpportunities(verifyData.opportunities || []);
+            setClaimableRewards(verifyData.claimableRewards || []);
+          }
+        }
+      }, 1000);
     } catch (err: any) {
       console.error("[PortalTab] Error claiming engagement reward:", err);
       setError(err.message || "Failed to claim reward");
@@ -615,6 +649,98 @@ export function PortalTab() {
               >
                 {verifying ? "Loading Opportunities..." : "Find Engagement Opportunities"}
               </button>
+            )}
+
+            {/* Claim Rewards Section */}
+            {claimableRewards.length > 0 && (
+              <div style={{ marginTop: 24 }}>
+                <h3
+                  style={{
+                    color: "#c1b400",
+                    fontSize: 18,
+                    fontWeight: 700,
+                    marginBottom: 12,
+                  }}
+                >
+                  💰 Claim Rewards
+                </h3>
+                <p style={{ color: "#999999", fontSize: 12, marginBottom: 16, lineHeight: 1.4 }}>
+                  You&apos;ve completed these actions! Claim your rewards from casts in the last 15 days.
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: "400px", overflowY: "auto" }}>
+                  {claimableRewards.map((reward) => (
+                    <div
+                      key={reward.castHash}
+                      style={{
+                        background: "#000000",
+                        border: "2px solid #00ff00",
+                        borderRadius: 8,
+                        padding: "16px",
+                      }}
+                    >
+                      <div style={{ marginBottom: 12 }}>
+                        <p style={{ color: "#ffffff", fontSize: 14, fontWeight: 600, margin: "0 0 4px 0" }}>
+                          {reward.authorDisplayName || reward.authorUsername || "Unknown"}
+                        </p>
+                        {reward.text && (
+                          <p style={{ color: "#999999", fontSize: 12, margin: "0 0 8px 0", lineHeight: 1.4 }}>
+                            {reward.text}
+                          </p>
+                        )}
+                      </div>
+                      
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+                        {reward.claimableActions.map((action) => (
+                          <div
+                            key={action.type}
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              padding: "8px 12px",
+                              background: "#1a1a1a",
+                              borderRadius: 6,
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ fontSize: 16 }}>
+                                {action.type === "like" && "❤️"}
+                                {action.type === "comment" && "💬"}
+                                {action.type === "recast" && "🔁"}
+                              </span>
+                              <span style={{ color: "#ffffff", fontSize: 14, textTransform: "capitalize" }}>
+                                {action.type} ✓
+                              </span>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ color: "#00ff00", fontSize: 14, fontWeight: 600 }}>
+                                +{action.rewardAmount.toLocaleString()} CATWALK
+                              </span>
+                              <button
+                                onClick={() => handleClaimEngagement(reward.castHash, action.type)}
+                                disabled={claiming}
+                                style={{
+                                  padding: "6px 12px",
+                                  background: "#00ff00",
+                                  color: "#000000",
+                                  border: "none",
+                                  borderRadius: 4,
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                  cursor: claiming ? "not-allowed" : "pointer",
+                                  opacity: claiming ? 0.6 : 1,
+                                }}
+                              >
+                                Claim
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         </>

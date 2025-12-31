@@ -50,6 +50,7 @@ export async function POST(request: Request) {
     }> = [];
 
     const thirtyDaysAgo = Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60);
+    const fifteenDaysAgo = Math.floor(Date.now() / 1000) - (15 * 24 * 60 * 60);
     const apiKey = process.env.NEYNAR_API_KEY || "";
 
     // Step 1: Get user's claimed engagements from database
@@ -257,7 +258,21 @@ export async function POST(request: Request) {
 
     console.log(`[Engagement Verify] User has engaged with ${userEngagements.size} casts`);
 
-    // Step 4: Build opportunities list
+    // Step 4: Build claimable rewards list (actions done but not claimed, from last 15 days)
+    const claimableRewards: Array<{
+      castHash: string;
+      castUrl: string;
+      authorUsername?: string;
+      authorDisplayName?: string;
+      text?: string;
+      timestamp: number;
+      claimableActions: Array<{
+        type: "like" | "comment" | "recast";
+        rewardAmount: number;
+      }>;
+    }> = [];
+
+    // Step 5: Build opportunities list
     for (const cast of channelCasts) {
       const castHash = cast.hash;
       if (!castHash) continue;
@@ -296,7 +311,37 @@ export async function POST(request: Request) {
       const hasCommented = userHasDone.has("comment");
       const hasCommentedAndClaimed = hasCommented && userHasClaimed.has("comment");
 
-      // If user has done AND claimed all 3 actions, don't show this cast
+      // Check for claimable rewards (actions done but not claimed, from last 15 days)
+      if (castTimestamp >= fifteenDaysAgo) {
+        const claimableActions: Array<{ type: "like" | "comment" | "recast"; rewardAmount: number }> = [];
+        
+        if (hasLiked && !hasLikedAndClaimed) {
+          claimableActions.push({ type: "like", rewardAmount: ENGAGEMENT_REWARDS.like });
+        }
+        if (hasRecasted && !hasRecastedAndClaimed) {
+          claimableActions.push({ type: "recast", rewardAmount: ENGAGEMENT_REWARDS.recast });
+        }
+        if (hasCommented && !hasCommentedAndClaimed) {
+          claimableActions.push({ type: "comment", rewardAmount: ENGAGEMENT_REWARDS.comment });
+        }
+
+        if (claimableActions.length > 0) {
+          const author = cast.author || {};
+          const castUrl = `https://warpcast.com/${author.username || 'unknown'}/${castHash}`;
+          
+          claimableRewards.push({
+            castHash,
+            castUrl,
+            authorUsername: author.username,
+            authorDisplayName: author.display_name,
+            text: cast.text?.substring(0, 100) || "",
+            timestamp: castTimestamp,
+            claimableActions,
+          });
+        }
+      }
+
+      // If user has done AND claimed all 3 actions, don't show this cast in opportunities
       if (hasLikedAndClaimed && hasRecastedAndClaimed && hasCommentedAndClaimed) {
         continue; // Skip this cast - user has completed all actions
       }
@@ -339,12 +384,18 @@ export async function POST(request: Request) {
 
     // Sort by timestamp (newest first)
     opportunities.sort((a, b) => b.timestamp - a.timestamp);
+    claimableRewards.sort((a, b) => b.timestamp - a.timestamp);
 
     return NextResponse.json({
       eligibleCount: opportunities.length,
       opportunities: opportunities.slice(0, 100), // Limit to 100 for UI performance
       totalReward: opportunities.reduce((sum, opp) => {
         return sum + opp.availableActions.reduce((actionSum, action) => actionSum + action.rewardAmount, 0);
+      }, 0),
+      claimableCount: claimableRewards.length,
+      claimableRewards: claimableRewards.slice(0, 100), // Limit to 100 for UI performance
+      totalClaimableReward: claimableRewards.reduce((sum, reward) => {
+        return sum + reward.claimableActions.reduce((actionSum, action) => actionSum + action.rewardAmount, 0);
       }, 0),
     });
   } catch (error: any) {

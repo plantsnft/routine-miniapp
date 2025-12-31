@@ -76,6 +76,7 @@ export function PortalTab() {
   const [claiming, setClaiming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [transactionUrl, setTransactionUrl] = useState<string | null>(null);
 
   const isCreator = userFid && CATWALK_CREATOR_FIDS.includes(userFid);
 
@@ -305,9 +306,11 @@ export function PortalTab() {
       // Show success with BaseScan link if available
       const basescanUrl = data.basescanUrl || (data.transactionHash ? `https://basescan.org/tx/${data.transactionHash}` : null);
       if (basescanUrl) {
-        setSuccess(`✅ Claimed ${data.rewardAmount?.toLocaleString() || ''} CATWALK! View on BaseScan: ${basescanUrl}`);
+        setSuccess(`✅ Claimed ${data.rewardAmount?.toLocaleString() || ''} CATWALK!`);
+        setTransactionUrl(basescanUrl);
       } else {
         setSuccess(`Successfully claimed reward for ${engagementType}!`);
+        setTransactionUrl(null);
       }
       triggerHaptic("heavy");
       
@@ -398,6 +401,26 @@ export function PortalTab() {
           }}
         >
           {success}
+          {transactionUrl && (
+            <div style={{ marginTop: 8 }}>
+              <a
+                href={transactionUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  color: "#000000",
+                  textDecoration: "underline",
+                  fontWeight: 700,
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  triggerHaptic("light");
+                }}
+              >
+                📜 View Transaction on BaseScan →
+              </a>
+            </div>
+          )}
         </div>
       )}
 

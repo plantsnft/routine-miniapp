@@ -48,47 +48,47 @@ function normalizeAddress(address: string | null | undefined): string | null {
   }
 }
 
-function collectWalletAddresses(fid: number, user: any): string[] {
-  const addresses = new Set<string>();
+function getWarpcastWalletAddress(fid: number, user: any): string | null {
+  // Priority order:
+  // 1. Verified ETH addresses (Warpcast integrated wallet on Base)
+  // 2. Custody address (fallback)
 
   if (!user) {
     console.log(`[Engagement Claim] FID ${fid}: No Neynar profile found`);
-    return [];
+    return null;
   }
 
-  const maybeAdd = (value: string | null | undefined) => {
-    const normalized = normalizeAddress(value);
-    if (normalized) {
-      addresses.add(normalized.toLowerCase());
-    }
-  };
-
-  maybeAdd(user.custody_address);
-
+  // First priority: Verified ETH addresses (Warpcast wallet)
   if (Array.isArray(user.verified_addresses?.eth_addresses)) {
     for (const verified of user.verified_addresses.eth_addresses) {
-      maybeAdd(verified);
-    }
-  }
-
-  if (Array.isArray((user as any)?.wallets)) {
-    for (const wallet of (user as any).wallets) {
-      maybeAdd(wallet?.address);
-      if (Array.isArray(wallet?.addresses)) {
-        for (const nested of wallet.addresses) {
-          maybeAdd(nested);
-        }
+      const normalized = normalizeAddress(verified);
+      if (normalized) {
+        console.log(`[Engagement Claim] FID ${fid}: Using verified Warpcast wallet: ${normalized}`);
+        return normalized;
       }
     }
   }
 
-  const unique = Array.from(addresses).map((addr) => ethers.getAddress(addr));
-  if (unique.length === 0) {
-    console.log(`[Engagement Claim] FID ${fid}: No wallet address found`);
-  } else {
-    console.log(`[Engagement Claim] FID ${fid}: Found addresses -> ${unique.join(", ")}`);
+  // Second priority: Custody address
+  const custodyNormalized = normalizeAddress(user.custody_address);
+  if (custodyNormalized) {
+    console.log(`[Engagement Claim] FID ${fid}: Using custody address: ${custodyNormalized}`);
+    return custodyNormalized;
   }
-  return unique;
+
+  // Check wallets array as last resort
+  if (Array.isArray((user as any)?.wallets)) {
+    for (const wallet of (user as any).wallets) {
+      const walletAddr = normalizeAddress(wallet?.address);
+      if (walletAddr) {
+        console.log(`[Engagement Claim] FID ${fid}: Using wallet from wallets array: ${walletAddr}`);
+        return walletAddr;
+      }
+    }
+  }
+
+  console.log(`[Engagement Claim] FID ${fid}: No wallet address found`);
+  return null;
 }
 
 /**
@@ -179,16 +179,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const walletAddresses = collectWalletAddresses(fid, user);
-    if (walletAddresses.length === 0) {
+    // Get Warpcast integrated wallet address (prioritizes verified ETH addresses)
+    const walletAddress = getWarpcastWalletAddress(fid, user);
+    if (!walletAddress) {
       return NextResponse.json(
-        { error: "No wallet address found for this user. Please connect a wallet." },
+        { error: "No wallet address found for this user. Please connect a wallet in Warpcast." },
         { status: 400 }
       );
     }
 
-    // Use the first available wallet address
-    const recipientAddress = walletAddresses[0] as `0x${string}`;
+    // Use the Warpcast wallet address
+    const recipientAddress = walletAddress as `0x${string}`;
     const rewardAmount = ENGAGEMENT_REWARDS[engagementType] || ENGAGEMENT_REWARDS.like;
     
     console.log(`[Engagement Claim] Sending ${rewardAmount.toString()} tokens to ${recipientAddress} for ${engagementType}`);

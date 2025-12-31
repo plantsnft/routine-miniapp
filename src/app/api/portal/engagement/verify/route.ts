@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
 
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const SUPABASE_SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE || "";
 const CATWALK_CHANNEL_PARENT_URL = "https://warpcast.com/~/channel/catwalk";
+
+const SUPABASE_HEADERS = {
+  apikey: SUPABASE_SERVICE_ROLE,
+  Authorization: `Bearer ${SUPABASE_SERVICE_ROLE}`,
+  "Content-Type": "application/json",
+};
 
 // Reward amounts per engagement type
 const ENGAGEMENT_REWARDS = {
@@ -44,7 +52,37 @@ export async function POST(request: Request) {
     const thirtyDaysAgo = Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60);
     const apiKey = process.env.NEYNAR_API_KEY || "";
 
-    // Step 1: Get user's existing engagements to know what they've already done
+    // Step 1: Get user's claimed engagements from database
+    const claimedEngagements = new Map<string, Set<string>>(); // castHash -> Set<"like"|"comment"|"recast">
+    
+    try {
+      const claimedRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/engagement_claims?fid=eq.${fid}&claimed_at=not.is.null`,
+        {
+          method: "GET",
+          headers: SUPABASE_HEADERS,
+        }
+      );
+
+      if (claimedRes.ok) {
+        const claimedData = await claimedRes.json() as any;
+        for (const claim of claimedData) {
+          const castHash = claim.cast_hash;
+          const engagementType = claim.engagement_type;
+          if (castHash && engagementType) {
+            if (!claimedEngagements.has(castHash)) {
+              claimedEngagements.set(castHash, new Set());
+            }
+            claimedEngagements.get(castHash)!.add(engagementType);
+          }
+        }
+      }
+      console.log(`[Engagement Verify] User has claimed ${claimedEngagements.size} unique cast engagements`);
+    } catch (dbErr) {
+      console.error("[Engagement Verify] Error fetching claimed engagements:", dbErr);
+    }
+
+    // Step 2: Get user's existing engagements from Neynar (what they've done, even if not claimed)
     const userEngagements = new Map<string, Set<string>>(); // castHash -> Set<"like"|"comment"|"recast">
 
     try {
@@ -62,17 +100,25 @@ export async function POST(request: Request) {
       if (likesResponse.ok) {
         const likesData = await likesResponse.json() as any;
         const likes = likesData.reactions || likesData.result?.reactions || likesData.result || [];
+        console.log(`[Engagement Verify] Found ${likes.length} likes from Neynar`);
         
         for (const like of likes) {
           const cast = like.cast || like;
           const castHash = cast.hash;
-          if (castHash && cast.parent_url === CATWALK_CHANNEL_PARENT_URL) {
+          const parentUrl = cast.parent_url || cast.parentUrl;
+          const castTimestamp = cast.timestamp ? parseInt(cast.timestamp) : 0;
+          
+          // Only include likes from catwalk channel in last 30 days
+          if (castHash && parentUrl === CATWALK_CHANNEL_PARENT_URL && castTimestamp >= thirtyDaysAgo) {
             if (!userEngagements.has(castHash)) {
               userEngagements.set(castHash, new Set());
             }
             userEngagements.get(castHash)!.add("like");
           }
         }
+      } else {
+        const errorText = await likesResponse.text();
+        console.error(`[Engagement Verify] Likes API error: ${likesResponse.status}`, errorText);
       }
 
       // Get user's recasts
@@ -89,17 +135,25 @@ export async function POST(request: Request) {
       if (recastsResponse.ok) {
         const recastsData = await recastsResponse.json() as any;
         const recasts = recastsData.reactions || recastsData.result?.reactions || recastsData.result || [];
+        console.log(`[Engagement Verify] Found ${recasts.length} recasts from Neynar`);
         
         for (const recast of recasts) {
           const cast = recast.cast || recast;
           const castHash = cast.hash;
-          if (castHash && cast.parent_url === CATWALK_CHANNEL_PARENT_URL) {
+          const parentUrl = cast.parent_url || cast.parentUrl;
+          const castTimestamp = cast.timestamp ? parseInt(cast.timestamp) : 0;
+          
+          // Only include recasts from catwalk channel in last 30 days
+          if (castHash && parentUrl === CATWALK_CHANNEL_PARENT_URL && castTimestamp >= thirtyDaysAgo) {
             if (!userEngagements.has(castHash)) {
               userEngagements.set(castHash, new Set());
             }
             userEngagements.get(castHash)!.add("recast");
           }
         }
+      } else {
+        const errorText = await recastsResponse.text();
+        console.error(`[Engagement Verify] Recasts API error: ${recastsResponse.status}`, errorText);
       }
 
       // Get user's comments
@@ -116,25 +170,32 @@ export async function POST(request: Request) {
       if (userCastsResponse.ok) {
         const userCastsData = await userCastsResponse.json() as any;
         const userCasts = userCastsData.result?.casts || [];
+        console.log(`[Engagement Verify] Found ${userCasts.length} user casts from Neynar`);
         
         for (const cast of userCasts) {
           const parentUrl = cast.parent_url || cast.parentUrl;
           const parentHash = cast.parent_hash;
-          if (parentHash && parentUrl === CATWALK_CHANNEL_PARENT_URL) {
+          const castTimestamp = cast.timestamp ? parseInt(cast.timestamp) : 0;
+          
+          // Only include comments from catwalk channel in last 30 days
+          if (parentHash && parentUrl === CATWALK_CHANNEL_PARENT_URL && castTimestamp >= thirtyDaysAgo) {
             if (!userEngagements.has(parentHash)) {
               userEngagements.set(parentHash, new Set());
             }
             userEngagements.get(parentHash)!.add("comment");
           }
         }
+      } else {
+        const errorText = await userCastsResponse.text();
+        console.error(`[Engagement Verify] User casts API error: ${userCastsResponse.status}`, errorText);
       }
     } catch (err) {
       console.error("[Engagement Verify] Error fetching user engagements:", err);
     }
 
-    console.log(`[Engagement Verify] User has ${userEngagements.size} casts they've engaged with`);
+    console.log(`[Engagement Verify] User has ${userEngagements.size} casts they've engaged with (from Neynar)`);
 
-    // Step 2: Get all casts from /catwalk channel in last 30 days
+    // Step 3: Get all casts from /catwalk channel in last 30 days
     const channelCasts: any[] = [];
     let cursor: string | null = null;
     let hasMore = true;
@@ -180,21 +241,34 @@ export async function POST(request: Request) {
 
     console.log(`[Engagement Verify] Found ${channelCasts.length} casts from last 30 days`);
 
-    // Step 3: For each cast, determine what actions user can still do
+    // Step 4: For each cast, determine what actions user can still do
+    // Show opportunities for actions they haven't done OR haven't claimed yet
     for (const cast of channelCasts) {
       const castHash = cast.hash;
       if (!castHash) continue;
 
+      const castTimestamp = cast.timestamp ? parseInt(cast.timestamp) : 0;
+      
+      // Skip if cast is older than 30 days
+      if (castTimestamp < thirtyDaysAgo) continue;
+
       const userHasDone = userEngagements.get(castHash) || new Set<string>();
+      const userHasClaimed = claimedEngagements.get(castHash) || new Set<string>();
+      
       const availableActions: Array<{ type: "like" | "comment" | "recast"; rewardAmount: number }> = [];
 
-      if (!userHasDone.has("like")) {
+      // Show like if: user hasn't done it yet (don't show if they've done it AND claimed it)
+      if (!userHasDone.has("like") || (userHasDone.has("like") && !userHasClaimed.has("like"))) {
         availableActions.push({ type: "like", rewardAmount: ENGAGEMENT_REWARDS.like });
       }
-      if (!userHasDone.has("recast")) {
+      
+      // Show recast if: user hasn't done it yet (don't show if they've done it AND claimed it)
+      if (!userHasDone.has("recast") || (userHasDone.has("recast") && !userHasClaimed.has("recast"))) {
         availableActions.push({ type: "recast", rewardAmount: ENGAGEMENT_REWARDS.recast });
       }
-      if (!userHasDone.has("comment")) {
+      
+      // Show comment if: user hasn't done it yet (don't show if they've done it AND claimed it)
+      if (!userHasDone.has("comment") || (userHasDone.has("comment") && !userHasClaimed.has("comment"))) {
         availableActions.push({ type: "comment", rewardAmount: ENGAGEMENT_REWARDS.comment });
       }
 
@@ -209,7 +283,7 @@ export async function POST(request: Request) {
           authorUsername: author.username,
           authorDisplayName: author.display_name,
           text: cast.text?.substring(0, 100) || "", // Truncate for display
-          timestamp: cast.timestamp ? parseInt(cast.timestamp) : 0,
+          timestamp: castTimestamp,
           availableActions,
         });
       }

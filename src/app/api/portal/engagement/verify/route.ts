@@ -297,10 +297,9 @@ export async function POST(request: Request) {
           }
         }
         
-        // Log for first few casts to debug
-        if (i < 3) {
-          console.log(`[Engagement Verify] Cast ${i} (${castHash.substring(0, 10)}...):`, {
-            castHash: castHash.substring(0, 10),
+        // Log for first 5 casts to debug - ALWAYS log to diagnose issues
+        if (i < 5) {
+          console.log(`[Engagement Verify] Cast ${i} (${castHash.substring(0, 12)}):`, JSON.stringify({
             viewerContext,
             hasLiked,
             hasRecasted,
@@ -308,7 +307,12 @@ export async function POST(request: Request) {
             repliesCount: castDetails.replies?.count || castDetails.reply_count || 0,
             likesCount: castDetails.reactions?.likes_count || castDetails.reactions?.likes?.length || 0,
             recastsCount: castDetails.reactions?.recasts_count || castDetails.reactions?.recasts?.length || 0,
-          });
+          }));
+        }
+        
+        // Also log any cast where user has engaged
+        if (hasLiked || hasRecasted || hasCommented) {
+          console.log(`[Engagement Verify] 🎯 FOUND ENGAGEMENT on cast ${castHash.substring(0, 12)}:`, { hasLiked, hasRecasted, hasCommented });
         }
 
         // Store detected engagements
@@ -375,8 +379,15 @@ export async function POST(request: Request) {
       }
     }
 
+    console.log(`[Engagement Verify] *** ENGAGEMENT DETECTION COMPLETE ***`);
+    console.log(`[Engagement Verify] User FID: ${fid}`);
+    console.log(`[Engagement Verify] Total casts checked: ${channelCasts.length}`);
     console.log(`[Engagement Verify] User has engaged with ${userEngagements.size} casts`);
-    console.log(`[Engagement Verify] Sample engaged casts:`, Array.from(userEngagements.entries()).slice(0, 5).map(([hash, actions]) => ({ hash, actions: Array.from(actions) })));
+    if (userEngagements.size > 0) {
+      console.log(`[Engagement Verify] ENGAGED CASTS:`, Array.from(userEngagements.entries()).map(([hash, actions]) => ({ hash: hash.substring(0, 12), actions: Array.from(actions) })));
+    } else {
+      console.log(`[Engagement Verify] ⚠️ NO ENGAGEMENTS DETECTED - this may indicate viewer_context is not working`);
+    }
 
     // Step 3.5: Check for any engaged casts that might not be in the channel feed
     // This handles cases where user engaged with casts that aren't in the current feed

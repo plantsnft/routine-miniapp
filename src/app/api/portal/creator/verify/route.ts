@@ -54,13 +54,14 @@ export async function POST(request: Request) {
       console.error("[Creator Verify] Error checking existing claim:", err);
     }
 
-    // Fetch casts from Catwalk channel and find user's cast
+    // Fetch casts from Catwalk channel and find user's cast from last 30 days
     let castFound = null;
+    const thirtyDaysAgo = Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60); // 30 days in seconds
 
     try {
-      // Fetch casts from the catwalk channel feed
-      const feedResponse = await fetch(
-        `https://api.neynar.com/v2/farcaster/feed?feed_type=filter&filter_type=parent_url&parent_url=${encodeURIComponent(CATWALK_CHANNEL_PARENT_URL)}&limit=100`,
+      // First, try to get user's casts directly (more efficient)
+      const userCastsResponse = await fetch(
+        `https://api.neynar.com/v2/farcaster/cast/user?fid=${fid}&limit=100`,
         {
           headers: {
             "x-api-key": process.env.NEYNAR_API_KEY || "",
@@ -69,21 +70,61 @@ export async function POST(request: Request) {
         }
       );
 
-      if (feedResponse.ok) {
-        const feedData = await feedResponse.json() as any;
-        const feedCasts = feedData.casts || feedData.result?.casts || [];
+      if (userCastsResponse.ok) {
+        const userCastsData = await userCastsResponse.json() as any;
+        const userCasts = userCastsData.result?.casts || [];
 
-        // Find a cast by this user
-        const userCast = feedCasts.find((c: any) => c.author?.fid === fid);
-        if (userCast) {
-          castFound = userCast;
+        // Find the most recent cast in /catwalk channel from last 30 days
+        for (const cast of userCasts) {
+          const castTimestamp = cast.timestamp ? parseInt(cast.timestamp) : 0;
+          
+          // Check if cast is in catwalk channel and within last 30 days
+          if (
+            cast.parent_url === CATWALK_CHANNEL_PARENT_URL &&
+            castTimestamp >= thirtyDaysAgo
+          ) {
+            castFound = cast;
+            break; // Use most recent (first in list)
+          }
+        }
+      }
+
+      // Fallback: If not found, search channel feed
+      if (!castFound) {
+        const feedResponse = await fetch(
+          `https://api.neynar.com/v2/farcaster/feed?feed_type=filter&filter_type=parent_url&parent_url=${encodeURIComponent(CATWALK_CHANNEL_PARENT_URL)}&limit=100`,
+          {
+            headers: {
+              "x-api-key": process.env.NEYNAR_API_KEY || "",
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        if (feedResponse.ok) {
+          const feedData = await feedResponse.json() as any;
+          const feedCasts = feedData.casts || feedData.result?.casts || [];
+
+          // Find the most recent cast by this user within last 30 days
+          for (const cast of feedCasts) {
+            const castTimestamp = cast.timestamp ? parseInt(cast.timestamp) : 0;
+            
+            if (
+              cast.author?.fid === fid &&
+              cast.parent_url === CATWALK_CHANNEL_PARENT_URL &&
+              castTimestamp >= thirtyDaysAgo
+            ) {
+              castFound = cast;
+              break;
+            }
+          }
         }
       }
 
       if (!castFound) {
         return NextResponse.json(
           {
-            error: "No cast found in /catwalk channel for this creator",
+            error: "No cast found in /catwalk channel from the last 30 days",
             isEligible: false,
           },
           { status: 404 }

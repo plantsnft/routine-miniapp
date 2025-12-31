@@ -19,7 +19,9 @@
     "lint": "next lint",
     "deploy:vercel": "tsx scripts/deploy.ts",
     "deploy:raw": "vercel --prod",
-    "cleanup": "node scripts/cleanup.js"
+    "cleanup": "node scripts/cleanup.js",
+    "smoke": "node scripts/smoke.mjs",
+    "smoke:prod": "node scripts/smoke.mjs"
   },
   "overrides": {
     "backslash": "0.2.0",

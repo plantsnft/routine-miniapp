@@ -38,97 +38,233 @@ export async function POST(request: Request) {
       castHash: string;
       engagementType: "like" | "comment" | "recast";
       rewardAmount: number;
+      castTimestamp?: number;
     }> = [];
 
-    // Fetch recent casts from Catwalk channel
-    let channelCasts: any[] = [];
+    const thirtyDaysAgo = Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60); // 30 days in seconds
+    const apiKey = process.env.NEYNAR_API_KEY || "";
+
+    // Strategy 1: Get user's engagement history (more efficient)
     try {
-      const feedResponse = await fetch(
-        `https://api.neynar.com/v2/farcaster/feed?feed_type=filter&filter_type=parent_url&parent_url=${encodeURIComponent(CATWALK_CHANNEL_PARENT_URL)}&limit=100`,
+      // Get user's likes
+      const likesResponse = await fetch(
+        `https://api.neynar.com/v2/farcaster/reaction/user?fid=${fid}&reaction_type=like&limit=100`,
         {
           headers: {
-            "x-api-key": process.env.NEYNAR_API_KEY || "",
+            "x-api-key": apiKey,
             "Content-Type": "application/json",
           },
         }
       );
 
-      if (feedResponse.ok) {
-        const feedData = await feedResponse.json() as any;
-        channelCasts = feedData.casts || feedData.result?.casts || [];
+      if (likesResponse.ok) {
+        const likesData = await likesResponse.json() as any;
+        const likes = likesData.reactions || likesData.result?.reactions || [];
+        
+        for (const like of likes) {
+          const castTimestamp = like.cast?.timestamp ? parseInt(like.cast.timestamp) : 0;
+          if (
+            like.cast?.parent_url === CATWALK_CHANNEL_PARENT_URL &&
+            castTimestamp >= thirtyDaysAgo
+          ) {
+            verifiedEngagements.push({
+              castHash: like.cast.hash,
+              engagementType: "like",
+              rewardAmount: ENGAGEMENT_REWARDS.like,
+              castTimestamp,
+            });
+          }
+        }
       }
-    } catch (err) {
-      console.error("[Engagement Verify] Error fetching channel feed:", err);
-      return NextResponse.json(
-        { error: "Failed to fetch channel feed" },
-        { status: 500 }
+
+      // Get user's recasts
+      const recastsResponse = await fetch(
+        `https://api.neynar.com/v2/farcaster/reaction/user?fid=${fid}&reaction_type=recast&limit=100`,
+        {
+          headers: {
+            "x-api-key": apiKey,
+            "Content-Type": "application/json",
+          },
+        }
       );
+
+      if (recastsResponse.ok) {
+        const recastsData = await recastsResponse.json() as any;
+        const recasts = recastsData.reactions || recastsData.result?.reactions || [];
+        
+        for (const recast of recasts) {
+          const castTimestamp = recast.cast?.timestamp ? parseInt(recast.cast.timestamp) : 0;
+          if (
+            recast.cast?.parent_url === CATWALK_CHANNEL_PARENT_URL &&
+            castTimestamp >= thirtyDaysAgo
+          ) {
+            verifiedEngagements.push({
+              castHash: recast.cast.hash,
+              engagementType: "recast",
+              rewardAmount: ENGAGEMENT_REWARDS.recast,
+              castTimestamp,
+            });
+          }
+        }
+      }
+
+      // Get user's casts (to find comments/replies)
+      const userCastsResponse = await fetch(
+        `https://api.neynar.com/v2/farcaster/cast/user?fid=${fid}&limit=100`,
+        {
+          headers: {
+            "x-api-key": apiKey,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (userCastsResponse.ok) {
+        const userCastsData = await userCastsResponse.json() as any;
+        const userCasts = userCastsData.result?.casts || [];
+        
+        for (const cast of userCasts) {
+          const castTimestamp = cast.timestamp ? parseInt(cast.timestamp) : 0;
+          // Check if this is a comment/reply to a /catwalk channel cast
+          if (
+            cast.parent_url === CATWALK_CHANNEL_PARENT_URL &&
+            castTimestamp >= thirtyDaysAgo &&
+            cast.parent_hash // This indicates it's a reply/comment
+          ) {
+            verifiedEngagements.push({
+              castHash: cast.parent_hash, // The original cast hash
+              engagementType: "comment",
+              rewardAmount: ENGAGEMENT_REWARDS.comment,
+              castTimestamp,
+            });
+          }
+        }
+      }
+    } catch (userEngagementErr) {
+      console.error("[Engagement Verify] Error fetching user engagement history:", userEngagementErr);
     }
 
-    // Check each cast for user's engagement
-    for (const cast of channelCasts) {
-      const castHash = cast.hash;
-      if (!castHash) continue;
+    // Strategy 2: Fallback - Fetch all channel casts with pagination (last 30 days)
+    // This ensures we don't miss any engagements
+    if (verifiedEngagements.length === 0) {
+      const channelCasts: any[] = [];
+      let cursor: string | null = null;
+      let hasMore = true;
+      let pageCount = 0;
+      const maxPages = 10; // Limit to prevent excessive API calls
 
-      try {
-        // Fetch cast details including reactions
-        const castResponse = await fetch(
-          `https://api.neynar.com/v2/farcaster/cast?identifier=${castHash}&type=hash`,
-          {
+      while (hasMore && channelCasts.length < 1000 && pageCount < maxPages) {
+        pageCount++;
+        try {
+          const url = cursor
+            ? `https://api.neynar.com/v2/farcaster/feed?feed_type=filter&filter_type=parent_url&parent_url=${encodeURIComponent(CATWALK_CHANNEL_PARENT_URL)}&limit=100&cursor=${cursor}`
+            : `https://api.neynar.com/v2/farcaster/feed?feed_type=filter&filter_type=parent_url&parent_url=${encodeURIComponent(CATWALK_CHANNEL_PARENT_URL)}&limit=100`;
+
+          const feedResponse = await fetch(url, {
             headers: {
-              "x-api-key": process.env.NEYNAR_API_KEY || "",
+              "x-api-key": apiKey,
               "Content-Type": "application/json",
             },
+          });
+
+          if (!feedResponse.ok) break;
+
+          const feedData = await feedResponse.json() as any;
+          const casts = feedData.casts || feedData.result?.casts || [];
+          
+          // Filter casts from last 30 days
+          const recentCasts = casts.filter((c: any) => {
+            const castTimestamp = c.timestamp ? parseInt(c.timestamp) : 0;
+            return castTimestamp >= thirtyDaysAgo;
+          });
+
+          channelCasts.push(...recentCasts);
+          cursor = feedData.next?.cursor || null;
+          hasMore = !!cursor && recentCasts.length === 100;
+        } catch (err) {
+          console.error("[Engagement Verify] Error fetching channel feed:", err);
+          break;
+        }
+      }
+
+      // Check each cast for user's engagement
+      for (const cast of channelCasts) {
+        const castHash = cast.hash;
+        if (!castHash) continue;
+
+        try {
+          // Fetch cast details including reactions
+          const castResponse = await fetch(
+            `https://api.neynar.com/v2/farcaster/cast?identifier=${castHash}&type=hash`,
+            {
+              headers: {
+                "x-api-key": apiKey,
+                "Content-Type": "application/json",
+              },
+            }
+          );
+
+          if (!castResponse.ok) continue;
+
+          const castData = await castResponse.json() as any;
+          const castDetails = castData.cast || castData.result?.cast || cast;
+          const castTimestamp = castDetails.timestamp ? parseInt(castDetails.timestamp) : 0;
+
+          // Check for likes
+          const likes = castDetails.reactions?.likes || [];
+          const hasLiked = likes.some((like: any) => like.fid === fid);
+          if (hasLiked) {
+            verifiedEngagements.push({
+              castHash,
+              engagementType: "like",
+              rewardAmount: ENGAGEMENT_REWARDS.like,
+              castTimestamp,
+            });
           }
-        );
 
-        if (!castResponse.ok) continue;
+          // Check for recasts
+          const recasts = castDetails.reactions?.recasts || [];
+          const hasRecasted = recasts.some((recast: any) => recast.fid === fid);
+          if (hasRecasted) {
+            verifiedEngagements.push({
+              castHash,
+              engagementType: "recast",
+              rewardAmount: ENGAGEMENT_REWARDS.recast,
+              castTimestamp,
+            });
+          }
 
-        const castData = await castResponse.json() as any;
-        const castDetails = castData.cast || castData.result?.cast || cast;
-
-        // Check for likes
-        const likes = castDetails.reactions?.likes || [];
-        const hasLiked = likes.some((like: any) => like.fid === fid);
-        if (hasLiked) {
-          verifiedEngagements.push({
-            castHash,
-            engagementType: "like",
-            rewardAmount: ENGAGEMENT_REWARDS.like,
-          });
+          // Check for comments/replies
+          const replies = castDetails.replies?.casts || [];
+          const hasCommented = replies.some((reply: any) => reply.author?.fid === fid);
+          if (hasCommented) {
+            verifiedEngagements.push({
+              castHash,
+              engagementType: "comment",
+              rewardAmount: ENGAGEMENT_REWARDS.comment,
+              castTimestamp,
+            });
+          }
+        } catch (castErr) {
+          console.error(`[Engagement Verify] Error processing cast ${castHash}:`, castErr);
+          // Continue with next cast
         }
-
-        // Check for recasts
-        const recasts = castDetails.reactions?.recasts || [];
-        const hasRecasted = recasts.some((recast: any) => recast.fid === fid);
-        if (hasRecasted) {
-          verifiedEngagements.push({
-            castHash,
-            engagementType: "recast",
-            rewardAmount: ENGAGEMENT_REWARDS.recast,
-          });
-        }
-
-        // Check for comments/replies
-        // Replies are included in the cast details response
-        const replies = castDetails.replies?.casts || [];
-        const hasCommented = replies.some((reply: any) => reply.author?.fid === fid);
-
-        if (hasCommented) {
-          verifiedEngagements.push({
-            castHash,
-            engagementType: "comment",
-            rewardAmount: ENGAGEMENT_REWARDS.comment,
-          });
-        }
-      } catch (castErr) {
-        console.error(`[Engagement Verify] Error processing cast ${castHash}:`, castErr);
-        // Continue with next cast
       }
     }
 
+    // Remove duplicates (same castHash + engagementType)
+    const uniqueEngagements = verifiedEngagements.reduce((acc, engagement) => {
+      const key = `${engagement.castHash}-${engagement.engagementType}`;
+      if (!acc.has(key)) {
+        acc.set(key, engagement);
+      }
+      return acc;
+    }, new Map<string, typeof verifiedEngagements[0]>());
+
+    const finalEngagements = Array.from(uniqueEngagements.values());
+
     // Store verified engagements in database (upsert - don't duplicate)
-    for (const engagement of verifiedEngagements) {
+    for (const engagement of finalEngagements) {
       try {
         const claimData = {
           fid: fid,

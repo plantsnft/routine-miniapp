@@ -41,10 +41,18 @@ export function PortalTab() {
 
   const isCreator = userFid && CATWALK_CREATOR_FIDS.includes(userFid);
 
-  // Fetch claim status on mount
+  // Fetch claim status on mount and auto-poll every 5 minutes
   useEffect(() => {
     if (userFid) {
       fetchClaimStatus();
+      
+      // Auto-poll every 5 minutes to detect new casts
+      const pollInterval = setInterval(() => {
+        console.log("[PortalTab] Auto-polling for new claims...");
+        fetchClaimStatus();
+      }, 5 * 60 * 1000); // 5 minutes
+
+      return () => clearInterval(pollInterval);
     } else {
       setLoading(false);
     }
@@ -58,14 +66,64 @@ export function PortalTab() {
       setLoading(true);
       setError(null);
 
-      const res = await fetch(`/api/portal/status?fid=${userFid}`);
-      if (!res.ok) {
+      // First check status
+      const statusRes = await fetch(`/api/portal/status?fid=${userFid}`);
+      if (!statusRes.ok) {
         throw new Error("Failed to fetch claim status");
       }
 
-      const data = await res.json();
-      setCreatorClaimStatus(data.creator || null);
-      setEngagementClaimStatus(data.engagement || null);
+      const statusData = await statusRes.json();
+      setCreatorClaimStatus(statusData.creator || null);
+      setEngagementClaimStatus(statusData.engagement || null);
+
+      // If no creator claim exists yet, try to auto-verify
+      // This allows claims to become available within 5 minutes of posting
+      if (isCreator && !statusData.creator) {
+        console.log("[PortalTab] No claim found, attempting auto-verify...");
+        try {
+          const verifyRes = await fetch("/api/portal/creator/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ fid: userFid }),
+          });
+
+          if (verifyRes.ok) {
+            const verifyData = await verifyRes.json();
+            if (verifyData.isEligible) {
+              console.log("[PortalTab] Auto-verified new cast!");
+              setCreatorClaimStatus(verifyData);
+              setSuccess("New cast detected! You can now claim your reward.");
+            }
+          }
+        } catch (verifyErr) {
+          // Silent fail - user might not have posted yet
+          console.log("[PortalTab] Auto-verify failed (expected if no new cast):", verifyErr);
+        }
+      }
+
+      // Auto-verify engagement if no engagement data exists
+      if (!statusData.engagement || statusData.engagement.eligibleCount === 0) {
+        console.log("[PortalTab] No engagement data found, attempting auto-verify...");
+        try {
+          const verifyEngRes = await fetch("/api/portal/engagement/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ fid: userFid }),
+          });
+
+          if (verifyEngRes.ok) {
+            const verifyEngData = await verifyEngRes.json();
+            if (verifyEngData.eligibleCount > 0) {
+              console.log(`[PortalTab] Auto-verified ${verifyEngData.eligibleCount} engagement(s)!`);
+              setEngagementClaimStatus(verifyEngData);
+              setSuccess(`Found ${verifyEngData.eligibleCount} eligible engagement(s)!`);
+            }
+          }
+        } catch (verifyEngErr) {
+          // Silent fail - user might not have any engagements
+          console.log("[PortalTab] Auto-verify engagement failed (expected if no engagements):", verifyEngErr);
+        }
+      }
     } catch (err: any) {
       console.error("[PortalTab] Error fetching claim status:", err);
       setError(err.message || "Failed to load claim status");
@@ -302,8 +360,11 @@ export function PortalTab() {
               >
                 🐱 Creator Reward
               </h2>
-              <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 20, lineHeight: 1.6 }}>
+              <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 12, lineHeight: 1.6 }}>
                 Verify that you&apos;ve posted to the /catwalk channel and claim 500,000 CATWALK tokens.
+              </p>
+              <p style={{ color: "#999999", fontSize: 12, marginBottom: 20, lineHeight: 1.4 }}>
+                Claims are available for casts posted in the last 30 days. New casts are detected automatically within 5 minutes.
               </p>
 
               {creatorClaimStatus?.hasClaimed ? (
@@ -323,9 +384,22 @@ export function PortalTab() {
                     You&apos;ve already claimed {creatorClaimStatus.rewardAmount?.toLocaleString()} CATWALK tokens.
                   </p>
                   {creatorClaimStatus.transactionHash && (
-                    <p style={{ color: "#999999", fontSize: 12, marginTop: 8 }}>
-                      TX: {creatorClaimStatus.transactionHash.substring(0, 20)}...
-                    </p>
+                    <div style={{ marginTop: 8 }}>
+                      <a
+                        href={`https://basescan.org/tx/${creatorClaimStatus.transactionHash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          color: "#c1b400",
+                          fontSize: 12,
+                          textDecoration: "underline",
+                          display: "block",
+                        }}
+                      >
+                        View on BaseScan: {creatorClaimStatus.transactionHash.substring(0, 10)}...
+                        {creatorClaimStatus.transactionHash.substring(creatorClaimStatus.transactionHash.length - 8)}
+                      </a>
+                    </div>
                   )}
                 </div>
               ) : creatorClaimStatus?.isEligible ? (
@@ -405,20 +479,31 @@ export function PortalTab() {
             >
               💬 Engagement Rewards
             </h2>
-            <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 20, lineHeight: 1.6 }}>
-              Like, comment, or recast posts in the /catwalk channel to earn rewards. Verify your engagement to claim rewards.
+            <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 12, lineHeight: 1.6 }}>
+              Like, comment, or recast posts in the /catwalk channel to earn rewards. All engagements from the last 30 days are shown below.
+            </p>
+            <p style={{ color: "#999999", fontSize: 12, marginBottom: 20, lineHeight: 1.4 }}>
+              Click &quot;Verify Engagement&quot; to find all your eligible engagements. New engagements are detected automatically.
             </p>
 
             {engagementClaimStatus ? (
               <>
                 {engagementClaimStatus.eligibleCount > 0 ? (
                   <div style={{ marginBottom: 16 }}>
-                    <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 12 }}>
-                      <strong>{engagementClaimStatus.eligibleCount}</strong> eligible engagement(s) found
+                    <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 12, fontWeight: 600 }}>
+                      <strong>{engagementClaimStatus.eligibleCount}</strong> unclaimed engagement(s) from the last 30 days
                     </p>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <p style={{ color: "#999999", fontSize: 12, marginBottom: 16 }}>
+                      Click &quot;Claim&quot; on each engagement to receive your reward.
+                    </p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: "400px", overflowY: "auto" }}>
                       {engagementClaimStatus.claims
                         .filter((claim) => !claim.claimed)
+                        .sort((a, b) => {
+                          // Sort by engagement type: comment first, then recast, then like
+                          const order = { comment: 0, recast: 1, like: 2 };
+                          return (order[a.engagementType as keyof typeof order] || 3) - (order[b.engagementType as keyof typeof order] || 3);
+                        })
                         .map((claim) => (
                           <div
                             key={`${claim.castHash}-${claim.engagementType}`}
@@ -433,21 +518,26 @@ export function PortalTab() {
                             }}
                           >
                             <div>
-                              <p style={{ color: "#ffffff", fontSize: 14, fontWeight: 600, margin: 0 }}>
-                                {claim.engagementType === "like" && "❤️ Like"}
-                                {claim.engagementType === "comment" && "💬 Comment"}
-                                {claim.engagementType === "recast" && "🔁 Recast"}
-                              </p>
-                              <p
-                                style={{
-                                  color: "#999999",
-                                  fontSize: 12,
-                                  margin: "4px 0 0 0",
-                                  fontFamily: "monospace",
-                                }}
-                              >
-                                {claim.castHash.substring(0, 16)}...
-                              </p>
+                              <div style={{ flex: 1 }}>
+                                <p style={{ color: "#ffffff", fontSize: 14, fontWeight: 600, margin: 0 }}>
+                                  {claim.engagementType === "like" && "❤️ Like"}
+                                  {claim.engagementType === "comment" && "💬 Comment"}
+                                  {claim.engagementType === "recast" && "🔁 Recast"}
+                                </p>
+                                <p
+                                  style={{
+                                    color: "#999999",
+                                    fontSize: 12,
+                                    margin: "4px 0 0 0",
+                                    fontFamily: "monospace",
+                                  }}
+                                >
+                                  {claim.castHash.substring(0, 16)}...
+                                </p>
+                                <p style={{ color: "#c1b400", fontSize: 12, margin: "4px 0 0 0", fontWeight: 600 }}>
+                                  {claim.rewardAmount.toLocaleString()} CATWALK
+                                </p>
+                              </div>
                             </div>
                             <button
                               onClick={() => handleClaimEngagement(claim.castHash, claim.engagementType)}

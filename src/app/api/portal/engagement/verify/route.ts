@@ -209,9 +209,10 @@ export async function POST(request: Request) {
       if (castTimestamp < thirtyDaysAgo) continue;
 
       try {
-        // Fetch cast details - reactions are included in the cast object
+        // Fetch cast details with viewer_fid to get viewer_context
+        // viewer_context tells us directly if this user has liked/recasted the cast
         const castResponse = await fetch(
-          `https://api.neynar.com/v2/farcaster/cast?identifier=${castHash}&type=hash`,
+          `https://api.neynar.com/v2/farcaster/cast?identifier=${castHash}&type=hash&viewer_fid=${fid}`,
           {
             headers: {
               "x-api-key": apiKey,
@@ -233,30 +234,13 @@ export async function POST(request: Request) {
           continue;
         }
 
-        // Parse reactions from cast details
-        // Reactions structure: cast.reactions.likes and cast.reactions.recasts are arrays of user objects
-        let hasLiked = false;
-        let hasRecasted = false;
+        // Use viewer_context which tells us directly if the user has liked/recasted
+        // This is the most reliable method - Neynar returns this when viewer_fid is provided
+        const viewerContext = castDetails.viewer_context || {};
+        const hasLiked = viewerContext.liked === true;
+        const hasRecasted = viewerContext.recasted === true;
         
-        // Check likes - reactions.likes is an array of user objects
-        const likes = castDetails.reactions?.likes || [];
-        if (Array.isArray(likes)) {
-          hasLiked = likes.some((like: any) => {
-            const likeFid = like.fid || like.user?.fid || like.author?.fid;
-            return likeFid === fid;
-          });
-        }
-        
-        // Check recasts - reactions.recasts is an array of user objects
-        const recasts = castDetails.reactions?.recasts || [];
-        if (Array.isArray(recasts)) {
-          hasRecasted = recasts.some((recast: any) => {
-            const recastFid = recast.fid || recast.user?.fid || recast.author?.fid;
-            return recastFid === fid;
-          });
-        }
-        
-        // Check comments/replies
+        // Check comments/replies - need to check replies array for user's FID
         let hasCommented = false;
         const replies = castDetails.replies?.casts || [];
         if (Array.isArray(replies)) {
@@ -270,14 +254,13 @@ export async function POST(request: Request) {
         if (i < 3) {
           console.log(`[Engagement Verify] Cast ${i} (${castHash.substring(0, 10)}...):`, {
             castHash: castHash.substring(0, 10),
-            likesCount: Array.isArray(likes) ? likes.length : 0,
-            recastsCount: Array.isArray(recasts) ? recasts.length : 0,
+            viewerContext,
+            hasLiked,
+            hasRecasted,
+            hasCommented,
             repliesCount: replies.length,
-            userLiked: hasLiked,
-            userRecasted: hasRecasted,
-            userCommented: hasCommented,
-            likesSample: Array.isArray(likes) && likes.length > 0 ? likes.slice(0, 3).map((l: any) => ({ fid: l.fid || l.user?.fid })) : [],
-            recastsSample: Array.isArray(recasts) && recasts.length > 0 ? recasts.slice(0, 3).map((r: any) => ({ fid: r.fid || r.user?.fid })) : [],
+            likesCount: castDetails.reactions?.likes_count || castDetails.reactions?.likes?.length || 0,
+            recastsCount: castDetails.reactions?.recasts_count || castDetails.reactions?.recasts?.length || 0,
           });
         }
 

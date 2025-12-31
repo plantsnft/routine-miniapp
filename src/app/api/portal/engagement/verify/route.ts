@@ -22,7 +22,7 @@ const ENGAGEMENT_REWARDS = {
  * POST /api/portal/engagement/verify
  * Body: { fid: number }
  * 
- * Returns all casts from /catwalk channel in last 30 days that user hasn't liked/commented/recasted
+ * Returns all casts from /catwalk channel in last 15 days that user hasn't liked/commented/recasted
  */
 export async function POST(request: Request) {
   try {
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
       }>;
     }> = [];
 
-    const thirtyDaysAgo = Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60);
+    // 15 days for BOTH opportunities and claimable rewards
     const fifteenDaysAgo = Math.floor(Date.now() / 1000) - (15 * 24 * 60 * 60);
     const apiKey = process.env.NEYNAR_API_KEY || "";
 
@@ -83,7 +83,7 @@ export async function POST(request: Request) {
       console.error("[Engagement Verify] Error fetching claimed engagements:", dbErr);
     }
 
-    // Step 2: Get all casts from /catwalk channel in last 30 days
+    // Step 2: Get all casts from /catwalk channel in last 15 days
     const channelCasts: any[] = [];
     let cursor: string | null = null;
     let hasMore = true;
@@ -123,12 +123,12 @@ export async function POST(request: Request) {
             raw: firstCast.timestamp,
             type: typeof firstCast.timestamp,
             parsed: firstCast.timestamp ? parseInt(firstCast.timestamp) : null,
-            thirtyDaysAgo,
+            fifteenDaysAgo,
             now: Math.floor(Date.now() / 1000),
           });
         }
         
-        // Filter casts from last 30 days
+        // Filter casts from last 15 days
         // Timestamps might be in seconds (Unix) or ISO string format
         const recentCasts = casts.filter((c: any) => {
           let castTimestamp = 0;
@@ -152,15 +152,15 @@ export async function POST(request: Request) {
             }
           }
           
-          return castTimestamp >= thirtyDaysAgo;
+          return castTimestamp >= fifteenDaysAgo;
         });
 
-        console.log(`[Engagement Verify] Page ${pageCount}: ${recentCasts.length} casts within 30 days (out of ${casts.length} total)`);
+        console.log(`[Engagement Verify] Page ${pageCount}: ${recentCasts.length} casts within 15 days (out of ${casts.length} total)`);
         channelCasts.push(...recentCasts);
         cursor = feedData.next?.cursor || null;
         hasMore = !!cursor && recentCasts.length === 100;
         
-        // Stop if we've gone past 30 days
+        // Stop if we've gone past 15 days
         if (recentCasts.length < 100) {
           console.log(`[Engagement Verify] Reached end of 30-day window, stopping`);
           break;
@@ -171,7 +171,7 @@ export async function POST(request: Request) {
       }
     }
 
-    console.log(`[Engagement Verify] Found ${channelCasts.length} casts from last 30 days`);
+    console.log(`[Engagement Verify] Found ${channelCasts.length} casts from last 15 days`);
 
     // Step 3: For each cast, check user's engagement using Neynar's reactions API
     // Use the proper Neynar API endpoint: /v2/farcaster/reactions/cast
@@ -205,8 +205,8 @@ export async function POST(request: Request) {
         }
       }
       
-      // Skip if cast is older than 30 days
-      if (castTimestamp < thirtyDaysAgo) continue;
+      // Skip if cast is older than 15 days
+      if (castTimestamp < fifteenDaysAgo) continue;
 
       try {
         // Fetch cast details with viewer_fid to get viewer_context
@@ -423,8 +423,8 @@ export async function POST(request: Request) {
               }
             }
             
-            // Only include if it's from catwalk channel and within 30 days
-            if (parentUrl === CATWALK_CHANNEL_PARENT_URL && castTimestamp >= thirtyDaysAgo) {
+            // Only include if it's from catwalk channel and within 15 days
+            if (parentUrl === CATWALK_CHANNEL_PARENT_URL && castTimestamp >= fifteenDaysAgo) {
               // Add to channelCasts so it gets processed in the opportunities/claimable logic
               channelCasts.push(castDetails);
               processedCastHashes.add(castHash);
@@ -474,8 +474,8 @@ export async function POST(request: Request) {
         }
       }
       
-      // Skip if cast is older than 30 days
-      if (castTimestamp < thirtyDaysAgo) continue;
+      // Skip if cast is older than 15 days
+      if (castTimestamp < fifteenDaysAgo) continue;
 
       const userHasDone = userEngagements.get(castHash) || new Set<string>();
       const userHasClaimed = claimedEngagements.get(castHash) || new Set<string>();

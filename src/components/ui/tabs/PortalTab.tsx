@@ -522,7 +522,108 @@ export function PortalTab() {
             </div>
           )}
 
-          {/* Engagement Claim Section */}
+          {/* CLAIM REWARDS SECTION - AT THE TOP */}
+          {claimableRewards.length > 0 && (
+            <div
+              style={{
+                background: "#0a1a0a",
+                border: "3px solid #00ff00",
+                borderRadius: 12,
+                padding: "24px",
+                marginBottom: 24,
+              }}
+            >
+              <h2
+                style={{
+                  color: "#00ff00",
+                  fontSize: 22,
+                  fontWeight: 700,
+                  marginBottom: 8,
+                }}
+              >
+                💰 CLAIM YOUR REWARDS
+              </h2>
+              <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 16, lineHeight: 1.6 }}>
+                You&apos;ve completed these actions! Click &quot;Claim&quot; to receive your CATWALK tokens.
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: "400px", overflowY: "auto" }}>
+                {claimableRewards.map((reward) => (
+                  <div
+                    key={reward.castHash}
+                    style={{
+                      background: "#000000",
+                      border: "2px solid #00ff00",
+                      borderRadius: 8,
+                      padding: "16px",
+                    }}
+                  >
+                    <div style={{ marginBottom: 12 }}>
+                      <p style={{ color: "#ffffff", fontSize: 14, fontWeight: 600, margin: "0 0 4px 0" }}>
+                        {reward.authorDisplayName || reward.authorUsername || "Unknown"}
+                      </p>
+                      {reward.text && (
+                        <p style={{ color: "#999999", fontSize: 12, margin: "0 0 8px 0", lineHeight: 1.4 }}>
+                          {reward.text}
+                        </p>
+                      )}
+                    </div>
+                    
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {reward.claimableActions.map((action) => (
+                        <div
+                          key={action.type}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            padding: "10px 14px",
+                            background: "#0a2a0a",
+                            borderRadius: 6,
+                            border: "1px solid #00ff00",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontSize: 18 }}>
+                              {action.type === "like" && "❤️"}
+                              {action.type === "comment" && "💬"}
+                              {action.type === "recast" && "🔁"}
+                            </span>
+                            <span style={{ color: "#00ff00", fontSize: 14, fontWeight: 600, textTransform: "capitalize" }}>
+                              {action.type} ✓
+                            </span>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                            <span style={{ color: "#00ff00", fontSize: 14, fontWeight: 700 }}>
+                              +{action.rewardAmount.toLocaleString()}
+                            </span>
+                            <button
+                              onClick={() => handleClaimEngagement(reward.castHash, action.type)}
+                              disabled={claiming}
+                              style={{
+                                padding: "8px 16px",
+                                background: "#00ff00",
+                                color: "#000000",
+                                border: "none",
+                                borderRadius: 6,
+                                fontSize: 14,
+                                fontWeight: 700,
+                                cursor: claiming ? "not-allowed" : "pointer",
+                                opacity: claiming ? 0.6 : 1,
+                              }}
+                            >
+                              CLAIM
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Engagement Opportunities Section */}
           <div
             style={{
               background: "#1a1a1a",
@@ -539,13 +640,13 @@ export function PortalTab() {
                 marginBottom: 16,
               }}
             >
-              💬 Engagement Rewards
+              💬 Engagement Opportunities
             </h2>
             <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 12, lineHeight: 1.6 }}>
-              Like, comment, or recast posts in the /catwalk channel to earn rewards. Click on any cast below to engage and earn tokens.
+              Like, comment, or recast posts in the /catwalk channel to earn rewards. Click on any cast below to engage.
             </p>
             <p style={{ color: "#999999", fontSize: 12, marginBottom: 20, lineHeight: 1.4 }}>
-              All casts from the last 30 days are shown. Complete the actions to claim your rewards.
+              All casts from the last 15 days are shown. Complete the actions, then claim your rewards above.
             </p>
 
             {engagementOpportunities.length > 0 ? (
@@ -663,97 +764,6 @@ export function PortalTab() {
               </button>
             )}
 
-            {/* Claim Rewards Section */}
-            {claimableRewards.length > 0 && (
-              <div style={{ marginTop: 24 }}>
-                <h3
-                  style={{
-                    color: "#c1b400",
-                    fontSize: 18,
-                    fontWeight: 700,
-                    marginBottom: 12,
-                  }}
-                >
-                  💰 Claim Rewards
-                </h3>
-                <p style={{ color: "#999999", fontSize: 12, marginBottom: 16, lineHeight: 1.4 }}>
-                  You&apos;ve completed these actions! Claim your rewards from casts in the last 15 days.
-                </p>
-                <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: "400px", overflowY: "auto" }}>
-                  {claimableRewards.map((reward) => (
-                    <div
-                      key={reward.castHash}
-                      style={{
-                        background: "#000000",
-                        border: "2px solid #00ff00",
-                        borderRadius: 8,
-                        padding: "16px",
-                      }}
-                    >
-                      <div style={{ marginBottom: 12 }}>
-                        <p style={{ color: "#ffffff", fontSize: 14, fontWeight: 600, margin: "0 0 4px 0" }}>
-                          {reward.authorDisplayName || reward.authorUsername || "Unknown"}
-                        </p>
-                        {reward.text && (
-                          <p style={{ color: "#999999", fontSize: 12, margin: "0 0 8px 0", lineHeight: 1.4 }}>
-                            {reward.text}
-                          </p>
-                        )}
-                      </div>
-                      
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
-                        {reward.claimableActions.map((action) => (
-                          <div
-                            key={action.type}
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                              padding: "8px 12px",
-                              background: "#1a1a1a",
-                              borderRadius: 6,
-                            }}
-                          >
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <span style={{ fontSize: 16 }}>
-                                {action.type === "like" && "❤️"}
-                                {action.type === "comment" && "💬"}
-                                {action.type === "recast" && "🔁"}
-                              </span>
-                              <span style={{ color: "#ffffff", fontSize: 14, textTransform: "capitalize" }}>
-                                {action.type} ✓
-                              </span>
-                            </div>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <span style={{ color: "#00ff00", fontSize: 14, fontWeight: 600 }}>
-                                +{action.rewardAmount.toLocaleString()} CATWALK
-                              </span>
-                              <button
-                                onClick={() => handleClaimEngagement(reward.castHash, action.type)}
-                                disabled={claiming}
-                                style={{
-                                  padding: "6px 12px",
-                                  background: "#00ff00",
-                                  color: "#000000",
-                                  border: "none",
-                                  borderRadius: 4,
-                                  fontSize: 12,
-                                  fontWeight: 700,
-                                  cursor: claiming ? "not-allowed" : "pointer",
-                                  opacity: claiming ? 0.6 : 1,
-                                }}
-                              >
-                                Claim
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </>
       )}

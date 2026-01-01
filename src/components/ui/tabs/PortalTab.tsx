@@ -1,5 +1,5 @@
 "use client";
-
+// Auto-engage feature v2 - deployed Dec 31 2024
 import { useState, useEffect } from "react";
 import { useMiniApp } from "@neynar/react";
 import { useHapticFeedback } from "~/hooks/useHapticFeedback";

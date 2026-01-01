@@ -94,6 +94,9 @@ export function PortalTab() {
   const [signerUuid, setSignerUuid] = useState<string | null>(null);
   const [bonusMultiplier, setBonusMultiplier] = useState(1.0);
   const [bulkEngaging, setBulkEngaging] = useState(false);
+  const [enablingAutoEngage, setEnablingAutoEngage] = useState(false);
+  const [signerApprovalUrl, setSignerApprovalUrl] = useState<string | null>(null);
+  const [pollingSigner, setPollingSigner] = useState(false);
 
   const isCreator = userFid && CATWALK_CREATOR_FIDS.includes(userFid);
 
@@ -130,6 +133,157 @@ export function PortalTab() {
     } catch (err) {
       console.log("[PortalTab] Error fetching auto-engage prefs:", err);
     }
+  };
+
+  // Start the signer authorization flow
+  const handleEnableAutoEngage = async () => {
+    if (!userFid) return;
+    
+    try {
+      setEnablingAutoEngage(true);
+      setError(null);
+      triggerHaptic("medium");
+
+      // Step 1: Create a new signer
+      const createRes = await fetch("/api/auth/signer", {
+        method: "POST",
+      });
+      
+      if (!createRes.ok) {
+        throw new Error("Failed to create signer");
+      }
+      
+      const signerData = await createRes.json();
+      console.log("[PortalTab] Created signer:", signerData);
+
+      // The signer response contains signer_uuid and signer_approval_url
+      const newSignerUuid = signerData.signer_uuid;
+      const approvalUrl = signerData.signer_approval_url;
+
+      if (!newSignerUuid) {
+        throw new Error("No signer UUID received");
+      }
+
+      // Store the pending signer in preferences (not yet approved)
+      await fetch("/api/portal/engage/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fid: userFid,
+          signerUuid: newSignerUuid,
+          autoEngageEnabled: false, // Will be enabled once approved
+        }),
+      });
+
+      if (approvalUrl) {
+        setSignerApprovalUrl(approvalUrl);
+        // Open the approval URL in Warpcast
+        if (actions?.openUrl) {
+          actions.openUrl(approvalUrl);
+        }
+        
+        // Start polling for approval
+        setPollingSigner(true);
+        pollSignerStatus(newSignerUuid);
+      } else {
+        // No approval needed (already approved or sponsored)
+        setSignerUuid(newSignerUuid);
+        setAutoEngageEnabled(true);
+        setBonusMultiplier(1.1);
+        
+        // Enable auto-engage
+        await fetch("/api/portal/engage/preferences", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fid: userFid,
+            signerUuid: newSignerUuid,
+            autoEngageEnabled: true,
+          }),
+        });
+        
+        setSuccess("✅ Auto-engage enabled! You now earn 10% bonus on all rewards.");
+        triggerHaptic("heavy");
+      }
+    } catch (err: any) {
+      console.error("[PortalTab] Enable auto-engage error:", err);
+      setError(err.message || "Failed to enable auto-engage");
+      triggerHaptic("rigid");
+    } finally {
+      setEnablingAutoEngage(false);
+    }
+  };
+
+  // Poll for signer approval status
+  const pollSignerStatus = async (pendingSignerUuid: string) => {
+    let attempts = 0;
+    const maxAttempts = 60; // 5 minutes with 5 second intervals
+
+    const checkStatus = async () => {
+      try {
+        const res = await fetch(`/api/auth/signer?signerUuid=${pendingSignerUuid}`);
+        if (!res.ok) {
+          attempts++;
+          if (attempts < maxAttempts) {
+            setTimeout(checkStatus, 5000);
+          } else {
+            setPollingSigner(false);
+            setError("Signer approval timed out. Please try again.");
+          }
+          return;
+        }
+
+        const data = await res.json();
+        console.log("[PortalTab] Signer status:", data);
+
+        // Check if approved (status will be "approved" once user approves in Warpcast)
+        if (data.status === "approved") {
+          setPollingSigner(false);
+          setSignerApprovalUrl(null);
+          setSignerUuid(pendingSignerUuid);
+          setAutoEngageEnabled(true);
+          setBonusMultiplier(1.1);
+
+          // Update preferences
+          await fetch("/api/portal/engage/preferences", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              fid: userFid,
+              signerUuid: pendingSignerUuid,
+              autoEngageEnabled: true,
+            }),
+          });
+
+          setSuccess("✅ Auto-engage enabled! You now earn 10% bonus on all rewards.");
+          triggerHaptic("heavy");
+        } else if (data.status === "pending_approval") {
+          // Still pending, keep polling
+          attempts++;
+          if (attempts < maxAttempts) {
+            setTimeout(checkStatus, 5000);
+          } else {
+            setPollingSigner(false);
+            setError("Signer approval timed out. Please try again.");
+          }
+        } else {
+          // Unknown status
+          setPollingSigner(false);
+          setError(`Unexpected signer status: ${data.status}`);
+        }
+      } catch (err) {
+        console.error("[PortalTab] Poll signer error:", err);
+        attempts++;
+        if (attempts < maxAttempts) {
+          setTimeout(checkStatus, 5000);
+        } else {
+          setPollingSigner(false);
+          setError("Failed to check signer status");
+        }
+      }
+    };
+
+    checkStatus();
   };
 
   // Handle bulk like & recast all
@@ -993,27 +1147,169 @@ export function PortalTab() {
               {bulkEngaging ? "⏳ Liking & Recasting..." : signerUuid ? "❤️🔁 Like & Recast All Casts" : "🔒 Enable Auto-Engage First"}
             </button>
 
-            {/* Auto-Engage Toggle Info */}
+            {/* Auto-Engage Toggle */}
             <div style={{
               background: "#0a0a0a",
-              border: "1px solid #ff00ff",
+              border: `1px solid ${autoEngageEnabled ? "#00ff00" : "#ff00ff"}`,
               borderRadius: 8,
               padding: "12px",
             }}>
-              <p style={{ color: "#ff00ff", fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
-                🎁 Auto Like & Recast (Coming Soon)
-              </p>
-              <p style={{ color: "#999", fontSize: 12, lineHeight: 1.4, marginBottom: 8 }}>
-                Enable auto-engagement to automatically like & recast new casts in /catwalk within 5 minutes of posting.
-              </p>
-              <p style={{ color: "#ff00ff", fontSize: 12, fontWeight: 600 }}>
-                ✨ Earn 10% bonus CATWALK on all rewards when enabled!
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <p style={{ color: autoEngageEnabled ? "#00ff00" : "#ff00ff", fontSize: 14, fontWeight: 600, margin: 0 }}>
+                  {autoEngageEnabled ? "✅ Auto-Engage Active" : "🎁 Auto Like & Recast"}
+                </p>
+                {autoEngageEnabled && (
+                  <span style={{
+                    background: "#00ff00",
+                    color: "#000",
+                    padding: "2px 6px",
+                    borderRadius: 4,
+                    fontSize: 10,
+                    fontWeight: 700,
+                  }}>
+                    +10% BONUS
+                  </span>
+                )}
+              </div>
+              
+              <p style={{ color: "#999", fontSize: 12, lineHeight: 1.4, marginBottom: 12 }}>
+                {autoEngageEnabled 
+                  ? "Your account will automatically like & recast new casts in /catwalk within 5 minutes. You're earning 10% bonus on all rewards!"
+                  : "Enable auto-engagement to automatically like & recast new casts in /catwalk within 5 minutes of posting."
+                }
               </p>
               
-              {!signerUuid && (
-                <p style={{ color: "#ff9500", fontSize: 11, marginTop: 8, fontStyle: "italic" }}>
-                  ⚠️ Requires Neynar signer authorization (contact @plantsnft to enable)
+              {!autoEngageEnabled && (
+                <p style={{ color: "#ff00ff", fontSize: 12, fontWeight: 600, marginBottom: 12 }}>
+                  ✨ Earn 10% bonus CATWALK on all rewards when enabled!
                 </p>
+              )}
+              
+              {pollingSigner && (
+                <div style={{
+                  background: "#1a1a00",
+                  border: "1px solid #c1b400",
+                  borderRadius: 6,
+                  padding: "10px",
+                  marginBottom: 12,
+                }}>
+                  <p style={{ color: "#c1b400", fontSize: 12, fontWeight: 600 }}>
+                    ⏳ Waiting for approval in Warpcast...
+                  </p>
+                  <p style={{ color: "#999", fontSize: 11, marginTop: 4 }}>
+                    Please approve the signer request in Warpcast to enable auto-engage.
+                  </p>
+                  {signerApprovalUrl && (
+                    <button
+                      onClick={() => actions?.openUrl && actions.openUrl(signerApprovalUrl)}
+                      style={{
+                        marginTop: 8,
+                        padding: "6px 12px",
+                        background: "#c1b400",
+                        color: "#000",
+                        border: "none",
+                        borderRadius: 4,
+                        fontSize: 11,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Open Approval Page
+                    </button>
+                  )}
+                </div>
+              )}
+              
+              {!signerUuid && !pollingSigner && (
+                <button
+                  onClick={handleEnableAutoEngage}
+                  disabled={enablingAutoEngage}
+                  style={{
+                    width: "100%",
+                    padding: "10px 16px",
+                    background: enablingAutoEngage ? "#333" : "#ff00ff",
+                    color: enablingAutoEngage ? "#666" : "#000",
+                    border: "none",
+                    borderRadius: 6,
+                    fontSize: 14,
+                    fontWeight: 700,
+                    cursor: enablingAutoEngage ? "not-allowed" : "pointer",
+                    opacity: enablingAutoEngage ? 0.6 : 1,
+                  }}
+                >
+                  {enablingAutoEngage ? "⏳ Setting up..." : "🚀 Enable Auto-Engage (+10% Bonus)"}
+                </button>
+              )}
+              
+              {signerUuid && !autoEngageEnabled && (
+                <button
+                  onClick={async () => {
+                    try {
+                      await fetch("/api/portal/engage/preferences", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          fid: userFid,
+                          autoEngageEnabled: true,
+                        }),
+                      });
+                      setAutoEngageEnabled(true);
+                      setBonusMultiplier(1.1);
+                      setSuccess("✅ Auto-engage enabled!");
+                      triggerHaptic("medium");
+                    } catch {
+                      setError("Failed to enable auto-engage");
+                    }
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "10px 16px",
+                    background: "#ff00ff",
+                    color: "#000",
+                    border: "none",
+                    borderRadius: 6,
+                    fontSize: 14,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  🚀 Enable Auto-Engage (+10% Bonus)
+                </button>
+              )}
+              
+              {autoEngageEnabled && (
+                <button
+                  onClick={async () => {
+                    try {
+                      await fetch("/api/portal/engage/preferences", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          fid: userFid,
+                          autoEngageEnabled: false,
+                        }),
+                      });
+                      setAutoEngageEnabled(false);
+                      setBonusMultiplier(1.0);
+                      setSuccess("Auto-engage disabled");
+                      triggerHaptic("light");
+                    } catch {
+                      setError("Failed to disable auto-engage");
+                    }
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "8px 16px",
+                    background: "transparent",
+                    color: "#666",
+                    border: "1px solid #333",
+                    borderRadius: 6,
+                    fontSize: 12,
+                    cursor: "pointer",
+                  }}
+                >
+                  Disable Auto-Engage
+                </button>
               )}
             </div>
           </div>

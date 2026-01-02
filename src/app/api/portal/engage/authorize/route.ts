@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import { privateKeyToAccount } from "viem/accounts";
-import { mnemonicToAccount } from "viem/accounts";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const SUPABASE_SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE || "";
 const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY || "";
-const MNEMONIC = process.env.MNEMONIC || "";
+const SIGNER_PRIVATE_KEY = process.env.REWARD_SIGNER_PRIVATE_KEY || process.env.PRIVATE_KEY || "";
 
 const SUPABASE_HEADERS = {
   apikey: SUPABASE_SERVICE_ROLE,
@@ -13,17 +12,12 @@ const SUPABASE_HEADERS = {
   "Content-Type": "application/json",
 };
 
-// The FID of the app (your Neynar app's FID)
-// You need to set this to your app's FID
+// The FID of the app - you need to set NEYNAR_APP_FID env variable
 const APP_FID = parseInt(process.env.NEYNAR_APP_FID || "0");
 
 /**
  * Signer Authorization Endpoint
- * Follows the full Neynar Managed Signer flow:
- * 1. Create signer -> get signer_uuid, public_key
- * 2. Sign with app wallet
- * 3. Register signed key -> get approval_url
- * 4. Return approval_url to user
+ * Follows the full Neynar Managed Signer flow
  */
 export async function POST(request: Request) {
   try {
@@ -63,7 +57,6 @@ export async function POST(request: Request) {
           });
         }
         
-        // If pending_approval, return the existing approval URL
         if (signerData.status === "pending_approval" && signerData.signer_approval_url) {
           return NextResponse.json({
             success: true,
@@ -95,16 +88,14 @@ export async function POST(request: Request) {
     const signer = await createRes.json() as any;
     console.log(`[Signer Auth] Signer created:`, {
       uuid: signer.signer_uuid,
-      publicKey: signer.public_key,
+      publicKey: signer.public_key?.substring(0, 20) + "...",
       status: signer.status,
       hasApprovalUrl: !!signer.signer_approval_url,
     });
 
-    // If we got an approval URL directly (some Neynar configs), use it
+    // If we got an approval URL directly, use it
     if (signer.signer_approval_url) {
-      // Save signer UUID
       await saveSignerUuid(fid, signer.signer_uuid, prefs.length > 0);
-      
       return NextResponse.json({
         success: true,
         signerUuid: signer.signer_uuid,
@@ -114,26 +105,34 @@ export async function POST(request: Request) {
       });
     }
 
-    // Step 2 & 3: Register signed key to get approval URL
-    // This requires the app's wallet to sign a message
-    if (!MNEMONIC) {
-      console.error(`[Signer Auth] No MNEMONIC configured for signing`);
-      // Fallback: Just save the signer and tell user to contact support
+    // Check if we have the required config for signed key registration
+    if (!SIGNER_PRIVATE_KEY) {
+      console.error(`[Signer Auth] No SIGNER_PRIVATE_KEY configured`);
       await saveSignerUuid(fid, signer.signer_uuid, prefs.length > 0);
-      
       return NextResponse.json({
         success: false,
         signerUuid: signer.signer_uuid,
-        error: "Signer created but approval URL generation requires app configuration. Please contact support.",
+        error: "Private key not configured. Please set REWARD_SIGNER_PRIVATE_KEY.",
         needsApproval: true,
       });
     }
 
-    console.log(`[Signer Auth] Step 2: Signing key request...`);
+    if (!APP_FID || APP_FID === 0) {
+      console.error(`[Signer Auth] No NEYNAR_APP_FID configured`);
+      await saveSignerUuid(fid, signer.signer_uuid, prefs.length > 0);
+      return NextResponse.json({
+        success: false,
+        signerUuid: signer.signer_uuid,
+        error: "App FID not configured. Please set NEYNAR_APP_FID in Vercel.",
+        needsApproval: true,
+      });
+    }
+
+    console.log(`[Signer Auth] Step 2: Signing key request with APP_FID=${APP_FID}...`);
     
-    // Create account from mnemonic
-    const account = mnemonicToAccount(MNEMONIC);
-    const deadline = Math.floor(Date.now() / 1000) + 86400; // 24 hours from now
+    // Create account from private key
+    const account = privateKeyToAccount(SIGNER_PRIVATE_KEY as `0x${string}`);
+    const deadline = Math.floor(Date.now() / 1000) + 86400; // 24 hours
 
     // EIP-712 signature for signed key request
     const SIGNED_KEY_REQUEST_VALIDATOR_ADDRESS = "0x00000000FC700472606ED4fA22623Acf62c60553";
@@ -162,7 +161,6 @@ export async function POST(request: Request) {
 
     console.log(`[Signer Auth] Step 3: Registering signed key...`);
     
-    // Register the signed key
     const registerRes = await fetch("https://api.neynar.com/v2/farcaster/signer/signed_key", {
       method: "POST",
       headers: {
@@ -180,16 +178,16 @@ export async function POST(request: Request) {
     if (!registerRes.ok) {
       const err = await registerRes.text();
       console.error(`[Signer Auth] Register signed key failed:`, err);
-      throw new Error("Failed to register signed key");
+      throw new Error(`Failed to register signed key: ${err}`);
     }
 
     const registeredSigner = await registerRes.json() as any;
     console.log(`[Signer Auth] Signed key registered:`, {
       status: registeredSigner.status,
       hasApprovalUrl: !!registeredSigner.signer_approval_url,
+      approvalUrl: registeredSigner.signer_approval_url?.substring(0, 50) + "...",
     });
 
-    // Save the signer UUID
     await saveSignerUuid(fid, signer.signer_uuid, prefs.length > 0);
 
     if (!registeredSigner.signer_approval_url) {

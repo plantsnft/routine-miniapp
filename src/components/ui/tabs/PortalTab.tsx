@@ -329,6 +329,15 @@ export function PortalTab() {
       const data = await res.json();
 
       if (!res.ok) {
+        if (data.needsApproval && data.approvalUrl) {
+          setSignerApprovalUrl(data.approvalUrl);
+          setSignerUuid(null);
+          setAutoEngageEnabled(false);
+          if (actions && actions.openUrl) {
+            actions.openUrl(data.approvalUrl);
+          }
+          throw new Error("Signer needs approval. Opening Warpcast...");
+        }
         throw new Error(data.error || "Bulk engage failed");
       }
 

@@ -540,8 +540,23 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "No check-in record found" }, { status: 400 });
     }
 
-    await markRewardClaimed(fid, new Date().toISOString(), { recordId: checkin.id ?? null });
-    console.log(`[Reward Claim] FID ${fid}: Reward marked as claimed, tx: ${txHash}`);
+    // Get user data to calculate reward amount for tracking
+    let rewardAmount = 0;
+    try {
+      const user = await fetchNeynarUser(fid);
+      const allocation = getRewardAllocation(fid, user);
+      // Convert from bigint with 18 decimals to token amount
+      rewardAmount = Number(allocation.amount / TOKEN_UNIT);
+      console.log(`[Reward Claim] FID ${fid}: Calculated reward amount: ${rewardAmount} tokens (${allocation.tierLabel} tier)`);
+    } catch (userErr) {
+      console.warn(`[Reward Claim] FID ${fid}: Could not calculate reward amount, using 0`, userErr);
+    }
+
+    await markRewardClaimed(fid, new Date().toISOString(), { 
+      recordId: checkin.id ?? null,
+      rewardAmount: rewardAmount 
+    });
+    console.log(`[Reward Claim] FID ${fid}: Reward marked as claimed, tx: ${txHash}, amount: ${rewardAmount}`);
 
     return NextResponse.json({ ok: true, message: "Reward claimed successfully" });
   } catch (error: any) {

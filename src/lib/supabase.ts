@@ -199,23 +199,39 @@ export async function updateCheckin(
 }
 
 /**
- * Mark a check-in record's reward as claimed without modifying other fields.
+ * Mark a check-in record's reward as claimed and optionally update total_walk_rewards.
  */
 export async function markRewardClaimed(
   fid: number,
   rewardClaimedAt: string,
-  options?: { recordId?: string | null }
+  options?: { recordId?: string | null; rewardAmount?: number }
 ): Promise<CheckinRecord> {
   let filterParam: string;
+  let currentTotalRewards = 0;
 
   if (options?.recordId) {
     filterParam = `id=eq.${options.recordId}`;
+    // Fetch current total if we need to add to it
+    if (options.rewardAmount) {
+      const existing = await getCheckinByFid(fid);
+      currentTotalRewards = (existing as any)?.total_walk_rewards || 0;
+    }
   } else {
     const existing = await getCheckinByFid(fid);
     if (!existing) {
       throw new Error(`Check-in record not found for fid ${fid}`);
     }
     filterParam = existing.id ? `id=eq.${existing.id}` : `fid=eq.${fid}`;
+    currentTotalRewards = (existing as any)?.total_walk_rewards || 0;
+  }
+
+  // Build update payload
+  const updatePayload: Record<string, any> = { reward_claimed_at: rewardClaimedAt };
+  
+  // Add reward amount to running total if provided
+  if (options?.rewardAmount && options.rewardAmount > 0) {
+    updatePayload.total_walk_rewards = currentTotalRewards + options.rewardAmount;
+    console.log(`[Supabase] Updating total_walk_rewards: ${currentTotalRewards} + ${options.rewardAmount} = ${updatePayload.total_walk_rewards}`);
   }
 
   const res = await fetch(
@@ -226,7 +242,7 @@ export async function markRewardClaimed(
         ...SUPABASE_HEADERS,
         Prefer: "return=representation",
       },
-      body: JSON.stringify({ reward_claimed_at: rewardClaimedAt }),
+      body: JSON.stringify(updatePayload),
     }
   );
 

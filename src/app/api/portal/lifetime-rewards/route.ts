@@ -18,19 +18,11 @@ const ENGAGEMENT_REWARDS: Record<string, number> = {
 
 const CREATOR_REWARD = 1_000_000; // 1M per cast
 
-// Virtual walk reward tiers (average - actual varies by score)
-const WALK_REWARD_AVG = 100_000; // Average walk reward
-
 interface RewardBreakdown {
-  creator: { amount: number; count: number };
-  patron: { 
-    amount: number; 
-    count: number;
-    likes: { amount: number; count: number };
-    recasts: { amount: number; count: number };
-    comments: { amount: number; count: number };
-  };
-  virtualWalk: { amount: number; count: number };
+  posting: number;
+  like: number;
+  recast: number;
+  comment: number;
   total: number;
 }
 
@@ -66,97 +58,85 @@ export async function GET(request: Request) {
     console.log(`[Lifetime Rewards] Fetching for FID ${fid}, period: ${period}`);
 
     const dateFilter = getDateFilter(period);
+    const dateQuery = dateFilter ? `&claimed_at=gte.${dateFilter}` : "";
 
-    // Initialize breakdown
+    // Fetch engagement claims (like, recast, comment)
+    const engagementRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/engagement_claims?fid=eq.${fid}&claimed_at=not.is.null${dateQuery}&select=engagement_type,claimed_at`,
+      {
+        method: "GET",
+        headers: SUPABASE_HEADERS,
+      }
+    );
+
+    let engagementClaims: any[] = [];
+    if (engagementRes.ok) {
+      engagementClaims = await engagementRes.json();
+    } else {
+      console.log("[Lifetime Rewards] Failed to fetch engagement claims:", await engagementRes.text());
+    }
+
+    // Fetch creator claims (posting)
+    const creatorRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/creator_claims?fid=eq.${fid}&claimed_at=not.is.null${dateQuery}&select=claimed_at,reward_amount`,
+      {
+        method: "GET",
+        headers: SUPABASE_HEADERS,
+      }
+    );
+
+    let creatorClaims: any[] = [];
+    if (creatorRes.ok) {
+      creatorClaims = await creatorRes.json();
+    } else {
+      console.log("[Lifetime Rewards] Failed to fetch creator claims:", await creatorRes.text());
+    }
+
+    // Calculate breakdown
     const breakdown: RewardBreakdown = {
-      creator: { amount: 0, count: 0 },
-      patron: { 
-        amount: 0, 
-        count: 0,
-        likes: { amount: 0, count: 0 },
-        recasts: { amount: 0, count: 0 },
-        comments: { amount: 0, count: 0 },
-      },
-      virtualWalk: { amount: 0, count: 0 },
+      posting: 0,
+      like: 0,
+      recast: 0,
+      comment: 0,
       total: 0,
     };
 
-    // 1. Fetch CREATOR claims (posting rewards)
-    const creatorDateQuery = dateFilter ? `&claimed_at=gte.${dateFilter}` : "";
-    const creatorRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/creator_claims?fid=eq.${fid}&claimed_at=not.is.null${creatorDateQuery}&select=claimed_at,reward_amount`,
-      { method: "GET", headers: SUPABASE_HEADERS }
-    );
-
-    if (creatorRes.ok) {
-      const creatorClaims = await creatorRes.json() as any[];
-      breakdown.creator.count = creatorClaims.length;
-      for (const claim of creatorClaims) {
-        const reward = claim.reward_amount ? Number(claim.reward_amount) : CREATOR_REWARD;
-        breakdown.creator.amount += reward;
-      }
-    }
-
-    // 2. Fetch PATRON claims (engagement rewards: like, recast, comment)
-    const engagementDateQuery = dateFilter ? `&claimed_at=gte.${dateFilter}` : "";
-    const engagementRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/engagement_claims?fid=eq.${fid}&claimed_at=not.is.null${engagementDateQuery}&select=engagement_type,claimed_at`,
-      { method: "GET", headers: SUPABASE_HEADERS }
-    );
-
-    if (engagementRes.ok) {
-      const engagementClaims = await engagementRes.json() as any[];
+    // Sum engagement rewards
+    for (const claim of engagementClaims) {
+      const type = claim.engagement_type as string;
+      const reward = ENGAGEMENT_REWARDS[type] || 0;
       
-      for (const claim of engagementClaims) {
-        const type = claim.engagement_type as string;
-        const reward = ENGAGEMENT_REWARDS[type] || 0;
-        
-        breakdown.patron.amount += reward;
-        breakdown.patron.count += 1;
-        
-        if (type === "like") {
-          breakdown.patron.likes.amount += reward;
-          breakdown.patron.likes.count += 1;
-        } else if (type === "recast") {
-          breakdown.patron.recasts.amount += reward;
-          breakdown.patron.recasts.count += 1;
-        } else if (type === "comment") {
-          breakdown.patron.comments.amount += reward;
-          breakdown.patron.comments.count += 1;
-        }
+      if (type === "like") {
+        breakdown.like += reward;
+      } else if (type === "recast") {
+        breakdown.recast += reward;
+      } else if (type === "comment") {
+        breakdown.comment += reward;
       }
     }
 
-    // 3. Fetch VIRTUAL WALK claims (daily check-in rewards)
-    // The checkins table has reward_claimed_at when user claimed
-    const walkDateQuery = dateFilter ? `&reward_claimed_at=gte.${dateFilter}` : "";
-    const walkRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/checkins?fid=eq.${fid}&reward_claimed_at=not.is.null${walkDateQuery}&select=reward_claimed_at,total_checkins`,
-      { method: "GET", headers: SUPABASE_HEADERS }
-    );
-
-    if (walkRes.ok) {
-      const walkClaims = await walkRes.json() as any[];
-      // Each claimed day counts as one virtual walk reward
-      // Note: The actual reward varies by score, using average for display
-      breakdown.virtualWalk.count = walkClaims.length;
-      breakdown.virtualWalk.amount = walkClaims.length * WALK_REWARD_AVG;
+    // Sum creator rewards
+    for (const claim of creatorClaims) {
+      const reward = claim.reward_amount ? Number(claim.reward_amount) : CREATOR_REWARD;
+      breakdown.posting += reward;
     }
 
     // Calculate total
-    breakdown.total = breakdown.creator.amount + breakdown.patron.amount + breakdown.virtualWalk.amount;
+    breakdown.total = breakdown.posting + breakdown.like + breakdown.recast + breakdown.comment;
 
-    console.log(`[Lifetime Rewards] FID ${fid} (${period}):`, {
-      creator: breakdown.creator,
-      patron: breakdown.patron.count,
-      virtualWalk: breakdown.virtualWalk,
-      total: breakdown.total,
-    });
+    console.log(`[Lifetime Rewards] FID ${fid} (${period}):`, breakdown);
 
     return NextResponse.json({
       fid: Number(fid),
       period,
       breakdown,
+      claimCounts: {
+        posting: creatorClaims.length,
+        like: engagementClaims.filter((c: any) => c.engagement_type === "like").length,
+        recast: engagementClaims.filter((c: any) => c.engagement_type === "recast").length,
+        comment: engagementClaims.filter((c: any) => c.engagement_type === "comment").length,
+        total: creatorClaims.length + engagementClaims.length,
+      },
     });
   } catch (error: any) {
     console.error("[Lifetime Rewards] Error:", error);

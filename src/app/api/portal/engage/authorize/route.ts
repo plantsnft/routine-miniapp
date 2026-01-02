@@ -1,10 +1,10 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { privateKeyToAccount } from "viem/accounts";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const SUPABASE_SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE || "";
 const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY || "";
-const REWARD_SIGNER_PRIVATE_KEY = process.env.REWARD_SIGNER_PRIVATE_KEY || "";
+const FARCASTER_CUSTODY_PRIVATE_KEY = process.env.FARCASTER_CUSTODY_PRIVATE_KEY || "";
 const NEYNAR_APP_FID = process.env.NEYNAR_APP_FID || "";
 
 const SUPABASE_HEADERS = {
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
 
     console.log(`[Signer Auth] Starting for FID ${fid}`);
 
-    if (!REWARD_SIGNER_PRIVATE_KEY) {
+    if (!FARCASTER_CUSTODY_PRIVATE_KEY) {
       return NextResponse.json({ error: "App signer private key not configured" }, { status: 500 });
     }
 
@@ -91,7 +91,7 @@ export async function POST(request: Request) {
 
     // Step 2: Sign with EIP-712
     console.log(`[Signer Auth] Step 2: Signing key request...`);
-    const privateKey = REWARD_SIGNER_PRIVATE_KEY.startsWith("0x") ? REWARD_SIGNER_PRIVATE_KEY : `0x${REWARD_SIGNER_PRIVATE_KEY}`;
+    const privateKey = FARCASTER_CUSTODY_PRIVATE_KEY.startsWith("0x") ? FARCASTER_CUSTODY_PRIVATE_KEY : `0x${FARCASTER_CUSTODY_PRIVATE_KEY}`;
     const account = privateKeyToAccount(privateKey as `0x${string}`);
     console.log(`[Signer Auth] Signing with address: ${account.address}`);
     

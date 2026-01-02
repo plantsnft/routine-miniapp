@@ -1,4 +1,4 @@
-{
+﻿{
   "buildCommand": "next build",
   "framework": "nextjs",
   "crons": [
@@ -8,7 +8,7 @@
     },
     {
       "path": "/api/cron/auto-engage",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 * * * *"
     }
   ]
-} 
+}

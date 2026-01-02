@@ -93,7 +93,7 @@ export async function POST(request: Request) {
     console.log(`[Signer Auth] Step 2: Signing key request...`);
     const privateKey = FARCASTER_CUSTODY_PRIVATE_KEY.startsWith("0x") ? FARCASTER_CUSTODY_PRIVATE_KEY : `0x${FARCASTER_CUSTODY_PRIVATE_KEY}`;
     const account = privateKeyToAccount(privateKey as `0x${string}`);
-    console.log(`[Signer Auth] Signing with address: ${account.address}`);
+    console.log(`[Signer Auth] Signing with address (check match): ${account.address}`);
     
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 86400);
     const signature = await account.signTypedData({
@@ -106,6 +106,7 @@ export async function POST(request: Request) {
 
     // Step 3: Register signed key
     console.log(`[Signer Auth] Step 3: Registering signed key...`);
+    console.log(`[Signer Auth] Register payload:`, JSON.stringify({ signer_uuid: signer.signer_uuid, app_fid: appFid, deadline: Number(deadline), sig_length: signature.length }));
     const registerRes = await fetch("https://api.neynar.com/v2/farcaster/signer/signed_key", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": NEYNAR_API_KEY },

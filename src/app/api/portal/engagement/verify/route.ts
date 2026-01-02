@@ -240,12 +240,35 @@ export async function POST(request: Request) {
         // Use viewer_context which tells us directly if the user has liked/recasted
         // This is the most reliable method - Neynar returns this when viewer_fid is provided
         const viewerContext = castDetails.viewer_context || {};
-        const hasLiked = viewerContext.liked === true;
-        const hasRecasted = viewerContext.recasted === true;
         
-        // Check comments/replies
+        // Log raw viewer_context to debug field names
+        if (i < 3) {
+          console.log(`[Engagement Verify] Cast ${i} RAW viewer_context:`, JSON.stringify(viewerContext));
+        }
+        
+        const hasLiked = viewerContext.liked === true;
+        // Neynar may use 'recast' or 'recasted' - check both
+        const hasRecasted = viewerContext.recasted === true || viewerContext.recast === true;
+        
+        // Check comments/replies - Neynar may use 'replied' or 'reply'
         // First check viewer_context.replied if available, otherwise check replies array
-        let hasCommented = viewerContext.replied === true;
+        let hasCommented = viewerContext.replied === true || viewerContext.reply === true;
+        
+        // FALLBACK: If viewer_context doesn't have recast info, check reactions.recasts array
+        // This is a backup in case viewer_context is incomplete
+        let hasRecastedFallback = hasRecasted;
+        if (!hasRecastedFallback) {
+          const recasts = castDetails.reactions?.recasts || [];
+          if (Array.isArray(recasts) && recasts.length > 0) {
+            hasRecastedFallback = recasts.some((r: any) => {
+              const recastFid = r.fid || r.user?.fid || r.reactor?.fid;
+              return recastFid === fid;
+            });
+            if (hasRecastedFallback && !hasRecasted) {
+              console.log(`[Engagement Verify] Cast ${castHash.substring(0, 10)}: Found recast via reactions array fallback`);
+            }
+          }
+        }
         
         // If viewer_context doesn't have replied, check replies array
         // Note: replies.casts might not include all replies, so we might need to fetch them separately
@@ -258,6 +281,9 @@ export async function POST(request: Request) {
             });
           }
         }
+        
+        // Use fallback value for recasted
+        const finalHasRecasted = hasRecasted || hasRecastedFallback;
         
         // If still no comment detected and cast has replies, fetch replies separately
         // This is needed because the main cast endpoint might not include all replies
@@ -305,7 +331,7 @@ export async function POST(request: Request) {
           console.log(`[Engagement Verify] Cast ${i} (${castHash.substring(0, 12)}):`, JSON.stringify({
             viewerContext,
             hasLiked,
-            hasRecasted,
+            hasRecasted: finalHasRecasted,
             hasCommented,
             repliesCount: castDetails.replies?.count || castDetails.reply_count || 0,
             likesCount: castDetails.reactions?.likes_count || castDetails.reactions?.likes?.length || 0,
@@ -314,12 +340,12 @@ export async function POST(request: Request) {
         }
         
         // Also log any cast where user has engaged
-        if (hasLiked || hasRecasted || hasCommented) {
-          console.log(`[Engagement Verify] 🎯 FOUND ENGAGEMENT on cast ${castHash.substring(0, 12)}:`, { hasLiked, hasRecasted, hasCommented });
+        if (hasLiked || finalHasRecasted || hasCommented) {
+          console.log(`[Engagement Verify] 🎯 FOUND ENGAGEMENT on cast ${castHash.substring(0, 12)}:`, { hasLiked, hasRecasted: finalHasRecasted, hasCommented });
         }
 
         // Store detected engagements
-        if (hasLiked || hasRecasted || hasCommented) {
+        if (hasLiked || finalHasRecasted || hasCommented) {
           if (!userEngagements.has(castHash)) {
             userEngagements.set(castHash, new Set());
           }
@@ -327,7 +353,7 @@ export async function POST(request: Request) {
             userEngagements.get(castHash)!.add("like");
             console.log(`[Engagement Verify] ✓ User ${fid} has liked cast ${castHash.substring(0, 10)}...`);
           }
-          if (hasRecasted) {
+          if (finalHasRecasted) {
             userEngagements.get(castHash)!.add("recast");
             console.log(`[Engagement Verify] ✓ User ${fid} has recasted cast ${castHash.substring(0, 10)}...`);
           }
@@ -340,7 +366,7 @@ export async function POST(request: Request) {
           // This helps us track what users have done even if they haven't claimed yet
           for (const engagementType of ["like", "recast", "comment"] as const) {
             const hasEngagement = engagementType === "like" ? hasLiked : 
-                                 engagementType === "recast" ? hasRecasted : hasCommented;
+                                 engagementType === "recast" ? finalHasRecasted : hasCommented;
             
             if (hasEngagement) {
               // Check if already stored

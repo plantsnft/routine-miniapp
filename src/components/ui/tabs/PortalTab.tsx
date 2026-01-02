@@ -1245,9 +1245,9 @@ export function PortalTab() {
                         setBonusMultiplier(1.1);
                         setSuccess("Signer is already approved!");
                       }
-                    } catch (err) {
+                    } catch (err: any) {
                       console.error("[PortalTab] Auth error:", err);
-                      setError(err.message || "Authorization failed");
+                      setError(err?.message || "Authorization failed");
                     } finally {
                       setEnablingAutoEngage(false);
                     }

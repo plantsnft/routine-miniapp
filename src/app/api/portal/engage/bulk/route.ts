@@ -1,14 +1,6 @@
 import { NextResponse } from "next/server";
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const SUPABASE_SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE || "";
 const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY || "";
-
-const SUPABASE_HEADERS = {
-  apikey: SUPABASE_SERVICE_ROLE,
-  Authorization: `Bearer ${SUPABASE_SERVICE_ROLE}`,
-  "Content-Type": "application/json",
-};
 
 interface BulkEngageRequest {
   fid: number;
@@ -28,7 +20,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "fid is required" }, { status: 400 });
     }
     if (!signerUuid) {
-      return NextResponse.json({ error: "signerUuid is required" }, { status: 400 });
+      return NextResponse.json({ error: "signerUuid is required. Please enable auto-engage first." }, { status: 400 });
     }
     if (!castHashes || castHashes.length === 0) {
       return NextResponse.json({ error: "castHashes required" }, { status: 400 });
@@ -37,12 +29,40 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "actions required" }, { status: 400 });
     }
 
+    // First, check if the signer is approved
+    console.log(`[Bulk Engage] Checking signer status...`);
+    const signerCheck = await fetch(`https://api.neynar.com/v2/farcaster/signer?signer_uuid=${signerUuid}`, {
+      headers: { "x-api-key": NEYNAR_API_KEY },
+    });
+    
+    if (!signerCheck.ok) {
+      console.error(`[Bulk Engage] Signer check failed:`, await signerCheck.text());
+      return NextResponse.json({ 
+        error: "Invalid signer. Please re-enable auto-engage.",
+        needsReauth: true 
+      }, { status: 400 });
+    }
+
+    const signerData = await signerCheck.json() as any;
+    console.log(`[Bulk Engage] Signer status:`, signerData.status);
+
+    if (signerData.status !== "approved") {
+      // Return the approval URL if available
+      const approvalUrl = signerData.signer_approval_url;
+      console.log(`[Bulk Engage] Signer not approved. Status: ${signerData.status}, approvalUrl: ${approvalUrl ? "present" : "missing"}`);
+      return NextResponse.json({ 
+        error: `Signer not approved (status: ${signerData.status}). Please authorize in Warpcast first.`,
+        needsApproval: true,
+        approvalUrl: approvalUrl || null,
+        status: signerData.status
+      }, { status: 400 });
+    }
+
     const results: Array<{ castHash: string; action: string; success: boolean; error?: string }> = [];
 
     for (const castHash of castHashes) {
       for (const action of actions) {
         try {
-          // Both like and recast use same endpoint with reaction_type
           const response = await fetch("https://api.neynar.com/v2/farcaster/reaction", {
             method: "POST",
             headers: {

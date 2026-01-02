@@ -97,6 +97,14 @@ export function PortalTab() {
   const [enablingAutoEngage, setEnablingAutoEngage] = useState(false);
   const [signerApprovalUrl, setSignerApprovalUrl] = useState<string | null>(null);
   const [pollingSigner, setPollingSigner] = useState(false);
+  
+  // Lifetime earnings state
+  const [lifetimeRewards, setLifetimeRewards] = useState<{
+    breakdown: { posting: number; like: number; recast: number; comment: number; total: number };
+    claimCounts: { posting: number; like: number; recast: number; comment: number; total: number };
+  } | null>(null);
+  const [lifetimePeriod, setLifetimePeriod] = useState<"7d" | "30d" | "1y" | "lifetime">("lifetime");
+  const [loadingLifetime, setLoadingLifetime] = useState(false);
 
   const isCreator = userFid && CATWALK_CREATOR_FIDS.includes(userFid);
 
@@ -105,6 +113,7 @@ export function PortalTab() {
     if (userFid) {
       fetchClaimStatus();
       fetchAutoEngagePrefs();
+      fetchLifetimeRewards();
       
       // Auto-poll every 5 minutes to detect new casts
       const pollInterval = setInterval(() => {
@@ -119,7 +128,32 @@ export function PortalTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userFid]);
 
-  // Fetch auto-engage preferences
+  // Fetch lifetime rewards data
+  const fetchLifetimeRewards = async (period: string = lifetimePeriod) => {
+    if (!userFid) return;
+    try {
+      setLoadingLifetime(true);
+      const res = await fetch(`/api/portal/lifetime-rewards?fid=${userFid}&period=${period}`);
+      if (res.ok) {
+        const data = await res.json();
+        setLifetimeRewards({
+          breakdown: data.breakdown,
+          claimCounts: data.claimCounts,
+        });
+      }
+    } catch (err) {
+      console.log("[PortalTab] Error fetching lifetime rewards:", err);
+    } finally {
+      setLoadingLifetime(false);
+    }
+  };
+
+  // Handle period change
+  const handlePeriodChange = (newPeriod: "7d" | "30d" | "1y" | "lifetime") => {
+    setLifetimePeriod(newPeriod);
+    fetchLifetimeRewards(newPeriod);
+  };
+
   // Fetch auto-engage preferences and verify signer status
   const fetchAutoEngagePrefs = async () => {
     if (!userFid) return;
@@ -657,7 +691,7 @@ export function PortalTab() {
           color: "#ffffff",
           fontSize: 13,
           textAlign: "center",
-          marginBottom: 24,
+          marginBottom: 16,
           background: "rgba(0, 0, 0, 0.75)",
           padding: "8px 12px",
           borderRadius: 6,
@@ -665,6 +699,128 @@ export function PortalTab() {
       >
         Earn CATWALK for posting and engaging in /catwalk
       </p>
+
+      {/* Lifetime Earnings Section */}
+      <div
+        style={{
+          background: "linear-gradient(135deg, rgba(193, 180, 0, 0.15) 0%, rgba(0, 0, 0, 0.9) 100%)",
+          border: "2px solid #c1b400",
+          borderRadius: 12,
+          padding: 16,
+          marginBottom: 20,
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <h3 style={{ color: "#c1b400", fontSize: 16, fontWeight: 700, margin: 0 }}>
+            💰 Lifetime Earned
+          </h3>
+          <select
+            value={lifetimePeriod}
+            onChange={(e) => handlePeriodChange(e.target.value as "7d" | "30d" | "1y" | "lifetime")}
+            style={{
+              background: "#000",
+              color: "#c1b400",
+              border: "1px solid #c1b400",
+              borderRadius: 6,
+              padding: "4px 8px",
+              fontSize: 12,
+              cursor: "pointer",
+            }}
+          >
+            <option value="7d">Last 7 Days</option>
+            <option value="30d">Last 30 Days</option>
+            <option value="1y">Last Year</option>
+            <option value="lifetime">All Time</option>
+          </select>
+        </div>
+
+        {loadingLifetime ? (
+          <p style={{ color: "#888", fontSize: 12, textAlign: "center" }}>Loading...</p>
+        ) : lifetimeRewards ? (
+          <>
+            {/* Total */}
+            <div style={{ 
+              textAlign: "center", 
+              marginBottom: 12, 
+              padding: 12, 
+              background: "rgba(193, 180, 0, 0.2)", 
+              borderRadius: 8 
+            }}>
+              <div style={{ color: "#c1b400", fontSize: 28, fontWeight: 900 }}>
+                {lifetimeRewards.breakdown.total.toLocaleString()}
+              </div>
+              <div style={{ color: "#888", fontSize: 11, marginTop: 2 }}>
+                TOTAL $CATWALK CLAIMED
+              </div>
+            </div>
+
+            {/* Breakdown Grid */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {/* Posting */}
+              <div style={{ 
+                background: "rgba(0, 0, 0, 0.6)", 
+                padding: 10, 
+                borderRadius: 8,
+                borderLeft: "3px solid #22c55e"
+              }}>
+                <div style={{ color: "#22c55e", fontSize: 14, fontWeight: 700 }}>
+                  {lifetimeRewards.breakdown.posting.toLocaleString()}
+                </div>
+                <div style={{ color: "#888", fontSize: 10 }}>
+                  📝 Posting ({lifetimeRewards.claimCounts.posting})
+                </div>
+              </div>
+
+              {/* Likes */}
+              <div style={{ 
+                background: "rgba(0, 0, 0, 0.6)", 
+                padding: 10, 
+                borderRadius: 8,
+                borderLeft: "3px solid #ef4444"
+              }}>
+                <div style={{ color: "#ef4444", fontSize: 14, fontWeight: 700 }}>
+                  {lifetimeRewards.breakdown.like.toLocaleString()}
+                </div>
+                <div style={{ color: "#888", fontSize: 10 }}>
+                  ❤️ Likes ({lifetimeRewards.claimCounts.like})
+                </div>
+              </div>
+
+              {/* Recasts */}
+              <div style={{ 
+                background: "rgba(0, 0, 0, 0.6)", 
+                padding: 10, 
+                borderRadius: 8,
+                borderLeft: "3px solid #3b82f6"
+              }}>
+                <div style={{ color: "#3b82f6", fontSize: 14, fontWeight: 700 }}>
+                  {lifetimeRewards.breakdown.recast.toLocaleString()}
+                </div>
+                <div style={{ color: "#888", fontSize: 10 }}>
+                  🔁 Recasts ({lifetimeRewards.claimCounts.recast})
+                </div>
+              </div>
+
+              {/* Comments */}
+              <div style={{ 
+                background: "rgba(0, 0, 0, 0.6)", 
+                padding: 10, 
+                borderRadius: 8,
+                borderLeft: "3px solid #a855f7"
+              }}>
+                <div style={{ color: "#a855f7", fontSize: 14, fontWeight: 700 }}>
+                  {lifetimeRewards.breakdown.comment.toLocaleString()}
+                </div>
+                <div style={{ color: "#888", fontSize: 10 }}>
+                  💬 Comments ({lifetimeRewards.claimCounts.comment})
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          <p style={{ color: "#888", fontSize: 12, textAlign: "center" }}>No claims yet</p>
+        )}
+      </div>
 
       {/* Confirmation Modal for Incomplete Claims */}
       {showConfirmModal && pendingClaim && (

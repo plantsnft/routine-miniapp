@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 // Auto-engage feature v2 - deployed Dec 31 2024
 import { useState, useEffect } from "react";
 import { useMiniApp } from "@neynar/react";
@@ -264,7 +264,7 @@ export function PortalTab() {
           }),
         });
         
-        setSuccess("✅ Auto-engage enabled! You now earn 10% bonus on all rewards.");
+        setSuccess("âœ… Auto-engage enabled! You now earn 10% bonus on all rewards.");
         triggerHaptic("heavy");
       } else {
         throw new Error("No approval URL received from server");
@@ -319,7 +319,7 @@ export function PortalTab() {
             }),
           });
 
-          setSuccess("✅ Auto-engage enabled! You now earn 10% bonus on all rewards.");
+          setSuccess("âœ… Auto-engage enabled! You now earn 10% bonus on all rewards.");
           triggerHaptic("heavy");
         } else if (data.status === "pending_approval") {
           // Still pending, keep polling
@@ -405,7 +405,7 @@ export function PortalTab() {
         throw new Error(data.error || "Bulk engage failed");
       }
 
-      setSuccess(`✅ Liked & recasted ${data.summary.successful} casts! Refresh to claim rewards.`);
+      setSuccess(`âœ… Liked & recasted ${data.summary.successful} casts! Refresh to claim rewards.`);
       triggerHaptic("heavy");
       
       // Refresh opportunities after a moment
@@ -627,7 +627,7 @@ export function PortalTab() {
       // Show success with BaseScan link if available
       const basescanUrl = data.basescanUrl || (data.transactionHash ? `https://basescan.org/tx/${data.transactionHash}` : null);
       if (basescanUrl) {
-        setSuccess(`✅ Claimed ${data.rewardAmount?.toLocaleString() || ''} CATWALK for ${data.claimedCount || engagementTypes.length} action(s)!`);
+        setSuccess(`âœ… Claimed ${data.rewardAmount?.toLocaleString() || ''} CATWALK for ${data.claimedCount || engagementTypes.length} action(s)!`);
         setTransactionUrl(basescanUrl);
       } else {
         setSuccess(`Successfully claimed ${engagementTypes.length} reward(s)!`);
@@ -712,7 +712,7 @@ export function PortalTab() {
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <h3 style={{ color: "#c1b400", fontSize: 16, fontWeight: 700, margin: 0 }}>
-            💰 Lifetime Earned
+            ðŸ’° Lifetime Earned
           </h3>
           <select
             value={lifetimePeriod}
@@ -767,7 +767,7 @@ export function PortalTab() {
                   {lifetimeRewards.breakdown.posting.toLocaleString()}
                 </div>
                 <div style={{ color: "#888", fontSize: 10 }}>
-                  📝 Posting ({lifetimeRewards.claimCounts.posting})
+                  ðŸ“ Posting ({lifetimeRewards.claimCounts.posting})
                 </div>
               </div>
 
@@ -782,7 +782,7 @@ export function PortalTab() {
                   {lifetimeRewards.breakdown.like.toLocaleString()}
                 </div>
                 <div style={{ color: "#888", fontSize: 10 }}>
-                  ❤️ Likes ({lifetimeRewards.claimCounts.like})
+                  â¤ï¸ Likes ({lifetimeRewards.claimCounts.like})
                 </div>
               </div>
 
@@ -797,7 +797,7 @@ export function PortalTab() {
                   {lifetimeRewards.breakdown.recast.toLocaleString()}
                 </div>
                 <div style={{ color: "#888", fontSize: 10 }}>
-                  🔁 Recasts ({lifetimeRewards.claimCounts.recast})
+                  ðŸ” Recasts ({lifetimeRewards.claimCounts.recast})
                 </div>
               </div>
 
@@ -812,7 +812,7 @@ export function PortalTab() {
                   {lifetimeRewards.breakdown.comment.toLocaleString()}
                 </div>
                 <div style={{ color: "#888", fontSize: 10 }}>
-                  💬 Comments ({lifetimeRewards.claimCounts.comment})
+                  ðŸ’¬ Comments ({lifetimeRewards.claimCounts.comment})
                 </div>
               </div>
             </div>
@@ -855,7 +855,7 @@ export function PortalTab() {
             onClick={(e) => e.stopPropagation()}
           >
             <h3 style={{ color: "#ffaa00", fontSize: 20, fontWeight: 700, marginBottom: 16, textAlign: "center" }}>
-              ⚠️ Incomplete Actions
+              âš ï¸ Incomplete Actions
             </h3>
             
             <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 16, lineHeight: 1.5 }}>
@@ -895,17 +895,17 @@ export function PortalTab() {
                     cursor: "pointer",
                   }}
                 >
-                  <span style={{ color: "#ff4444", fontSize: 16 }}>✗</span>
+                  <span style={{ color: "#ff4444", fontSize: 16 }}>âœ—</span>
                   <span style={{ color: "#ff4444", fontSize: 14, textTransform: "capitalize" }}>
-                    {action === "like" && "❤️ Like"}
-                    {action === "recast" && "🔁 Recast"}
-                    {action === "comment" && "💬 Comment"}
+                    {action === "like" && "â¤ï¸ Like"}
+                    {action === "recast" && "ðŸ” Recast"}
+                    {action === "comment" && "ðŸ’¬ Comment"}
                   </span>
                   <span style={{ color: "#ff4444", fontSize: 12, marginLeft: "auto" }}>
                     -{action === "like" ? "1,000" : action === "recast" ? "2,000" : "5,000"}
                   </span>
                   <span style={{ color: "#ffaa00", fontSize: 11, fontWeight: 600 }}>
-                    TAP TO DO →
+                    TAP TO DO â†’
                   </span>
                 </button>
               ))}
@@ -1022,7 +1022,7 @@ export function PortalTab() {
                   textDecoration: "none",
                 }}
               >
-                📜 View Transaction on BaseScan →
+                ðŸ“œ View Transaction on BaseScan â†’
               </button>
             </div>
           )}
@@ -1054,7 +1054,7 @@ export function PortalTab() {
                   marginBottom: 16,
                 }}
               >
-                🐱 Creator Reward
+                ðŸ± Creator Reward
               </h2>
               <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 12, lineHeight: 1.6 }}>
                 Verify that you&apos;ve posted to the /catwalk channel and claim 500,000 CATWALK tokens.
@@ -1074,7 +1074,7 @@ export function PortalTab() {
                   }}
                 >
                   <p style={{ color: "#00ff00", fontSize: 16, fontWeight: 700, marginBottom: 8 }}>
-                    ✅ Reward Claimed
+                    âœ… Reward Claimed
                   </p>
                   <p style={{ color: "#ffffff", fontSize: 14 }}>
                     You&apos;ve already claimed {creatorClaimStatus.rewardAmount?.toLocaleString()} CATWALK tokens.
@@ -1109,7 +1109,7 @@ export function PortalTab() {
                   }}
                 >
                   <p style={{ color: "#c1b400", fontSize: 16, fontWeight: 700, marginBottom: 8 }}>
-                    ✅ Verification Complete
+                    âœ… Verification Complete
                   </p>
                   <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 16 }}>
                     You&apos;re eligible to claim {creatorClaimStatus.rewardAmount?.toLocaleString()} CATWALK tokens!
@@ -1175,7 +1175,7 @@ export function PortalTab() {
                   marginBottom: 6,
                 }}
               >
-                💰 ENGAGEMENT REWARDS
+                ðŸ’° ENGAGEMENT REWARDS
               </h2>
               <p style={{ color: "#ffffff", fontSize: 12, marginBottom: 12, lineHeight: 1.5 }}>
                 You&apos;ve completed these actions! Click &quot;Claim&quot; to receive your CATWALK tokens.
@@ -1187,9 +1187,9 @@ export function PortalTab() {
                   
                   // All possible actions with their rewards
                   const allActions = [
-                    { type: "like" as const, emoji: "❤️", reward: 1000 },
-                    { type: "recast" as const, emoji: "🔁", reward: 2000 },
-                    { type: "comment" as const, emoji: "💬", reward: 5000 },
+                    { type: "like" as const, emoji: "â¤ï¸", reward: 1000 },
+                    { type: "recast" as const, emoji: "ðŸ”", reward: 2000 },
+                    { type: "comment" as const, emoji: "ðŸ’¬", reward: 5000 },
                   ];
                   
                   // Calculate missing actions and their total reward
@@ -1253,7 +1253,7 @@ export function PortalTab() {
                               <div key={action.type} style={{ display: "flex", alignItems: "center", gap: 4 }}>
                                 <span style={{ fontSize: 14 }}>{action.emoji}</span>
                                 <span style={{ color: isCompleted ? "#00ff00" : "#ff4444", fontSize: 11 }}>
-                                  {isCompleted ? "✓" : "✗"}
+                                  {isCompleted ? "âœ“" : "âœ—"}
                                 </span>
                               </div>
                             );
@@ -1305,7 +1305,7 @@ export function PortalTab() {
                   fontWeight: 700,
                 }}
               >
-                ⚡ Quick Actions
+                âš¡ Quick Actions
               </h2>
               {bonusMultiplier > 1 && (
                 <span style={{
@@ -1339,7 +1339,7 @@ export function PortalTab() {
                 marginBottom: 16,
               }}
             >
-              {bulkEngaging ? "⏳ Liking & Recasting..." : signerUuid ? "❤️🔁 Like & Recast All Casts" : "🔒 Enable Auto-Engage First"}
+              {bulkEngaging ? "â³ Liking & Recasting..." : signerUuid ? "â¤ï¸ðŸ” Like & Recast All Casts" : "ðŸ”’ Enable Auto-Engage First"}
             </button>
 
             {/* Signer Authorization Required */}
@@ -1433,7 +1433,7 @@ export function PortalTab() {
             }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                 <p style={{ color: autoEngageEnabled ? "#00ff00" : "#ff00ff", fontSize: 14, fontWeight: 600, margin: 0 }}>
-                  {autoEngageEnabled ? "✅ Auto-Engage Active" : "🎁 Auto Like & Recast"}
+                  {autoEngageEnabled ? "âœ… Auto-Engage Active" : "ðŸŽ Auto Like & Recast"}
                 </p>
                 {autoEngageEnabled && (
                   <span style={{
@@ -1458,7 +1458,7 @@ export function PortalTab() {
               
               {!autoEngageEnabled && (
                 <p style={{ color: "#ff00ff", fontSize: 12, fontWeight: 600, marginBottom: 12 }}>
-                  ✨ Earn 10% bonus CATWALK on all rewards when enabled!
+                  âœ¨ Earn 10% bonus CATWALK on all rewards when enabled!
                 </p>
               )}
               
@@ -1471,7 +1471,7 @@ export function PortalTab() {
                   marginBottom: 12,
                 }}>
                   <p style={{ color: "#c1b400", fontSize: 12, fontWeight: 600 }}>
-                    ⏳ Waiting for approval in Warpcast...
+                    â³ Waiting for approval in Warpcast...
                   </p>
                   <p style={{ color: "#999", fontSize: 11, marginTop: 4 }}>
                     Please approve the signer request in Warpcast to enable auto-engage.
@@ -1514,7 +1514,7 @@ export function PortalTab() {
                     opacity: enablingAutoEngage ? 0.6 : 1,
                   }}
                 >
-                  {enablingAutoEngage ? "⏳ Setting up..." : "🚀 Enable Auto-Engage (+10% Bonus)"}
+                  {enablingAutoEngage ? "â³ Setting up..." : "ðŸš€ Enable Auto-Engage (+10% Bonus)"}
                 </button>
               )}
               
@@ -1532,7 +1532,7 @@ export function PortalTab() {
                       });
                       setAutoEngageEnabled(true);
                       setBonusMultiplier(1.1);
-                      setSuccess("✅ Auto-engage enabled!");
+                      setSuccess("âœ… Auto-engage enabled!");
                       triggerHaptic("medium");
                     } catch {
                       setError("Failed to enable auto-engage");
@@ -1550,7 +1550,7 @@ export function PortalTab() {
                     cursor: "pointer",
                   }}
                 >
-                  🚀 Enable Auto-Engage (+10% Bonus)
+                  ðŸš€ Enable Auto-Engage (+10% Bonus)
                 </button>
               )}
               
@@ -1608,7 +1608,7 @@ export function PortalTab() {
                 marginBottom: 16,
               }}
             >
-              💬 Engagement Opportunities
+              ðŸ’¬ Engagement Opportunities
             </h2>
             <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 12, lineHeight: 1.6 }}>
               Like, comment, or recast posts in the /catwalk channel to earn rewards. Click on any cast below to engage.
@@ -1659,9 +1659,9 @@ export function PortalTab() {
                           >
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                               <span style={{ fontSize: 16 }}>
-                                {action.type === "like" && "❤️"}
-                                {action.type === "comment" && "💬"}
-                                {action.type === "recast" && "🔁"}
+                                {action.type === "like" && "â¤ï¸"}
+                                {action.type === "comment" && "ðŸ’¬"}
+                                {action.type === "recast" && "ðŸ”"}
                               </span>
                               <span style={{ color: "#ffffff", fontSize: 14, textTransform: "capitalize" }}>
                                 {action.type}
@@ -1738,6 +1738,3 @@ export function PortalTab() {
     </div>
   );
 }
-/ /   R e f r e s h   2 0 2 6 - 0 1 - 0 2   0 0 : 2 6 : 0 4 
- 
- 

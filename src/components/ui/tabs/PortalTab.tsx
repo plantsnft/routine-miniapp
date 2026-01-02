@@ -145,12 +145,9 @@ export function PortalTab() {
                 console.log("[PortalTab] Signer needs approval");
                 setSignerUuid(null);
                 setAutoEngageEnabled(false);
-                // Use stored approval URL from preferences, or from signer data
-                const storedUrl = data.signerApprovalUrl;
-                const signerUrl = signerData.signer_approval_url;
-                if (storedUrl || signerUrl) {
-                  setSignerApprovalUrl(storedUrl || signerUrl);
-                }
+                // Signer not approved - show authorization button
+                // Set a placeholder to trigger the UI
+                setSignerApprovalUrl("pending");
               }
             } else {
               setSignerUuid(null);
@@ -1210,11 +1207,49 @@ export function PortalTab() {
                   This is a one-time setup that allows the app to like and recast on your behalf.
                 </p>
                 <button
-                  onClick={() => {
-                    if (actions && actions.openUrl && signerApprovalUrl) {
-                      console.log("[PortalTab] Opening approval URL:", signerApprovalUrl);
-                      actions.openUrl(signerApprovalUrl);
-                      setPollingSigner(true);
+                  onClick={async () => {
+                    try {
+                      setEnablingAutoEngage(true);
+                      setError(null);
+                      console.log("[PortalTab] Requesting signer authorization...");
+                      
+                      // Call the authorize endpoint to get a fresh signer with approval URL
+                      const res = await fetch("/api/portal/engage/authorize", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ fid: userFid }),
+                      });
+                      
+                      const data = await res.json();
+                      console.log("[PortalTab] Authorization response:", data);
+                      
+                      if (!res.ok) {
+                        throw new Error(data.error || "Authorization failed");
+                      }
+                      
+                      if (data.needsApproval && data.approvalUrl) {
+                        setSignerApprovalUrl(data.approvalUrl);
+                        if (actions && actions.openUrl) {
+                          console.log("[PortalTab] Opening Warpcast approval URL");
+                          actions.openUrl(data.approvalUrl);
+                        }
+                        setPollingSigner(true);
+                        // Start polling for approval
+                        if (data.signerUuid) {
+                          pollSignerStatus(data.signerUuid);
+                        }
+                      } else if (!data.needsApproval) {
+                        // Already approved
+                        setSignerUuid(data.signerUuid);
+                        setAutoEngageEnabled(true);
+                        setBonusMultiplier(1.1);
+                        setSuccess("Signer is already approved!");
+                      }
+                    } catch (err) {
+                      console.error("[PortalTab] Auth error:", err);
+                      setError(err.message || "Authorization failed");
+                    } finally {
+                      setEnablingAutoEngage(false);
                     }
                   }}
                   style={{

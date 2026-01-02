@@ -145,8 +145,11 @@ export function PortalTab() {
                 console.log("[PortalTab] Signer needs approval");
                 setSignerUuid(null);
                 setAutoEngageEnabled(false);
-                if (signerData.signer_approval_url) {
-                  setSignerApprovalUrl(signerData.signer_approval_url);
+                // Use stored approval URL from preferences, or from signer data
+                const storedUrl = data.signerApprovalUrl;
+                const signerUrl = signerData.signer_approval_url;
+                if (storedUrl || signerUrl) {
+                  setSignerApprovalUrl(storedUrl || signerUrl);
                 }
               }
             } else {
@@ -204,6 +207,7 @@ export function PortalTab() {
         body: JSON.stringify({
           fid: userFid,
           signerUuid: newSignerUuid,
+          signerApprovalUrl: approvalUrl || null,
           autoEngageEnabled: false, // Will be enabled once approved
         }),
       });

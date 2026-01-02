@@ -29,6 +29,7 @@ export async function GET(request: Request) {
       return NextResponse.json({
         fid: parseInt(fid),
         signerUuid: null,
+        signerApprovalUrl: null,
         autoEngageEnabled: false,
         bonusMultiplier: 1.0,
         hasValidSigner: false,
@@ -39,6 +40,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       fid: prefs.fid,
       signerUuid: prefs.signer_uuid,
+      signerApprovalUrl: prefs.signer_approval_url || null,
       autoEngageEnabled: prefs.auto_engage_enabled,
       bonusMultiplier: parseFloat(prefs.bonus_multiplier),
       hasValidSigner: !!prefs.signer_uuid,
@@ -52,13 +54,13 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json() as any;
-    const { fid, signerUuid, autoEngageEnabled } = body;
+    const { fid, signerUuid, signerApprovalUrl, autoEngageEnabled } = body;
 
     if (!fid || typeof fid !== "number") {
       return NextResponse.json({ error: "fid required" }, { status: 400 });
     }
 
-    console.log(`[Engage Preferences] Update: fid=${fid}, autoEngage=${autoEngageEnabled}, hasSigner=${!!signerUuid}`);
+    console.log(`[Engage Preferences] Update: fid=${fid}, autoEngage=${autoEngageEnabled}, hasSigner=${!!signerUuid}, hasApprovalUrl=${!!signerApprovalUrl}`);
 
     const bonusMultiplier = autoEngageEnabled ? 1.1 : 1.0;
 
@@ -75,6 +77,7 @@ export async function POST(request: Request) {
       bonus_multiplier: bonusMultiplier,
     };
     if (signerUuid !== undefined) updateData.signer_uuid = signerUuid;
+    if (signerApprovalUrl !== undefined) updateData.signer_approval_url = signerApprovalUrl;
     if (autoEngageEnabled !== undefined) {
       updateData.auto_engage_enabled = autoEngageEnabled;
       if (autoEngageEnabled) updateData.auto_engage_enabled_at = new Date().toISOString();
@@ -117,6 +120,7 @@ export async function POST(request: Request) {
       success: true,
       fid: prefs.fid,
       signerUuid: prefs.signer_uuid,
+      signerApprovalUrl: prefs.signer_approval_url || null,
       autoEngageEnabled: prefs.auto_engage_enabled,
       bonusMultiplier: parseFloat(prefs.bonus_multiplier),
       hasValidSigner: !!prefs.signer_uuid,

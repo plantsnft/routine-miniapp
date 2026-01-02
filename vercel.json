@@ -1,4 +1,4 @@
-﻿{
+{
   "buildCommand": "next build",
   "framework": "nextjs",
   "crons": [

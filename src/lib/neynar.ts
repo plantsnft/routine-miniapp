@@ -3,10 +3,13 @@ import { APP_URL } from './constants';
 
 let neynarClient: NeynarAPIClient | null = null;
 
-// Example usage:
-// const client = getNeynarClient();
-// const user = await client.lookupUserByFid(fid); 
-export function getNeynarClient() {
+/**
+ * Get a singleton Neynar API client.
+ * Lazily initializes the client on first call.
+ * 
+ * @throws Error if NEYNAR_API_KEY is not configured
+ */
+export function getNeynarClient(): NeynarAPIClient {
   if (!neynarClient) {
     const apiKey = process.env.NEYNAR_API_KEY;
     if (!apiKey) {
@@ -65,10 +68,9 @@ export async function sendNeynarMiniAppNotification({
 
     if (result.notification_deliveries.length > 0) {
       return { state: "success" };
-    } else if (result.notification_deliveries.length === 0) {
-      return { state: "no_token" };
     } else {
-      return { state: "error", error: result || "Unknown error" };
+      // No deliveries means user hasn't enabled notifications
+      return { state: "no_token" };
     }
   } catch (error) {
     return { state: "error", error };

@@ -145,10 +145,10 @@ export async function GET(request: Request) {
           // Small delay
           await new Promise(r => setTimeout(r, 100));
 
-          // Perform recast
+          // Perform recast (using reaction endpoint with recast type)
           totalEngagements++;
           
-          const recastRes = await fetch("https://api.neynar.com/v2/farcaster/recast", {
+          const recastRes = await fetch("https://api.neynar.com/v2/farcaster/reaction", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -156,6 +156,7 @@ export async function GET(request: Request) {
             },
             body: JSON.stringify({
               signer_uuid: signerUuid,
+              reaction_type: "recast",
               target: castHash,
             }),
           });

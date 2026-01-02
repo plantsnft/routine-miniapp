@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
+import { privateKeyToAccount } from "viem/accounts";
+import { mnemonicToAccount } from "viem/accounts";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const SUPABASE_SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE || "";
 const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY || "";
+const MNEMONIC = process.env.MNEMONIC || "";
 
 const SUPABASE_HEADERS = {
   apikey: SUPABASE_SERVICE_ROLE,
@@ -10,11 +13,17 @@ const SUPABASE_HEADERS = {
   "Content-Type": "application/json",
 };
 
+// The FID of the app (your Neynar app's FID)
+// You need to set this to your app's FID
+const APP_FID = parseInt(process.env.NEYNAR_APP_FID || "0");
+
 /**
  * Signer Authorization Endpoint
- * POST /api/portal/engage/authorize
- * 
- * Creates a managed signer using the Neynar API directly
+ * Follows the full Neynar Managed Signer flow:
+ * 1. Create signer -> get signer_uuid, public_key
+ * 2. Sign with app wallet
+ * 3. Register signed key -> get approval_url
+ * 4. Return approval_url to user
  */
 export async function POST(request: Request) {
   try {
@@ -25,14 +34,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "fid is required" }, { status: 400 });
     }
 
-    console.log(`[Signer Auth] Starting authorization for FID ${fid}`);
+    console.log(`[Signer Auth] Starting for FID ${fid}`);
 
-    // Check if user has existing approved signer
+    // Check for existing approved signer
     const prefsRes = await fetch(
       `${SUPABASE_URL}/rest/v1/user_engage_preferences?fid=eq.${fid}&limit=1`,
       { method: "GET", headers: SUPABASE_HEADERS }
     );
-    
     const prefs = await prefsRes.json() as any[];
     const existingSignerUuid = prefs[0]?.signer_uuid;
 
@@ -54,12 +62,22 @@ export async function POST(request: Request) {
             needsApproval: false,
           });
         }
+        
+        // If pending_approval, return the existing approval URL
+        if (signerData.status === "pending_approval" && signerData.signer_approval_url) {
+          return NextResponse.json({
+            success: true,
+            signerUuid: existingSignerUuid,
+            approvalUrl: signerData.signer_approval_url,
+            status: "pending_approval",
+            needsApproval: true,
+          });
+        }
       }
     }
 
-    // Create a new signer using the Neynar API directly
-    console.log(`[Signer Auth] Creating new managed signer via API...`);
-    
+    // Step 1: Create a new signer
+    console.log(`[Signer Auth] Step 1: Creating signer...`);
     const createRes = await fetch("https://api.neynar.com/v2/farcaster/signer", {
       method: "POST",
       headers: {
@@ -69,120 +87,120 @@ export async function POST(request: Request) {
     });
 
     if (!createRes.ok) {
-      const errorText = await createRes.text();
-      console.error(`[Signer Auth] Create signer failed:`, errorText);
+      const err = await createRes.text();
+      console.error(`[Signer Auth] Create signer failed:`, err);
       throw new Error("Failed to create signer");
     }
 
-    const newSigner = await createRes.json() as any;
-    
-    console.log(`[Signer Auth] Signer created:`, JSON.stringify(newSigner, null, 2));
+    const signer = await createRes.json() as any;
+    console.log(`[Signer Auth] Signer created:`, {
+      uuid: signer.signer_uuid,
+      publicKey: signer.public_key,
+      status: signer.status,
+      hasApprovalUrl: !!signer.signer_approval_url,
+    });
 
-    // Check if we got an approval URL
-    const approvalUrl = newSigner.signer_approval_url;
-    
-    if (!approvalUrl) {
-      // For sponsored signers, we might not get an approval URL
-      // The signer might already be usable or need a different flow
-      console.log(`[Signer Auth] No approval URL - checking signer status...`);
+    // If we got an approval URL directly (some Neynar configs), use it
+    if (signer.signer_approval_url) {
+      // Save signer UUID
+      await saveSignerUuid(fid, signer.signer_uuid, prefs.length > 0);
       
-      // If signer is already approved (sponsored), we can use it
-      if (newSigner.status === "approved") {
-        // Save and return
-        const updateData = {
-          signer_uuid: newSigner.signer_uuid,
-          auto_engage_enabled: true,
-          bonus_multiplier: 1.1,
-          updated_at: new Date().toISOString(),
-        };
-
-        if (prefs.length > 0) {
-          await fetch(
-            `${SUPABASE_URL}/rest/v1/user_engage_preferences?fid=eq.${fid}`,
-            { method: "PATCH", headers: SUPABASE_HEADERS, body: JSON.stringify(updateData) }
-          );
-        } else {
-          await fetch(
-            `${SUPABASE_URL}/rest/v1/user_engage_preferences`,
-            { method: "POST", headers: SUPABASE_HEADERS, body: JSON.stringify([{ fid, ...updateData }]) }
-          );
-        }
-
-        return NextResponse.json({
-          success: true,
-          signerUuid: newSigner.signer_uuid,
-          status: "approved",
-          needsApproval: false,
-          message: "Signer is approved (sponsored)",
-        });
-      }
-
-      // For managed signers, we need to use the signed key request flow
-      // This requires the user to sign a message in Warpcast
-      console.log(`[Signer Auth] Attempting signed key request flow...`);
-      
-      // Generate a signed key request URL using Warpcast deep link
-      const publicKey = newSigner.public_key;
-      const deadline = Math.floor(Date.now() / 1000) + 86400; // 24 hours from now
-      
-      // Create a Warpcast deep link for signing
-      const warpcastUrl = `https://warpcast.com/~/add-signer?publicKey=${publicKey}&name=Catwalk%20Auto-Engage&deadline=${deadline}`;
-      
-      console.log(`[Signer Auth] Generated Warpcast URL: ${warpcastUrl}`);
-
-      // Save the signer UUID
-      const updateData = {
-        signer_uuid: newSigner.signer_uuid,
-        updated_at: new Date().toISOString(),
-      };
-
-      if (prefs.length > 0) {
-        await fetch(
-          `${SUPABASE_URL}/rest/v1/user_engage_preferences?fid=eq.${fid}`,
-          { method: "PATCH", headers: SUPABASE_HEADERS, body: JSON.stringify(updateData) }
-        );
-      } else {
-        await fetch(
-          `${SUPABASE_URL}/rest/v1/user_engage_preferences`,
-          { method: "POST", headers: SUPABASE_HEADERS, body: JSON.stringify([{ fid, ...updateData }]) }
-        );
-      }
-
       return NextResponse.json({
         success: true,
-        signerUuid: newSigner.signer_uuid,
-        approvalUrl: warpcastUrl,
-        status: newSigner.status,
+        signerUuid: signer.signer_uuid,
+        approvalUrl: signer.signer_approval_url,
+        status: signer.status,
         needsApproval: true,
-        message: "Please authorize in Warpcast",
       });
     }
 
-    // Save the new signer UUID
-    const updateData = {
-      signer_uuid: newSigner.signer_uuid,
-      updated_at: new Date().toISOString(),
-    };
-
-    if (prefs.length > 0) {
-      await fetch(
-        `${SUPABASE_URL}/rest/v1/user_engage_preferences?fid=eq.${fid}`,
-        { method: "PATCH", headers: SUPABASE_HEADERS, body: JSON.stringify(updateData) }
-      );
-    } else {
-      await fetch(
-        `${SUPABASE_URL}/rest/v1/user_engage_preferences`,
-        { method: "POST", headers: SUPABASE_HEADERS, body: JSON.stringify([{ fid, ...updateData }]) }
-      );
+    // Step 2 & 3: Register signed key to get approval URL
+    // This requires the app's wallet to sign a message
+    if (!MNEMONIC) {
+      console.error(`[Signer Auth] No MNEMONIC configured for signing`);
+      // Fallback: Just save the signer and tell user to contact support
+      await saveSignerUuid(fid, signer.signer_uuid, prefs.length > 0);
+      
+      return NextResponse.json({
+        success: false,
+        signerUuid: signer.signer_uuid,
+        error: "Signer created but approval URL generation requires app configuration. Please contact support.",
+        needsApproval: true,
+      });
     }
 
-    console.log(`[Signer Auth] Returning approval URL: ${approvalUrl}`);
+    console.log(`[Signer Auth] Step 2: Signing key request...`);
+    
+    // Create account from mnemonic
+    const account = mnemonicToAccount(MNEMONIC);
+    const deadline = Math.floor(Date.now() / 1000) + 86400; // 24 hours from now
+
+    // EIP-712 signature for signed key request
+    const SIGNED_KEY_REQUEST_VALIDATOR_ADDRESS = "0x00000000FC700472606ED4fA22623Acf62c60553";
+    
+    const signature = await account.signTypedData({
+      domain: {
+        name: "Farcaster SignedKeyRequestValidator",
+        version: "1",
+        chainId: 10, // Optimism
+        verifyingContract: SIGNED_KEY_REQUEST_VALIDATOR_ADDRESS,
+      },
+      types: {
+        SignedKeyRequest: [
+          { name: "requestFid", type: "uint256" },
+          { name: "key", type: "bytes" },
+          { name: "deadline", type: "uint256" },
+        ],
+      },
+      primaryType: "SignedKeyRequest",
+      message: {
+        requestFid: BigInt(APP_FID),
+        key: signer.public_key as `0x${string}`,
+        deadline: BigInt(deadline),
+      },
+    });
+
+    console.log(`[Signer Auth] Step 3: Registering signed key...`);
+    
+    // Register the signed key
+    const registerRes = await fetch("https://api.neynar.com/v2/farcaster/signer/signed_key", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": NEYNAR_API_KEY,
+      },
+      body: JSON.stringify({
+        signer_uuid: signer.signer_uuid,
+        app_fid: APP_FID,
+        deadline,
+        signature,
+      }),
+    });
+
+    if (!registerRes.ok) {
+      const err = await registerRes.text();
+      console.error(`[Signer Auth] Register signed key failed:`, err);
+      throw new Error("Failed to register signed key");
+    }
+
+    const registeredSigner = await registerRes.json() as any;
+    console.log(`[Signer Auth] Signed key registered:`, {
+      status: registeredSigner.status,
+      hasApprovalUrl: !!registeredSigner.signer_approval_url,
+    });
+
+    // Save the signer UUID
+    await saveSignerUuid(fid, signer.signer_uuid, prefs.length > 0);
+
+    if (!registeredSigner.signer_approval_url) {
+      throw new Error("No approval URL returned from signed key registration");
+    }
 
     return NextResponse.json({
       success: true,
-      signerUuid: newSigner.signer_uuid,
-      approvalUrl: approvalUrl,
-      status: newSigner.status,
+      signerUuid: signer.signer_uuid,
+      approvalUrl: registeredSigner.signer_approval_url,
+      status: registeredSigner.status,
       needsApproval: true,
     });
   } catch (error: any) {
@@ -190,6 +208,25 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: error.message || "Failed to authorize signer" },
       { status: 500 }
+    );
+  }
+}
+
+async function saveSignerUuid(fid: number, signerUuid: string, exists: boolean) {
+  const updateData = {
+    signer_uuid: signerUuid,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (exists) {
+    await fetch(
+      `${SUPABASE_URL}/rest/v1/user_engage_preferences?fid=eq.${fid}`,
+      { method: "PATCH", headers: SUPABASE_HEADERS, body: JSON.stringify(updateData) }
+    );
+  } else {
+    await fetch(
+      `${SUPABASE_URL}/rest/v1/user_engage_preferences`,
+      { method: "POST", headers: SUPABASE_HEADERS, body: JSON.stringify([{ fid, ...updateData }]) }
     );
   }
 }

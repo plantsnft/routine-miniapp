@@ -244,10 +244,30 @@ export async function GET(request: Request) {
       total: breakdown.total,
     });
 
+    // Also provide legacy format for backwards compatibility with existing UI
+    const legacyBreakdown = {
+      posting: breakdown.creator.amount,
+      like: breakdown.patron.likes.amount,
+      recast: breakdown.patron.recasts.amount,
+      comment: breakdown.patron.comments.amount,
+      total: breakdown.total,
+    };
+    
+    const legacyCounts = {
+      posting: breakdown.creator.count,
+      like: breakdown.patron.likes.count,
+      recast: breakdown.patron.recasts.count,
+      comment: breakdown.patron.comments.count,
+      total: breakdown.creator.count + breakdown.patron.count,
+    };
+
     return NextResponse.json({
       fid: Number(fid),
       period,
-      breakdown,
+      breakdown: legacyBreakdown,
+      claimCounts: legacyCounts,
+      // Also include new 3-section format for future UI updates
+      sections: breakdown,
     });
   } catch (error: any) {
     console.error("[Lifetime Rewards] Error:", error);

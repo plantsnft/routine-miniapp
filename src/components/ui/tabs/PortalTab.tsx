@@ -182,36 +182,28 @@ export function PortalTab() {
       // Call the new authorize endpoint with EIP-712 signing
       const authRes = await fetch("/api/portal/engage/authorize", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fid: userFid }),
       });
       
-      if (!createRes.ok) {
-        throw new Error("Failed to create signer");
-      }
+      const authData = await authRes.json();
       
-      const signerData = await createRes.json();
-      console.log("[PortalTab] Created signer:", signerData);
+      if (!authRes.ok) {
+        throw new Error(authData.error || "Failed to authorize signer");
+      }
+      console.log("[PortalTab] Authorize response:", authData);
 
       // The signer response contains signer_uuid and signer_approval_url
-      const newSignerUuid = signerData.signer_uuid;
-      const approvalUrl = signerData.signer_approval_url;
+      const newSignerUuid = authData.signerUuid;
+      const approvalUrl = authData.approvalUrl;
 
       if (!newSignerUuid) {
         throw new Error("No signer UUID received");
       }
 
-      // Store the pending signer in preferences (not yet approved)
-      await fetch("/api/portal/engage/preferences", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fid: userFid,
-          signerUuid: newSignerUuid,
-          signerApprovalUrl: approvalUrl || null,
-          autoEngageEnabled: false, // Will be enabled once approved
-        }),
-      });
-
-      if (approvalUrl) {
+      // The authorize endpoint already saved the signer data to DB
+      
+      if (authData.needsApproval && approvalUrl) {
         setSignerApprovalUrl(approvalUrl);
         // Open the approval URL in Warpcast
         if (actions?.openUrl) {
@@ -221,8 +213,8 @@ export function PortalTab() {
         // Start polling for approval
         setPollingSigner(true);
         pollSignerStatus(newSignerUuid);
-      } else {
-        // No approval needed (already approved or sponsored)
+      } else if (!authData.needsApproval) {
+        // Already approved
         setSignerUuid(newSignerUuid);
         setAutoEngageEnabled(true);
         setBonusMultiplier(1.1);
@@ -240,6 +232,8 @@ export function PortalTab() {
         
         setSuccess("✅ Auto-engage enabled! You now earn 10% bonus on all rewards.");
         triggerHaptic("heavy");
+      } else {
+        throw new Error("No approval URL received from server");
       }
     } catch (err: any) {
       console.error("[PortalTab] Enable auto-engage error:", err);

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 // Auto-engage feature v2 - deployed Dec 31 2024
 import { useState, useEffect } from "react";
 import { useMiniApp } from "@neynar/react";
@@ -98,13 +98,11 @@ export function PortalTab() {
   const [signerApprovalUrl, setSignerApprovalUrl] = useState<string | null>(null);
   const [pollingSigner, setPollingSigner] = useState(false);
   
-  // Lifetime earnings state
-  const [lifetimeRewards, setLifetimeRewards] = useState<{
-    breakdown: { posting: number; like: number; recast: number; comment: number; total: number };
-    claimCounts: { posting: number; like: number; recast: number; comment: number; total: number };
-  } | null>(null);
+  // Lifetime earnings state (uses sections from API)
+  const [lifetimeRewards, setLifetimeRewards] = useState<{ creator: { amount: number; count: number }; patron: { amount: number; count: number; likes: { amount: number; count: number }; recasts: { amount: number; count: number }; comments: { amount: number; count: number } }; virtualWalk: { amount: number; count: number }; total: number } | null>(null);
   const [lifetimePeriod, setLifetimePeriod] = useState<"7d" | "30d" | "1y" | "lifetime">("lifetime");
   const [loadingLifetime, setLoadingLifetime] = useState(false);
+
 
   const isCreator = userFid && CATWALK_CREATOR_FIDS.includes(userFid);
 
@@ -136,10 +134,7 @@ export function PortalTab() {
       const res = await fetch(`/api/portal/lifetime-rewards?fid=${userFid}&period=${period}`);
       if (res.ok) {
         const data = await res.json();
-        setLifetimeRewards({
-          breakdown: data.breakdown,
-          claimCounts: data.claimCounts,
-        });
+        if (data.sections) { setLifetimeRewards(data.sections); }
       }
     } catch (err) {
       console.log("[PortalTab] Error fetching lifetime rewards:", err);
@@ -264,7 +259,7 @@ export function PortalTab() {
           }),
         });
         
-        setSuccess("âœ… Auto-engage enabled! You now earn 10% bonus on all rewards.");
+        setSuccess("ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Auto-engage enabled! You now earn 10% bonus on all rewards.");
         triggerHaptic("heavy");
       } else {
         throw new Error("No approval URL received from server");
@@ -319,7 +314,7 @@ export function PortalTab() {
             }),
           });
 
-          setSuccess("âœ… Auto-engage enabled! You now earn 10% bonus on all rewards.");
+          setSuccess("ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Auto-engage enabled! You now earn 10% bonus on all rewards.");
           triggerHaptic("heavy");
         } else if (data.status === "pending_approval") {
           // Still pending, keep polling
@@ -405,7 +400,7 @@ export function PortalTab() {
         throw new Error(data.error || "Bulk engage failed");
       }
 
-      setSuccess(`âœ… Liked & recasted ${data.summary.successful} casts! Refresh to claim rewards.`);
+      setSuccess(`ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Liked & recasted ${data.summary.successful} casts! Refresh to claim rewards.`);
       triggerHaptic("heavy");
       
       // Refresh opportunities after a moment
@@ -627,7 +622,7 @@ export function PortalTab() {
       // Show success with BaseScan link if available
       const basescanUrl = data.basescanUrl || (data.transactionHash ? `https://basescan.org/tx/${data.transactionHash}` : null);
       if (basescanUrl) {
-        setSuccess(`âœ… Claimed ${data.rewardAmount?.toLocaleString() || ''} CATWALK for ${data.claimedCount || engagementTypes.length} action(s)!`);
+        setSuccess(`ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Claimed ${data.rewardAmount?.toLocaleString() || ''} CATWALK for ${data.claimedCount || engagementTypes.length} action(s)!`);
         setTransactionUrl(basescanUrl);
       } else {
         setSuccess(`Successfully claimed ${engagementTypes.length} reward(s)!`);
@@ -712,7 +707,7 @@ export function PortalTab() {
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <h3 style={{ color: "#c1b400", fontSize: 16, fontWeight: 700, margin: 0 }}>
-            ðŸ’° Lifetime Earned
+            ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€šÃ‚Â° Lifetime Earned
           </h3>
           <select
             value={lifetimePeriod}
@@ -739,86 +734,71 @@ export function PortalTab() {
         ) : lifetimeRewards ? (
           <>
             {/* Total */}
-            <div style={{ 
-              textAlign: "center", 
-              marginBottom: 12, 
-              padding: 12, 
-              background: "rgba(193, 180, 0, 0.2)", 
-              borderRadius: 8 
-            }}>
+            <div style={{ textAlign: "center", marginBottom: 16, padding: 12, background: "rgba(193, 180, 0, 0.2)", borderRadius: 8 }}>
               <div style={{ color: "#c1b400", fontSize: 28, fontWeight: 900 }}>
-                {lifetimeRewards.breakdown.total.toLocaleString()}
+                {(lifetimeRewards.total || 0).toLocaleString()}
               </div>
-              <div style={{ color: "#888", fontSize: 11, marginTop: 2 }}>
-                TOTAL $CATWALK CLAIMED
-              </div>
+              <div style={{ color: "#888", fontSize: 11, marginTop: 2 }}>TOTAL $CATWALK CLAIMED</div>
             </div>
-
-            {/* Breakdown Grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              {/* Posting */}
-              <div style={{ 
-                background: "rgba(0, 0, 0, 0.6)", 
-                padding: 10, 
-                borderRadius: 8,
-                borderLeft: "3px solid #22c55e"
-              }}>
-                <div style={{ color: "#22c55e", fontSize: 14, fontWeight: 700 }}>
-                  {lifetimeRewards.breakdown.posting.toLocaleString()}
-                </div>
-                <div style={{ color: "#888", fontSize: 10 }}>
-                  ðŸ“ Posting ({lifetimeRewards.claimCounts.posting})
+            {/* 3 Category Cards */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {/* Creator Rewards */}
+              <div style={{ background: "rgba(34, 197, 94, 0.1)", border: "1px solid #22c55e", padding: 12, borderRadius: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <div style={{ color: "#22c55e", fontSize: 11, fontWeight: 600, marginBottom: 2 }}>CREATOR REWARDS</div>
+                    <div style={{ color: "#888", fontSize: 10 }}>Posting in /catwalk</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ color: "#22c55e", fontSize: 18, fontWeight: 700 }}>{(lifetimeRewards.creator?.amount || 0).toLocaleString()}</div>
+                    <div style={{ color: "#666", fontSize: 10 }}>{lifetimeRewards.creator?.count || 0} posts</div>
+                  </div>
                 </div>
               </div>
-
-              {/* Likes */}
-              <div style={{ 
-                background: "rgba(0, 0, 0, 0.6)", 
-                padding: 10, 
-                borderRadius: 8,
-                borderLeft: "3px solid #ef4444"
-              }}>
-                <div style={{ color: "#ef4444", fontSize: 14, fontWeight: 700 }}>
-                  {lifetimeRewards.breakdown.like.toLocaleString()}
+              {/* Patron Rewards */}
+              <div style={{ background: "rgba(168, 85, 247, 0.1)", border: "1px solid #a855f7", padding: 12, borderRadius: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div>
+                    <div style={{ color: "#a855f7", fontSize: 11, fontWeight: 600, marginBottom: 2 }}>PATRON REWARDS</div>
+                    <div style={{ color: "#888", fontSize: 10 }}>Likes, recasts and comments</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ color: "#a855f7", fontSize: 18, fontWeight: 700 }}>{(lifetimeRewards.patron?.amount || 0).toLocaleString()}</div>
+                    <div style={{ color: "#666", fontSize: 10 }}>{lifetimeRewards.patron?.count || 0} actions</div>
+                  </div>
                 </div>
-                <div style={{ color: "#888", fontSize: 10 }}>
-                  â¤ï¸ Likes ({lifetimeRewards.claimCounts.like})
-                </div>
-              </div>
-
-              {/* Recasts */}
-              <div style={{ 
-                background: "rgba(0, 0, 0, 0.6)", 
-                padding: 10, 
-                borderRadius: 8,
-                borderLeft: "3px solid #3b82f6"
-              }}>
-                <div style={{ color: "#3b82f6", fontSize: 14, fontWeight: 700 }}>
-                  {lifetimeRewards.breakdown.recast.toLocaleString()}
-                </div>
-                <div style={{ color: "#888", fontSize: 10 }}>
-                  ðŸ” Recasts ({lifetimeRewards.claimCounts.recast})
+                <div style={{ display: "flex", gap: 8, paddingTop: 8, borderTop: "1px solid rgba(168, 85, 247, 0.3)" }}>
+                  <div style={{ flex: 1, textAlign: "center" }}>
+                    <div style={{ color: "#ef4444", fontSize: 12, fontWeight: 600 }}>{(lifetimeRewards.patron?.likes?.amount || 0).toLocaleString()}</div>
+                    <div style={{ color: "#666", fontSize: 9 }}>Likes ({lifetimeRewards.patron?.likes?.count || 0})</div>
+                  </div>
+                  <div style={{ flex: 1, textAlign: "center" }}>
+                    <div style={{ color: "#3b82f6", fontSize: 12, fontWeight: 600 }}>{(lifetimeRewards.patron?.recasts?.amount || 0).toLocaleString()}</div>
+                    <div style={{ color: "#666", fontSize: 9 }}>Recasts ({lifetimeRewards.patron?.recasts?.count || 0})</div>
+                  </div>
+                  <div style={{ flex: 1, textAlign: "center" }}>
+                    <div style={{ color: "#f59e0b", fontSize: 12, fontWeight: 600 }}>{(lifetimeRewards.patron?.comments?.amount || 0).toLocaleString()}</div>
+                    <div style={{ color: "#666", fontSize: 9 }}>Comments ({lifetimeRewards.patron?.comments?.count || 0})</div>
+                  </div>
                 </div>
               </div>
-
-              {/* Comments */}
-              <div style={{ 
-                background: "rgba(0, 0, 0, 0.6)", 
-                padding: 10, 
-                borderRadius: 8,
-                borderLeft: "3px solid #a855f7"
-              }}>
-                <div style={{ color: "#a855f7", fontSize: 14, fontWeight: 700 }}>
-                  {lifetimeRewards.breakdown.comment.toLocaleString()}
-                </div>
-                <div style={{ color: "#888", fontSize: 10 }}>
-                  ðŸ’¬ Comments ({lifetimeRewards.claimCounts.comment})
+              {/* Virtual Walk Rewards */}
+              <div style={{ background: "rgba(59, 130, 246, 0.1)", border: "1px solid #3b82f6", padding: 12, borderRadius: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <div style={{ color: "#3b82f6", fontSize: 11, fontWeight: 600, marginBottom: 2 }}>VIRTUAL WALK REWARDS</div>
+                    <div style={{ color: "#888", fontSize: 10 }}>Daily cat walks</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ color: "#3b82f6", fontSize: 18, fontWeight: 700 }}>{(lifetimeRewards.virtualWalk?.amount || 0).toLocaleString()}</div>
+                    <div style={{ color: "#666", fontSize: 10 }}>{lifetimeRewards.virtualWalk?.count || 0} walks</div>
+                  </div>
                 </div>
               </div>
             </div>
           </>
         ) : (
-          <p style={{ color: "#888", fontSize: 12, textAlign: "center" }}>No claims yet</p>
+          <p style={{ color: "#888", fontSize: 12, textAlign: "center" }}>No rewards claimed yet</p>
         )}
       </div>
 
@@ -855,7 +835,7 @@ export function PortalTab() {
             onClick={(e) => e.stopPropagation()}
           >
             <h3 style={{ color: "#ffaa00", fontSize: 20, fontWeight: 700, marginBottom: 16, textAlign: "center" }}>
-              âš ï¸ Incomplete Actions
+              ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Incomplete Actions
             </h3>
             
             <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 16, lineHeight: 1.5 }}>
@@ -895,17 +875,17 @@ export function PortalTab() {
                     cursor: "pointer",
                   }}
                 >
-                  <span style={{ color: "#ff4444", fontSize: 16 }}>âœ—</span>
+                  <span style={{ color: "#ff4444", fontSize: 16 }}>ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â</span>
                   <span style={{ color: "#ff4444", fontSize: 14, textTransform: "capitalize" }}>
-                    {action === "like" && "â¤ï¸ Like"}
-                    {action === "recast" && "ðŸ” Recast"}
-                    {action === "comment" && "ðŸ’¬ Comment"}
+                    {action === "like" && "ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â¤ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Like"}
+                    {action === "recast" && "ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â Recast"}
+                    {action === "comment" && "ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€šÃ‚Â¬ Comment"}
                   </span>
                   <span style={{ color: "#ff4444", fontSize: 12, marginLeft: "auto" }}>
                     -{action === "like" ? "1,000" : action === "recast" ? "2,000" : "5,000"}
                   </span>
                   <span style={{ color: "#ffaa00", fontSize: 11, fontWeight: 600 }}>
-                    TAP TO DO â†’
+                    TAP TO DO ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢
                   </span>
                 </button>
               ))}
@@ -1022,7 +1002,7 @@ export function PortalTab() {
                   textDecoration: "none",
                 }}
               >
-                ðŸ“œ View Transaction on BaseScan â†’
+                ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¦Ã¢â‚¬Å“ View Transaction on BaseScan ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢
               </button>
             </div>
           )}
@@ -1054,7 +1034,7 @@ export function PortalTab() {
                   marginBottom: 16,
                 }}
               >
-                ðŸ± Creator Reward
+                ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â± Creator Reward
               </h2>
               <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 12, lineHeight: 1.6 }}>
                 Verify that you&apos;ve posted to the /catwalk channel and claim 500,000 CATWALK tokens.
@@ -1074,7 +1054,7 @@ export function PortalTab() {
                   }}
                 >
                   <p style={{ color: "#00ff00", fontSize: 16, fontWeight: 700, marginBottom: 8 }}>
-                    âœ… Reward Claimed
+                    ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Reward Claimed
                   </p>
                   <p style={{ color: "#ffffff", fontSize: 14 }}>
                     You&apos;ve already claimed {creatorClaimStatus.rewardAmount?.toLocaleString()} CATWALK tokens.
@@ -1109,7 +1089,7 @@ export function PortalTab() {
                   }}
                 >
                   <p style={{ color: "#c1b400", fontSize: 16, fontWeight: 700, marginBottom: 8 }}>
-                    âœ… Verification Complete
+                    ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Verification Complete
                   </p>
                   <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 16 }}>
                     You&apos;re eligible to claim {creatorClaimStatus.rewardAmount?.toLocaleString()} CATWALK tokens!
@@ -1175,7 +1155,7 @@ export function PortalTab() {
                   marginBottom: 6,
                 }}
               >
-                ðŸ’° ENGAGEMENT REWARDS
+                ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€šÃ‚Â° ENGAGEMENT REWARDS
               </h2>
               <p style={{ color: "#ffffff", fontSize: 12, marginBottom: 12, lineHeight: 1.5 }}>
                 You&apos;ve completed these actions! Click &quot;Claim&quot; to receive your CATWALK tokens.
@@ -1187,9 +1167,9 @@ export function PortalTab() {
                   
                   // All possible actions with their rewards
                   const allActions = [
-                    { type: "like" as const, emoji: "â¤ï¸", reward: 1000 },
-                    { type: "recast" as const, emoji: "ðŸ”", reward: 2000 },
-                    { type: "comment" as const, emoji: "ðŸ’¬", reward: 5000 },
+                    { type: "like" as const, emoji: "ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â¤ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â", reward: 1000 },
+                    { type: "recast" as const, emoji: "ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â", reward: 2000 },
+                    { type: "comment" as const, emoji: "ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€šÃ‚Â¬", reward: 5000 },
                   ];
                   
                   // Calculate missing actions and their total reward
@@ -1253,7 +1233,7 @@ export function PortalTab() {
                               <div key={action.type} style={{ display: "flex", alignItems: "center", gap: 4 }}>
                                 <span style={{ fontSize: 14 }}>{action.emoji}</span>
                                 <span style={{ color: isCompleted ? "#00ff00" : "#ff4444", fontSize: 11 }}>
-                                  {isCompleted ? "âœ“" : "âœ—"}
+                                  {isCompleted ? "ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ" : "ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â"}
                                 </span>
                               </div>
                             );
@@ -1305,7 +1285,7 @@ export function PortalTab() {
                   fontWeight: 700,
                 }}
               >
-                âš¡ Quick Actions
+                ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â¡ Quick Actions
               </h2>
               {bonusMultiplier > 1 && (
                 <span style={{
@@ -1339,7 +1319,7 @@ export function PortalTab() {
                 marginBottom: 16,
               }}
             >
-              {bulkEngaging ? "â³ Liking & Recasting..." : signerUuid ? "â¤ï¸ðŸ” Like & Recast All Casts" : "ðŸ”’ Enable Auto-Engage First"}
+              {bulkEngaging ? "ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â³ Liking & Recasting..." : signerUuid ? "ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â¤ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â Like & Recast All Casts" : "ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Enable Auto-Engage First"}
             </button>
 
             {/* Signer Authorization Required */}
@@ -1433,7 +1413,7 @@ export function PortalTab() {
             }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                 <p style={{ color: autoEngageEnabled ? "#00ff00" : "#ff00ff", fontSize: 14, fontWeight: 600, margin: 0 }}>
-                  {autoEngageEnabled ? "âœ… Auto-Engage Active" : "ðŸŽ Auto Like & Recast"}
+                  {autoEngageEnabled ? "ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Auto-Engage Active" : "ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€¦Ã‚Â½Ãƒâ€šÃ‚Â Auto Like & Recast"}
                 </p>
                 {autoEngageEnabled && (
                   <span style={{
@@ -1458,7 +1438,7 @@ export function PortalTab() {
               
               {!autoEngageEnabled && (
                 <p style={{ color: "#ff00ff", fontSize: 12, fontWeight: 600, marginBottom: 12 }}>
-                  âœ¨ Earn 10% bonus CATWALK on all rewards when enabled!
+                  ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“Ãƒâ€šÃ‚Â¨ Earn 10% bonus CATWALK on all rewards when enabled!
                 </p>
               )}
               
@@ -1471,7 +1451,7 @@ export function PortalTab() {
                   marginBottom: 12,
                 }}>
                   <p style={{ color: "#c1b400", fontSize: 12, fontWeight: 600 }}>
-                    â³ Waiting for approval in Warpcast...
+                    ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â³ Waiting for approval in Warpcast...
                   </p>
                   <p style={{ color: "#999", fontSize: 11, marginTop: 4 }}>
                     Please approve the signer request in Warpcast to enable auto-engage.
@@ -1514,7 +1494,7 @@ export function PortalTab() {
                     opacity: enablingAutoEngage ? 0.6 : 1,
                   }}
                 >
-                  {enablingAutoEngage ? "â³ Setting up..." : "ðŸš€ Enable Auto-Engage (+10% Bonus)"}
+                  {enablingAutoEngage ? "ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â³ Setting up..." : "ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€¦Ã‚Â¡ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ Enable Auto-Engage (+10% Bonus)"}
                 </button>
               )}
               
@@ -1532,7 +1512,7 @@ export function PortalTab() {
                       });
                       setAutoEngageEnabled(true);
                       setBonusMultiplier(1.1);
-                      setSuccess("âœ… Auto-engage enabled!");
+                      setSuccess("ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Auto-engage enabled!");
                       triggerHaptic("medium");
                     } catch {
                       setError("Failed to enable auto-engage");
@@ -1550,7 +1530,7 @@ export function PortalTab() {
                     cursor: "pointer",
                   }}
                 >
-                  ðŸš€ Enable Auto-Engage (+10% Bonus)
+                  ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€¦Ã‚Â¡ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ Enable Auto-Engage (+10% Bonus)
                 </button>
               )}
               
@@ -1608,7 +1588,7 @@ export function PortalTab() {
                 marginBottom: 16,
               }}
             >
-              ðŸ’¬ Engagement Opportunities
+              ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€šÃ‚Â¬ Engagement Opportunities
             </h2>
             <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 12, lineHeight: 1.6 }}>
               Like, comment, or recast posts in the /catwalk channel to earn rewards. Click on any cast below to engage.
@@ -1659,9 +1639,9 @@ export function PortalTab() {
                           >
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                               <span style={{ fontSize: 16 }}>
-                                {action.type === "like" && "â¤ï¸"}
-                                {action.type === "comment" && "ðŸ’¬"}
-                                {action.type === "recast" && "ðŸ”"}
+                                {action.type === "like" && "ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â¤ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â"}
+                                {action.type === "comment" && "ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€šÃ‚Â¬"}
+                                {action.type === "recast" && "ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â"}
                               </span>
                               <span style={{ color: "#ffffff", fontSize: 14, textTransform: "capitalize" }}>
                                 {action.type}

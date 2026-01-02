@@ -3,6 +3,7 @@ import { getNeynarClient } from "~/lib/neynar";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const SUPABASE_SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE || "";
+const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY || "";
 
 const SUPABASE_HEADERS = {
   apikey: SUPABASE_SERVICE_ROLE,
@@ -45,16 +46,28 @@ export async function POST(request: Request) {
     const signer = await neynarClient.createSigner();
     console.log(`[Signer Auth] Signer created: ${signer.signer_uuid}`);
 
-    // Register with Neynar sponsorship - NO private key or FID needed!
+    // Register with Neynar sponsorship using direct API call
     console.log("[Signer Auth] Registering with Neynar sponsorship...");
-    const registered = await neynarClient.registerSignedKey({
-      signerUuid: signer.signer_uuid,
-      appFid: 0, // Will be ignored when sponsored_by_neynar is true
-      deadline: Math.floor(Date.now() / 1000) + 86400,
-      signature: "0x", // Will be ignored when sponsored_by_neynar is true
-      sponsor: { sponsored_by_neynar: true }
+    const registerRes = await fetch("https://api.neynar.com/v2/farcaster/signer/signed_key", {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json", 
+        "x-api-key": NEYNAR_API_KEY 
+      },
+      body: JSON.stringify({
+        signer_uuid: signer.signer_uuid,
+        sponsor: { sponsored_by_neynar: true }
+      }),
     });
     
+    const registerText = await registerRes.text();
+    console.log(`[Signer Auth] Neynar response: ${registerRes.status} - ${registerText}`);
+    
+    if (!registerRes.ok) {
+      throw new Error(`Neynar API error: ${registerRes.status} - ${registerText}`);
+    }
+    
+    const registered = JSON.parse(registerText) as any;
     console.log(`[Signer Auth] Result: status=${registered.status}, hasUrl=${!!registered.signer_approval_url}`);
 
     if (!registered.signer_approval_url) {
@@ -82,7 +95,7 @@ export async function POST(request: Request) {
       });
     }
 
-    console.log(`[Signer Auth] Success! Approval URL: ${registered.signer_approval_url.substring(0, 60)}...`);
+    console.log(`[Signer Auth] Success!`);
 
     return NextResponse.json({ 
       success: true, 

@@ -120,15 +120,48 @@ export function PortalTab() {
   }, [userFid]);
 
   // Fetch auto-engage preferences
+  // Fetch auto-engage preferences and verify signer status
   const fetchAutoEngagePrefs = async () => {
     if (!userFid) return;
     try {
       const res = await fetch(`/api/portal/engage/preferences?fid=${userFid}`);
       if (res.ok) {
         const data = await res.json();
-        setAutoEngageEnabled(data.autoEngageEnabled || false);
-        setSignerUuid(data.signerUuid || null);
         setBonusMultiplier(data.bonusMultiplier || 1.0);
+        
+        // If there's a stored signer, check if it's actually approved
+        if (data.signerUuid) {
+          try {
+            const signerRes = await fetch(`/api/auth/signer?signerUuid=${data.signerUuid}`);
+            if (signerRes.ok) {
+              const signerData = await signerRes.json();
+              console.log("[PortalTab] Signer status:", signerData.status);
+              
+              if (signerData.status === "approved") {
+                setSignerUuid(data.signerUuid);
+                setAutoEngageEnabled(data.autoEngageEnabled || false);
+                setSignerApprovalUrl(null);
+              } else {
+                console.log("[PortalTab] Signer needs approval");
+                setSignerUuid(null);
+                setAutoEngageEnabled(false);
+                if (signerData.signer_approval_url) {
+                  setSignerApprovalUrl(signerData.signer_approval_url);
+                }
+              }
+            } else {
+              setSignerUuid(null);
+              setAutoEngageEnabled(false);
+            }
+          } catch (err) {
+            console.log("[PortalTab] Signer check error:", err);
+            setSignerUuid(null);
+            setAutoEngageEnabled(false);
+          }
+        } else {
+          setSignerUuid(null);
+          setAutoEngageEnabled(false);
+        }
       }
     } catch (err) {
       console.log("[PortalTab] Error fetching auto-engage prefs:", err);
@@ -1155,6 +1188,50 @@ export function PortalTab() {
             >
               {bulkEngaging ? "⏳ Liking & Recasting..." : signerUuid ? "❤️🔁 Like & Recast All Casts" : "🔒 Enable Auto-Engage First"}
             </button>
+
+            {/* Signer Authorization Required */}
+            {signerApprovalUrl && !signerUuid && (
+              <div style={{
+                background: "#2a1500",
+                border: "2px solid #ff6600",
+                borderRadius: 8,
+                padding: 16,
+                marginBottom: 16,
+              }}>
+                <h3 style={{ color: "#ff6600", fontSize: 16, fontWeight: 700, marginBottom: 8 }}>
+                  ???? Authorization Required
+                </h3>
+                <p style={{ color: "#ccc", fontSize: 13, lineHeight: 1.5, marginBottom: 16 }}>
+                  To use auto-engage and bulk like/recast features, you need to authorize this app in Warpcast.
+                  This is a one-time setup that allows the app to like and recast on your behalf.
+                </p>
+                <button
+                  onClick={() => {
+                    if (actions && actions.openUrl && signerApprovalUrl) {
+                      console.log("[PortalTab] Opening approval URL:", signerApprovalUrl);
+                      actions.openUrl(signerApprovalUrl);
+                      setPollingSigner(true);
+                    }
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "14px 20px",
+                    background: "#ff6600",
+                    color: "#000",
+                    border: "none",
+                    borderRadius: 8,
+                    fontSize: 16,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  ???? Authorize in Warpcast
+                </button>
+                <p style={{ color: "#888", fontSize: 11, marginTop: 8, textAlign: "center" }}>
+                  After authorizing, return here and the features will be enabled automatically.
+                </p>
+              </div>
+            )}
 
             {/* Auto-Engage Toggle */}
             <div style={{

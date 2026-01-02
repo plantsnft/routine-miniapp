@@ -177,8 +177,10 @@ export function PortalTab() {
       setError(null);
       triggerHaptic("medium");
 
-      // Step 1: Create a new signer
-      const createRes = await fetch("/api/auth/signer", {
+      console.log("[PortalTab] Calling authorize endpoint for FID:", userFid);
+      
+      // Call the new authorize endpoint with EIP-712 signing
+      const authRes = await fetch("/api/portal/engage/authorize", {
         method: "POST",
       });
       

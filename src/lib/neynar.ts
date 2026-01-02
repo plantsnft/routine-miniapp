@@ -21,6 +21,36 @@ export function getNeynarClient(): NeynarAPIClient {
   return neynarClient;
 }
 
+/**
+ * Get the Neynar API key from environment.
+ * Use this when making direct API calls instead of using the SDK.
+ * 
+ * @throws Error if NEYNAR_API_KEY is not configured
+ */
+export function getNeynarApiKey(): string {
+  const apiKey = process.env.NEYNAR_API_KEY;
+  if (!apiKey) {
+    throw new Error('NEYNAR_API_KEY not configured');
+  }
+  return apiKey;
+}
+
+/**
+ * Standard headers for Neynar API requests.
+ * Use this when making direct fetch calls to Neynar APIs.
+ * 
+ * @example
+ * const response = await fetch(url, {
+ *   headers: getNeynarHeaders(),
+ * });
+ */
+export function getNeynarHeaders(): { 'x-api-key': string; 'Content-Type': string } {
+  return {
+    'x-api-key': getNeynarApiKey(),
+    'Content-Type': 'application/json',
+  };
+}
+
 type User = WebhookUserCreated['data'];
 
 export async function getNeynarUser(fid: number): Promise<User | null> {

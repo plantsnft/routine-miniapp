@@ -1,16 +1,9 @@
 import { NextResponse } from 'next/server';
+import { getNeynarClient } from '~/lib/neynar';
 
 export async function GET(request: Request) {
-  const apiKey = process.env.NEYNAR_API_KEY;
   const { searchParams } = new URL(request.url);
   const fid = searchParams.get('fid');
-  
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: 'Neynar API key is not configured. Please add NEYNAR_API_KEY to your environment variables.' },
-      { status: 500 }
-    );
-  }
 
   if (!fid) {
     return NextResponse.json(
@@ -20,26 +13,28 @@ export async function GET(request: Request) {
   }
 
   try {
-    const response = await fetch(
-      `https://api.neynar.com/v2/farcaster/user/best_friends?fid=${fid}&limit=3`,
-      {
-        headers: {
-          "x-api-key": apiKey,
-        },
-      }
-    );
+    const client = getNeynarClient();
+    
+    // Use SDK for best friends lookup - more reliable than direct API calls
+    const response = await client.fetchUserBestFriends({
+      fid: parseInt(fid),
+      limit: 3,
+    });
 
-    if (!response.ok) {
-      throw new Error(`Neynar API error: ${response.statusText}`);
-    }
-
-    const { users } = await response.json() as { users: { user: { fid: number; username: string } }[] };
-
-    return NextResponse.json({ bestFriends: users });
-  } catch (error) {
+    return NextResponse.json({ bestFriends: response.users || [] });
+  } catch (error: any) {
     console.error('Failed to fetch best friends:', error);
+    
+    // Check if it's an API key configuration error
+    if (error?.message?.includes('NEYNAR_API_KEY')) {
+      return NextResponse.json(
+        { error: 'Neynar API key is not configured. Please add NEYNAR_API_KEY to your environment variables.' },
+        { status: 500 }
+      );
+    }
+    
     return NextResponse.json(
-      { error: 'Failed to fetch best friends. Please check your Neynar API key and try again.' },
+      { error: 'Failed to fetch best friends. Please try again.' },
       { status: 500 }
     );
   }

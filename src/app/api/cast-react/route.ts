@@ -44,12 +44,9 @@ export async function POST(req: NextRequest) {
     // If we have a signer UUID, perform the actual like/recast
     if (finalSignerUuid) {
       try {
-        // Use direct Neynar API call for reactions
-        const reactionEndpoint = reactionType === "like" 
-          ? "https://api.neynar.com/v2/farcaster/reaction"
-          : "https://api.neynar.com/v2/farcaster/recast";
-        
-        const response = await fetch(reactionEndpoint, {
+        // Use unified /v2/farcaster/reaction endpoint for both like and recast
+        // The deprecated /v2/farcaster/recast endpoint is no longer available
+        const response = await fetch("https://api.neynar.com/v2/farcaster/reaction", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -57,6 +54,7 @@ export async function POST(req: NextRequest) {
           },
           body: JSON.stringify({
             signer_uuid: finalSignerUuid,
+            reaction_type: reactionType, // "like" or "recast"
             target: castHash,
           }),
         });

@@ -539,7 +539,7 @@ export async function GET(req: NextRequest) {
               const lookupUrl = `https://api.neynar.com/v2/farcaster/user/by_address?address=${address}`;
               const lookupResponse = await fetch(lookupUrl, {
                 headers: {
-                  'api_key': apiKey,
+                  'x-api-key': apiKey,
                 },
               });
               

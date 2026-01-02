@@ -6,6 +6,7 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const SUPABASE_SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE || "";
 const FARCASTER_CUSTODY_PRIVATE_KEY = process.env.FARCASTER_CUSTODY_PRIVATE_KEY || "";
 const NEYNAR_APP_FID = process.env.NEYNAR_APP_FID || "";
+const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY || "";
 
 const SUPABASE_HEADERS = {
   apikey: SUPABASE_SERVICE_ROLE,
@@ -39,6 +40,30 @@ export async function POST(request: Request) {
     if (!NEYNAR_APP_FID) return NextResponse.json({ error: "NEYNAR_APP_FID not set" }, { status: 500 });
 
     const appFid = parseInt(NEYNAR_APP_FID, 10);
+    console.log(`[Signer Auth] Using App FID: ${appFid}`);
+    
+    // Verify custody address from private key
+    const pk = FARCASTER_CUSTODY_PRIVATE_KEY.startsWith("0x") ? FARCASTER_CUSTODY_PRIVATE_KEY : `0x${FARCASTER_CUSTODY_PRIVATE_KEY}`;
+    const account = privateKeyToAccount(pk as `0x${string}`);
+    console.log(`[Signer Auth] Private key generates address: ${account.address}`);
+    
+    // Lookup the FID's actual custody address from Neynar
+    const userRes = await fetch(`https://api.neynar.com/v2/farcaster/user/bulk?fids=${appFid}`, {
+      headers: { "x-api-key": NEYNAR_API_KEY }
+    });
+    if (userRes.ok) {
+      const userData = await userRes.json() as any;
+      const custodyAddress = userData.users?.[0]?.custody_address;
+      console.log(`[Signer Auth] FID ${appFid} custody address from Neynar: ${custodyAddress}`);
+      console.log(`[Signer Auth] Addresses match: ${account.address.toLowerCase() === custodyAddress?.toLowerCase()}`);
+      
+      if (custodyAddress && account.address.toLowerCase() !== custodyAddress.toLowerCase()) {
+        return NextResponse.json({ 
+          error: `Key mismatch! Your private key generates ${account.address} but FID ${appFid} has custody ${custodyAddress}` 
+        }, { status: 500 });
+      }
+    }
+    
     const neynarClient = getNeynarClient();
 
     // Check existing signer
@@ -55,28 +80,26 @@ export async function POST(request: Request) {
     // Create signer
     console.log("[Signer Auth] Creating signer...");
     const signer = await neynarClient.createSigner();
-    console.log(`[Signer Auth] Signer: ${signer.signer_uuid}`);
+    console.log(`[Signer Auth] Signer: ${signer.signer_uuid}, pubKey: ${signer.public_key.substring(0, 20)}...`);
 
     // Sign with EIP-712
-    const pk = FARCASTER_CUSTODY_PRIVATE_KEY.startsWith("0x") ? FARCASTER_CUSTODY_PRIVATE_KEY : `0x${FARCASTER_CUSTODY_PRIVATE_KEY}`;
-    const account = privateKeyToAccount(pk as `0x${string}`);
-    console.log(`[Signer Auth] Address: ${account.address}`);
-
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 86400);
+    console.log(`[Signer Auth] Signing: requestFid=${appFid}, deadline=${deadline}`);
+    
     const signature = await account.signTypedData({
       domain: SIGNED_KEY_REQUEST_DOMAIN,
       types: SIGNED_KEY_REQUEST_TYPES,
       primaryType: "SignedKeyRequest",
       message: { requestFid: BigInt(appFid), key: signer.public_key as `0x${string}`, deadline },
     });
-    console.log("[Signer Auth] Signature generated");
+    console.log(`[Signer Auth] Signature: ${signature.substring(0, 20)}... (len=${signature.length})`);
 
     // Register signed key
-    console.log("[Signer Auth] Registering...");
+    console.log("[Signer Auth] Registering signed key with Neynar...");
     const registered = await neynarClient.registerSignedKey({ signerUuid: signer.signer_uuid, appFid, deadline: Number(deadline), signature });
-    console.log(`[Signer Auth] Done: ${registered.status}, url=${!!registered.signer_approval_url}`);
+    console.log(`[Signer Auth] Result: status=${registered.status}, hasUrl=${!!registered.signer_approval_url}`);
 
-    if (!registered.signer_approval_url) throw new Error("No approval URL");
+    if (!registered.signer_approval_url) throw new Error("No approval URL returned");
 
     // Save
     const data = { signer_uuid: signer.signer_uuid, signer_approval_url: registered.signer_approval_url, updated_at: new Date().toISOString() };

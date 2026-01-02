@@ -743,7 +743,7 @@ export function PortalTab() {
             {/* 3 Category Cards */}
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {/* Creator Rewards */}
-              <div style={{ background: "rgba(34, 197, 94, 0.25)", border: "1px solid #22c55e", padding: 12, borderRadius: 8 }}>
+              <div style={{ background: "rgba(34, 197, 94, 0.1)", border: "1px solid #22c55e", padding: 12, borderRadius: 8 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
                     <div style={{ color: "#22c55e", fontSize: 11, fontWeight: 600, marginBottom: 2 }}>CREATOR REWARDS</div>
@@ -756,7 +756,7 @@ export function PortalTab() {
                 </div>
               </div>
               {/* Patron Rewards */}
-              <div style={{ background: "rgba(168, 85, 247, 0.25)", border: "1px solid #a855f7", padding: 12, borderRadius: 8 }}>
+              <div style={{ background: "rgba(168, 85, 247, 0.1)", border: "1px solid #a855f7", padding: 12, borderRadius: 8 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                   <div>
                     <div style={{ color: "#a855f7", fontSize: 11, fontWeight: 600, marginBottom: 2 }}>PATRON REWARDS</div>
@@ -783,7 +783,7 @@ export function PortalTab() {
                 </div>
               </div>
               {/* Virtual Walk Rewards */}
-              <div style={{ background: "rgba(59, 130, 246, 0.25)", border: "1px solid #3b82f6", padding: 12, borderRadius: 8 }}>
+              <div style={{ background: "rgba(59, 130, 246, 0.1)", border: "1px solid #3b82f6", padding: 12, borderRadius: 8 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
                     <div style={{ color: "#3b82f6", fontSize: 11, fontWeight: 600, marginBottom: 2 }}>VIRTUAL WALK REWARDS</div>
@@ -1233,7 +1233,7 @@ export function PortalTab() {
                               <div key={action.type} style={{ display: "flex", alignItems: "center", gap: 4 }}>
                                 <span style={{ fontSize: 14 }}>{action.emoji}</span>
                                 <span style={{ color: isCompleted ? "#00ff00" : "#ff4444", fontSize: 11 }}>
-                                  {isCompleted ? "Done" : "X"}
+                                  {isCompleted ? "OK" : "X"}
                                 </span>
                               </div>
                             );
@@ -1624,34 +1624,42 @@ export function PortalTab() {
                         )}
                       </div>
                       
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
-                        {opportunity.availableActions.map((action) => (
-                          <div
-                            key={action.type}
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                              padding: "8px 12px",
-                              background: "#1a1a1a",
-                              borderRadius: 6,
-                            }}
-                          >
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <span style={{ fontSize: 16 }}>
-                                {action.type === "like" && "Like"}
-                                {action.type === "comment" && "Comment"}
-                                {action.type === "recast" && "Recast"}
-                              </span>
-                              <span style={{ color: "#ffffff", fontSize: 14, textTransform: "capitalize" }}>
-                                {action.type}
-                              </span>
-                            </div>
-                            <span style={{ color: "#c1b400", fontSize: 14, fontWeight: 600 }}>
-                              +{action.rewardAmount.toLocaleString()} CATWALK
+                      {/* Compact horizontal action status */}
+                      <div style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "10px 12px",
+                        background: "#1a1a1a",
+                        borderRadius: 6,
+                        marginBottom: 12,
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                          {/* Like */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <span>L</span>
+                            <span style={{ color: opportunity.availableActions.some(a => a.type === "like") ? "#ff4444" : "#00ff00", fontWeight: 600 }}>
+                              {opportunity.availableActions.some(a => a.type === "like") ? "X" : "OK"}
                             </span>
                           </div>
-                        ))}
+                          {/* Recast */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <span>R</span>
+                            <span style={{ color: opportunity.availableActions.some(a => a.type === "recast") ? "#ff4444" : "#00ff00", fontWeight: 600 }}>
+                              {opportunity.availableActions.some(a => a.type === "recast") ? "X" : "OK"}
+                            </span>
+                          </div>
+                          {/* Comment */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <span>C</span>
+                            <span style={{ color: opportunity.availableActions.some(a => a.type === "comment") ? "#ff4444" : "#00ff00", fontWeight: 600 }}>
+                              {opportunity.availableActions.some(a => a.type === "comment") ? "X" : "OK"}
+                            </span>
+                          </div>
+                        </div>
+                        <span style={{ color: "#c1b400", fontSize: 13, fontWeight: 600 }}>
+                          +{opportunity.availableActions.reduce((sum, a) => sum + a.rewardAmount, 0).toLocaleString()} CATWALK
+                        </span>
                       </div>
 
                       <button

@@ -5,10 +5,6 @@
     {
       "path": "/api/creator-stats/sync",
       "schedule": "0 1 * * *"
-    },
-    {
-      "path": "/api/cron/auto-engage",
-      "schedule": "0 * * * *"
     }
   ]
 }

@@ -17,70 +17,33 @@ interface BulkEngageRequest {
   actions: ("like" | "recast")[];
 }
 
-/**
- * Bulk Like & Recast endpoint
- * POST /api/portal/engage/bulk
- * 
- * Body: {
- *   fid: number,
- *   signerUuid: string,
- *   castHashes: string[],
- *   actions: ["like", "recast"]
- * }
- * 
- * Performs like/recast on multiple casts at once
- */
 export async function POST(request: Request) {
   try {
     const body = await request.json() as BulkEngageRequest;
     const { fid, signerUuid, castHashes, actions } = body;
 
-    console.log(`[Bulk Engage] Request: fid=${fid}, casts=${castHashes.length}, actions=${actions.join(',')}`);
+    console.log(`[Bulk Engage] Request: fid=${fid}, casts=${castHashes.length}, actions=${actions.join(",")}`);
 
     if (!fid || typeof fid !== "number") {
-      return NextResponse.json(
-        { error: "fid is required and must be a number" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "fid is required" }, { status: 400 });
     }
-
     if (!signerUuid) {
-      return NextResponse.json(
-        { error: "signerUuid is required. Please enable auto-engage first." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "signerUuid is required" }, { status: 400 });
     }
-
     if (!castHashes || castHashes.length === 0) {
-      return NextResponse.json(
-        { error: "castHashes array is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "castHashes required" }, { status: 400 });
     }
-
     if (!actions || actions.length === 0) {
-      return NextResponse.json(
-        { error: "actions array is required (like, recast)" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "actions required" }, { status: 400 });
     }
 
-    const results: Array<{
-      castHash: string;
-      action: string;
-      success: boolean;
-      error?: string;
-    }> = [];
+    const results: Array<{ castHash: string; action: string; success: boolean; error?: string }> = [];
 
-    // Process each cast
     for (const castHash of castHashes) {
       for (const action of actions) {
         try {
-          const endpoint = action === "like" 
-            ? "https://api.neynar.com/v2/farcaster/reaction"
-            : "https://api.neynar.com/v2/farcaster/recast";
-
-          const response = await fetch(endpoint, {
+          // Both like and recast use same endpoint with reaction_type
+          const response = await fetch("https://api.neynar.com/v2/farcaster/reaction", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -88,23 +51,26 @@ export async function POST(request: Request) {
             },
             body: JSON.stringify({
               signer_uuid: signerUuid,
+              reaction_type: action,
               target: castHash,
-              ...(action === "like" && { reaction_type: "like" }),
             }),
           });
 
           if (!response.ok) {
-            const errorData = await response.json().catch(() => ({})) as any;
-            throw new Error(errorData.message || `Failed to ${action}`);
+            const errorText = await response.text();
+            let errorMessage = `Failed to ${action}`;
+            try {
+              const errorData = JSON.parse(errorText) as any;
+              errorMessage = errorData.message || errorMessage;
+            } catch { errorMessage = errorText || errorMessage; }
+            throw new Error(errorMessage);
           }
 
           results.push({ castHash, action, success: true });
-          console.log(`[Bulk Engage] ✅ ${action} on ${castHash.substring(0, 10)}...`);
-
-          // Small delay to avoid rate limiting
-          await new Promise(resolve => setTimeout(resolve, 100));
+          console.log(`[Bulk Engage] OK ${action} on ${castHash.substring(0, 10)}`);
+          await new Promise(r => setTimeout(r, 100));
         } catch (err: any) {
-          console.error(`[Bulk Engage] ❌ ${action} on ${castHash}:`, err.message);
+          console.error(`[Bulk Engage] ERR ${action} on ${castHash}:`, err.message);
           results.push({ castHash, action, success: false, error: err.message });
         }
       }
@@ -112,49 +78,15 @@ export async function POST(request: Request) {
 
     const successCount = results.filter(r => r.success).length;
     const failCount = results.filter(r => !r.success).length;
-
-    console.log(`[Bulk Engage] Complete: ${successCount} success, ${failCount} failed`);
-
-    // Update engagement_claims to mark these as completed
-    // This will make them claimable in the Portal
-    for (const result of results.filter(r => r.success)) {
-      try {
-        // Insert or update the engagement claim as verified
-        await fetch(
-          `${SUPABASE_URL}/rest/v1/engagement_claims`,
-          {
-            method: "POST",
-            headers: {
-              ...SUPABASE_HEADERS,
-              Prefer: "resolution=merge-duplicates",
-            },
-            body: JSON.stringify({
-              fid,
-              cast_hash: result.castHash,
-              engagement_type: result.action,
-              verified_at: new Date().toISOString(),
-            }),
-          }
-        );
-      } catch (dbErr) {
-        console.error(`[Bulk Engage] DB error for ${result.castHash}:`, dbErr);
-      }
-    }
+    console.log(`[Bulk Engage] Done: ${successCount} ok, ${failCount} fail`);
 
     return NextResponse.json({
       success: true,
       results,
-      summary: {
-        total: results.length,
-        successful: successCount,
-        failed: failCount,
-      },
+      summary: { total: results.length, successful: successCount, failed: failCount },
     });
   } catch (error: any) {
     console.error("[Bulk Engage] Error:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to perform bulk engagement" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

@@ -9,38 +9,23 @@ const SUPABASE_HEADERS = {
   "Content-Type": "application/json",
 };
 
-/**
- * Get user engagement preferences
- * GET /api/portal/engage/preferences?fid=123
- */
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const fid = searchParams.get("fid");
-
     if (!fid) {
-      return NextResponse.json(
-        { error: "fid is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "fid is required" }, { status: 400 });
     }
 
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/user_engage_preferences?fid=eq.${fid}&limit=1`,
-      {
-        method: "GET",
-        headers: SUPABASE_HEADERS,
-      }
+      { method: "GET", headers: SUPABASE_HEADERS }
     );
 
-    if (!res.ok) {
-      throw new Error("Failed to fetch preferences");
-    }
+    if (!res.ok) throw new Error("Failed to fetch preferences");
 
     const data = await res.json() as any[];
-    
     if (data.length === 0) {
-      // Return default preferences
       return NextResponse.json({
         fid: parseInt(fid),
         signerUuid: null,
@@ -55,75 +40,68 @@ export async function GET(request: Request) {
       fid: prefs.fid,
       signerUuid: prefs.signer_uuid,
       autoEngageEnabled: prefs.auto_engage_enabled,
-      autoEngageEnabledAt: prefs.auto_engage_enabled_at,
       bonusMultiplier: parseFloat(prefs.bonus_multiplier),
       hasValidSigner: !!prefs.signer_uuid,
     });
   } catch (error: any) {
     console.error("[Engage Preferences] GET Error:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to fetch preferences" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
-/**
- * Update user engagement preferences
- * POST /api/portal/engage/preferences
- * 
- * Body: {
- *   fid: number,
- *   signerUuid?: string,
- *   autoEngageEnabled?: boolean
- * }
- */
 export async function POST(request: Request) {
   try {
     const body = await request.json() as any;
     const { fid, signerUuid, autoEngageEnabled } = body;
 
     if (!fid || typeof fid !== "number") {
-      return NextResponse.json(
-        { error: "fid is required and must be a number" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "fid required" }, { status: 400 });
     }
 
     console.log(`[Engage Preferences] Update: fid=${fid}, autoEngage=${autoEngageEnabled}, hasSigner=${!!signerUuid}`);
 
-    // Calculate bonus multiplier (10% bonus for auto-engage users)
     const bonusMultiplier = autoEngageEnabled ? 1.1 : 1.0;
 
-    // Upsert preferences
+    // Check if exists first
+    const checkRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/user_engage_preferences?fid=eq.${fid}&limit=1`,
+      { method: "GET", headers: SUPABASE_HEADERS }
+    );
+    const existing = await checkRes.json() as any[];
+    const exists = existing && existing.length > 0;
+
     const updateData: any = {
-      fid,
       updated_at: new Date().toISOString(),
       bonus_multiplier: bonusMultiplier,
     };
-
-    if (signerUuid !== undefined) {
-      updateData.signer_uuid = signerUuid;
-    }
-
+    if (signerUuid !== undefined) updateData.signer_uuid = signerUuid;
     if (autoEngageEnabled !== undefined) {
       updateData.auto_engage_enabled = autoEngageEnabled;
-      if (autoEngageEnabled) {
-        updateData.auto_engage_enabled_at = new Date().toISOString();
-      }
+      if (autoEngageEnabled) updateData.auto_engage_enabled_at = new Date().toISOString();
     }
 
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/user_engage_preferences`,
-      {
-        method: "POST",
-        headers: {
-          ...SUPABASE_HEADERS,
-          Prefer: "resolution=merge-duplicates,return=representation",
-        },
-        body: JSON.stringify(updateData),
-      }
-    );
+    let res;
+    if (exists) {
+      console.log(`[Engage Preferences] PATCH for FID ${fid}`);
+      res = await fetch(
+        `${SUPABASE_URL}/rest/v1/user_engage_preferences?fid=eq.${fid}`,
+        {
+          method: "PATCH",
+          headers: { ...SUPABASE_HEADERS, Prefer: "return=representation" },
+          body: JSON.stringify(updateData),
+        }
+      );
+    } else {
+      console.log(`[Engage Preferences] INSERT for FID ${fid}`);
+      res = await fetch(
+        `${SUPABASE_URL}/rest/v1/user_engage_preferences`,
+        {
+          method: "POST",
+          headers: { ...SUPABASE_HEADERS, Prefer: "return=representation" },
+          body: JSON.stringify([{ fid, ...updateData }]),
+        }
+      );
+    }
 
     if (!res.ok) {
       const errorText = await res.text();
@@ -133,8 +111,7 @@ export async function POST(request: Request) {
 
     const data = await res.json() as any[];
     const prefs = data[0];
-
-    console.log(`[Engage Preferences] Updated successfully for FID ${fid}`);
+    console.log(`[Engage Preferences] Updated for FID ${fid}`);
 
     return NextResponse.json({
       success: true,
@@ -146,9 +123,6 @@ export async function POST(request: Request) {
     });
   } catch (error: any) {
     console.error("[Engage Preferences] POST Error:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to update preferences" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

@@ -1302,7 +1302,7 @@ export function PortalTab() {
                                 </span>
                               </div>
                             );
-                          }) }
+                         })}
                           <span style={{ color: "#ff9500", fontSize: 13, fontWeight: 700, marginLeft: 8 }}>
                             +{totalReward.toLocaleString()}
                           </span>

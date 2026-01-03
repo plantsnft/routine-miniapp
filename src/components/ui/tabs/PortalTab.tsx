@@ -518,7 +518,7 @@ export function PortalTab() {
 
       setSuccess("Creator cast verified successfully!");
       triggerHaptic("heavy");
-      // Refresh status after a moment
+      // Refresh status to get properly formatted data
       setTimeout(() => fetchClaimStatus(), 1000);
     } catch (err: any) {
       console.error("[PortalTab] Error verifying creator:", err);

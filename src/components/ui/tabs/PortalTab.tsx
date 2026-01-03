@@ -1308,7 +1308,6 @@ export function PortalTab() {
                           </span>
                         </div>
                         <button
-                        <button
                           onClick={handleClaimClick}
                           disabled={claiming}
                           style={{

@@ -1291,12 +1291,10 @@ export function PortalTab() {
                         borderRadius: 6,
                         border: hasMissingActions ? "1px solid #ffaa00" : "1px solid #00ff00",
                       }}>
-                            const allDoneActions = reward.allDoneActions || [];
-                            const isCompleted = allDoneActions.includes(action.type);
                           {allActions.map((action) => {
                             const allDoneActions = reward.allDoneActions || [];
                             const isCompleted = allDoneActions.includes(action.type);
-                            const isCompleted = allDoneActions.includes(action.type);
+                            return (
                                 <span style={{ fontSize: 14 }}>{action.emoji}</span>
                                 <span style={{ color: isCompleted ? "#00ff00" : "#ff4444", fontSize: 11 }}>
                                   {isCompleted ? "OK" : "X"}

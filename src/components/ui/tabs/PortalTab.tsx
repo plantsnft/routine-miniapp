@@ -1308,10 +1308,10 @@ export function PortalTab() {
                           </span>
                         </div>
                         <button
-                            padding: "6px 14px",
-                            background: hasMissingActions ? "#ffaa00" : "#00ff00",
-                            color: "#000000",
-                            border: "none",
+                        <button
+                          onClick={handleClaimClick}
+                          disabled={claiming}
+                          style={{
                             borderRadius: 4,
                             fontSize: 12,
                             fontWeight: 700,

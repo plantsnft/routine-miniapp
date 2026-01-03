@@ -86,6 +86,40 @@ export async function POST(request: Request) {
       console.error("[Engagement Verify] Error fetching claimed engagements:", dbErr);
     }
 
+    // Step 1.5: Get user's verified but unclaimed engagements from database
+    // This ensures we include engagements that were verified in previous runs
+    const verifiedUnclaimedEngagements = new Map<string, Set<string>>(); // castHash -> Set<"like"|"comment"|"recast">
+    
+    try {
+      const verifiedRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/engagement_claims?fid=eq.${fid}&claimed_at=is.null&verified_at=not.is.null`,
+        {
+          method: "GET",
+          headers: SUPABASE_HEADERS,
+        }
+      );
+
+      if (verifiedRes.ok) {
+        const verifiedData = await verifiedRes.json() as any;
+        for (const claim of verifiedData) {
+          const castHash = claim.cast_hash;
+          const engagementType = claim.engagement_type;
+          if (castHash && engagementType) {
+            if (!verifiedUnclaimedEngagements.has(castHash)) {
+              verifiedUnclaimedEngagements.set(castHash, new Set());
+            }
+            verifiedUnclaimedEngagements.get(castHash)!.add(engagementType);
+          }
+        }
+      }
+      console.log(`[Engagement Verify] User has ${verifiedUnclaimedEngagements.size} casts with verified but unclaimed engagements`);
+      if (verifiedUnclaimedEngagements.size > 0) {
+        console.log(`[Engagement Verify] Verified unclaimed cast hashes (first 10):`, Array.from(verifiedUnclaimedEngagements.keys()).slice(0, 10));
+      }
+    } catch (dbErr) {
+      console.error("[Engagement Verify] Error fetching verified unclaimed engagements:", dbErr);
+    }
+
     // Step 2: Get all casts from /catwalk channel in last 15 days
     const channelCasts: any[] = [];
     let cursor: string | null = null;
@@ -344,10 +378,17 @@ export async function POST(request: Request) {
           console.log(`[Engagement Verify] 🎯 FOUND ENGAGEMENT on cast ${castHash.substring(0, 12)}:`, { hasLiked, hasRecasted: finalHasRecasted, hasCommented });
         }
 
-        // Store detected engagements
+        // Store detected engagements (merge with database-verified engagements)
         if (hasLiked || finalHasRecasted || hasCommented) {
           if (!userEngagements.has(castHash)) {
             userEngagements.set(castHash, new Set());
+          }
+          // Also merge any verified unclaimed engagements from database
+          const dbVerified = verifiedUnclaimedEngagements.get(castHash);
+          if (dbVerified) {
+            for (const engagementType of dbVerified) {
+              userEngagements.get(castHash)!.add(engagementType);
+            }
           }
           if (hasLiked) {
             userEngagements.get(castHash)!.add("like");
@@ -382,9 +423,46 @@ export async function POST(request: Request) {
                 const existing = await existingCheck.json() as any;
                 if (existing.length === 0) {
                   // Store as verified but not claimed
-                  const storeRes = await fetch(`${SUPABASE_URL}/rest/v1/engagement_claims`, { method: "POST", headers: SUPABASE_HEADERS, body: JSON.stringify({ fid, cast_hash: castHash, engagement_type: engagementType, reward_amount: ENGAGEMENT_REWARDS[engagementType], verified_at: new Date().toISOString(), }), }); if (storeRes.ok) { console.log(`[Engagement Verify] ✅ Stored ${engagementType} for cast ${castHash.substring(0, 10)}...`); } else { const errorText = await storeRes.text(); console.error(`[Engagement Verify] ❌ Failed to store ${engagementType} for cast ${castHash.substring(0, 10)}:`, errorText); }
+                  const storeRes = await fetch(
+                    `${SUPABASE_URL}/rest/v1/engagement_claims`,
+                    {
+                      method: "POST",
+                      headers: SUPABASE_HEADERS,
+                      body: JSON.stringify({
+                        fid,
+                        cast_hash: castHash,
+                        engagement_type: engagementType,
+                        reward_amount: ENGAGEMENT_REWARDS[engagementType],
+                        verified_at: new Date().toISOString(),
+                      }),
+                    }
+                  );
+                  
+                  if (storeRes.ok) {
+                    console.log(`[Engagement Verify] ✅ Stored ${engagementType} for cast ${castHash.substring(0, 10)}...`);
+                  } else {
+                    const errorText = await storeRes.text();
+                    console.error(`[Engagement Verify] ❌ Failed to store ${engagementType} for cast ${castHash.substring(0, 10)}:`, errorText);
+                  }
+                } else {
+                  console.log(`[Engagement Verify] ${engagementType} for cast ${castHash.substring(0, 10)} already exists in database`);
                 }
+              } else {
+                const errorText = await existingCheck.text();
+                console.error(`[Engagement Verify] ❌ Failed to check existing ${engagementType} for cast ${castHash.substring(0, 10)}:`, errorText);
               }
+            }
+          }
+        } else {
+          // Even if not detected in this run, check if we have verified unclaimed engagements from database
+          const dbVerified = verifiedUnclaimedEngagements.get(castHash);
+          if (dbVerified && dbVerified.size > 0) {
+            if (!userEngagements.has(castHash)) {
+              userEngagements.set(castHash, new Set());
+            }
+            for (const engagementType of dbVerified) {
+              userEngagements.get(castHash)!.add(engagementType);
+              console.log(`[Engagement Verify] ✓ Using database-verified ${engagementType} for cast ${castHash.substring(0, 10)}...`);
             }
           }
         }

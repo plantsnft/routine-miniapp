@@ -1306,8 +1306,8 @@ export function PortalTab() {
                           <span style={{ color: "#ff9500", fontSize: 13, fontWeight: 700, marginLeft: 8 }}>
                             +{totalReward.toLocaleString()}
                           </span>
-                          disabled={claiming}
-                          style={{
+                        </div>
+                        <button
                             padding: "6px 14px",
                             background: hasMissingActions ? "#ffaa00" : "#00ff00",
                             color: "#000000",

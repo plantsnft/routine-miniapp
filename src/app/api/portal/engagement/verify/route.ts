@@ -725,16 +725,7 @@ export async function POST(request: Request) {
             }
           }
           
-          claimableRewards.push({
-            castHash,
-            castUrl,
-            authorUsername: author.username,
-            authorDisplayName: author.display_name,
-            text: cast.text?.substring(0, 100) || "",
-            timestamp: castTimestamp,
-            claimableActions,
-            allDoneActions: Array.from(userHasDone), // All actions user has done (including already claimed)
-          });
+          const rewardItem: { castHash: string; castUrl: string; authorUsername?: string; authorDisplayName?: string; text?: string; timestamp: number; claimableActions: Array<{ type: "like" | "comment" | "recast"; rewardAmount: number; }>; allDoneActions?: Array<"like" | "comment" | "recast">; } = { castHash, castUrl, authorUsername: author.username, authorDisplayName: author.display_name, text: cast.text?.substring(0, 100) || "", timestamp: castTimestamp, claimableActions, allDoneActions: Array.from(userHasDone) as Array<"like" | "comment" | "recast">, }; claimableRewards.push(rewardItem);
         }
       }
 

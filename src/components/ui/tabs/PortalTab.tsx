@@ -50,6 +50,7 @@ interface ClaimableReward {
     type: "like" | "comment" | "recast";
     rewardAmount: number;
   }>;
+  allDoneActions?: Array<"like" | "comment" | "recast">; // All actions user has done (including already claimed)
 }
 
 interface EngagementOpportunitiesResponse {
@@ -1036,7 +1037,7 @@ export function PortalTab() {
                 Creator Reward
               </h2>
               <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 12, lineHeight: 1.6 }}>
-                Verify that you&apos;ve posted to the /catwalk channel and claim 1,000,000 CATWALK tokens.
+                Verify that you&apos;ve posted to the /catwalk channel and claim 500,000 CATWALK tokens.
               </p>
               <p style={{ color: "#999999", fontSize: 12, marginBottom: 20, lineHeight: 1.4 }}>
                 Claims are available for casts posted in the last 30 days. New casts are detected automatically within 5 minutes.
@@ -1055,53 +1056,27 @@ export function PortalTab() {
                   <p style={{ color: "#00ff00", fontSize: 16, fontWeight: 700, marginBottom: 8 }}>
                     Reward Claimed
                   </p>
-                  <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 12 }}>
+                  <p style={{ color: "#ffffff", fontSize: 14 }}>
                     You&apos;ve already claimed {creatorClaimStatus.rewardAmount?.toLocaleString()} CATWALK tokens.
                   </p>
                   {creatorClaimStatus.transactionHash && (
-                    <a
-                      href={`https://basescan.org/tx/${creatorClaimStatus.transactionHash}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        color: "#c1b400",
-                        fontSize: 12,
-                        textDecoration: "underline",
-                        display: "block",
-                        marginBottom: 12,
-                      }}
-                    >
-                      View on BaseScan: {creatorClaimStatus.transactionHash.substring(0, 10)}...
-                      {creatorClaimStatus.transactionHash.substring(creatorClaimStatus.transactionHash.length - 8)}
-                    </a>
+                    <div style={{ marginTop: 8 }}>
+                      <a
+                        href={`https://basescan.org/tx/${creatorClaimStatus.transactionHash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          color: "#c1b400",
+                          fontSize: 12,
+                          textDecoration: "underline",
+                          display: "block",
+                        }}
+                      >
+                        View on BaseScan: {creatorClaimStatus.transactionHash.substring(0, 10)}...
+                        {creatorClaimStatus.transactionHash.substring(creatorClaimStatus.transactionHash.length - 8)}
+                      </a>
+                    </div>
                   )}
-                  <div style={{ borderTop: "1px solid #333", paddingTop: 12, marginTop: 8 }}>
-                    <p style={{ color: "#888", fontSize: 13, marginBottom: 8 }}>
-                      Cast again to earn more rewards!
-                    </p>
-                    <a
-                      href="https://farcaster.xyz/~/channel/catwalk"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => {
-                        if (actions?.openUrl) {
-                          actions.openUrl("https://warpcast.com/~/channel/catwalk");
-                        }
-                      }}
-                      style={{
-                        display: "inline-block",
-                        padding: "8px 16px",
-                        background: "#c1b400",
-                        color: "#000",
-                        borderRadius: 6,
-                        fontSize: 13,
-                        fontWeight: 600,
-                        textDecoration: "none",
-                      }}
-                    >
-                      Cast into /catwalk
-                    </a>
-                  </div>
                 </div>
               ) : creatorClaimStatus?.isEligible ? (
                 <div
@@ -1139,63 +1114,24 @@ export function PortalTab() {
                   </button>
                 </div>
               ) : (
-                <div>
-                  <div style={{ 
-                    background: "rgba(193, 180, 0, 0.1)", 
-                    border: "1px solid rgba(193, 180, 0, 0.3)",
-                    borderRadius: 8, 
-                    padding: 12, 
-                    marginBottom: 12,
-                    textAlign: "center"
-                  }}>
-                    <p style={{ color: "#c1b400", fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
-                      No recent casts found
-                    </p>
-                    <p style={{ color: "#888", fontSize: 12, marginBottom: 12 }}>
-                      Cast into /catwalk to earn 1,000,000 CATWALK tokens per post!
-                    </p>
-                    <a
-                      href="https://farcaster.xyz/~/channel/catwalk"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => {
-                        if (actions?.openUrl) {
-                          actions.openUrl("https://warpcast.com/~/channel/catwalk");
-                        }
-                      }}
-                      style={{
-                        display: "inline-block",
-                        padding: "10px 20px",
-                        background: "#c1b400",
-                        color: "#000",
-                        borderRadius: 6,
-                        fontSize: 14,
-                        fontWeight: 700,
-                        textDecoration: "none",
-                      }}
-                    >
-                      Cast into /catwalk
-                    </a>
-                  </div>
-                  <button
-                    onClick={handleVerifyCreator}
-                    disabled={verifying}
-                    style={{
-                      width: "100%",
-                      padding: "10px 24px",
-                      background: "transparent",
-                      color: "#c1b400",
-                      border: "1px solid #c1b400",
-                      borderRadius: 8,
-                      fontSize: 14,
-                      fontWeight: 600,
-                      cursor: verifying ? "not-allowed" : "pointer",
-                      opacity: verifying ? 0.6 : 1,
-                    }}
-                  >
-                    {verifying ? "Verifying..." : "Already posted? Verify now"}
-                  </button>
-                </div>
+                <button
+                  onClick={handleVerifyCreator}
+                  disabled={verifying}
+                  style={{
+                    width: "100%",
+                    padding: "12px 24px",
+                    background: "#c1b400",
+                    color: "#000000",
+                    border: "2px solid #000000",
+                    borderRadius: 8,
+                    fontSize: 16,
+                    fontWeight: 700,
+                    cursor: verifying ? "not-allowed" : "pointer",
+                    opacity: verifying ? 0.6 : 1,
+                  }}
+                >
+                  {verifying ? "Verifying..." : "Verify Creator Cast"}
+                </button>
               )}
             </div>
           )}
@@ -1228,6 +1164,7 @@ export function PortalTab() {
                 {claimableRewards.map((reward) => {
                   const totalReward = reward.claimableActions.reduce((sum, a) => sum + a.rewardAmount, 0);
                   const actionTypes = reward.claimableActions.map(a => a.type);
+                  const allDoneActions = reward.allDoneActions || []; // All actions user has done (including claimed)
                   
                   // All possible actions with their rewards
                   const allActions = [
@@ -1236,8 +1173,7 @@ export function PortalTab() {
                     { type: "comment" as const, emoji: "C", reward: 5000 },
                   ];
                   
-                  // Use allDoneActions (includes already-claimed) to correctly identify what's missing
-                  const allDoneActions = reward.allDoneActions || [];
+                  // Calculate missing actions - only count actions user hasn't done yet (not just unclaimed)
                   const missingActions = allActions.filter(a => !allDoneActions.includes(a.type));
                   const missedReward = missingActions.reduce((sum, a) => sum + a.reward, 0);
                   const hasMissingActions = missingActions.length > 0;
@@ -1291,14 +1227,15 @@ export function PortalTab() {
                         borderRadius: 6,
                         border: hasMissingActions ? "1px solid #ffaa00" : "1px solid #00ff00",
                       }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           {allActions.map((action) => {
-                            const allDoneActions = reward.allDoneActions || [];
-                            const isCompleted = allDoneActions.includes(action.type);
+                            const isDone = allDoneActions.includes(action.type);
+                            const isClaimable = actionTypes.includes(action.type);
                             return (
                               <div key={action.type} style={{ display: "flex", alignItems: "center", gap: 4 }}>
                                 <span style={{ fontSize: 14 }}>{action.emoji}</span>
-                                <span style={{ color: isCompleted ? "#00ff00" : "#ff4444", fontSize: 11 }}>
-                                  {isCompleted ? "OK" : "X"}
+                                <span style={{ color: isDone ? "#00ff00" : "#ff4444", fontSize: 11 }}>
+                                  {isDone ? "OK" : "X"}
                                 </span>
                               </div>
                             );
@@ -1315,6 +1252,10 @@ export function PortalTab() {
                             background: hasMissingActions ? "#ffaa00" : "#00ff00",
                             color: "#000000",
                             border: "none",
+                            borderRadius: 4,
+                            fontSize: 12,
+                            fontWeight: 700,
+                            cursor: claiming ? "not-allowed" : "pointer",
                             opacity: claiming ? 0.6 : 1,
                           }}
                         >

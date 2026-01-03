@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getNeynarClient } from '~/lib/neynar';
+import { getNeynarApiKey } from '~/lib/neynar';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -13,15 +13,25 @@ export async function GET(request: Request) {
   }
 
   try {
-    const client = getNeynarClient();
+    const apiKey = getNeynarApiKey();
     
-    // Use SDK method for fetching best friends
-    const result = await client.fetchUserBestFriends({
-      fid: parseInt(fid),
-      limit: 3,
-    });
+    // Use direct API call - SDK doesn't have fetchUserBestFriends method
+    const response = await fetch(
+      `https://api.neynar.com/v2/farcaster/user/best_friends?fid=${fid}&limit=3`,
+      {
+        headers: {
+          'x-api-key': apiKey,
+        },
+      }
+    );
 
-    return NextResponse.json({ bestFriends: result.users || [] });
+    if (!response.ok) {
+      throw new Error(`Neynar API error: ${response.statusText}`);
+    }
+
+    const data = await response.json() as { users?: any[] };
+
+    return NextResponse.json({ bestFriends: data.users || [] });
   } catch (error: any) {
     console.error('Failed to fetch best friends:', error);
     
@@ -34,7 +44,7 @@ export async function GET(request: Request) {
     }
     
     return NextResponse.json(
-      { error: 'Failed to fetch best friends. Please check your Neynar API key and try again.' },
+      { error: 'Failed to fetch best friends. Please try again.' },
       { status: 500 }
     );
   }

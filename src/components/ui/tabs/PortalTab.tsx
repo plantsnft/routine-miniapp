@@ -1297,7 +1297,6 @@ export function PortalTab() {
                             return (
                               <div key={action.type} style={{ display: "flex", alignItems: "center", gap: 4 }}>
                                 <span style={{ fontSize: 14 }}>{action.emoji}</span>
-                                <span style={{ fontSize: 14 }}>{action.emoji}</span>
                                 <span style={{ color: isCompleted ? "#00ff00" : "#ff4444", fontSize: 11 }}>
                                   {isCompleted ? "OK" : "X"}
                                 </span>

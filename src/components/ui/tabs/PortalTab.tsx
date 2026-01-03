@@ -517,7 +517,6 @@ export function PortalTab() {
       }
 
       setSuccess("Creator cast verified successfully!");
-      setCreatorClaimStatus(data);
       triggerHaptic("heavy");
       // Refresh status after a moment
       setTimeout(() => fetchClaimStatus(), 1000);

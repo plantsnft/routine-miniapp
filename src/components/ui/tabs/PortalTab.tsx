@@ -1239,7 +1239,6 @@ export function PortalTab() {
                   // Use allDoneActions (includes already-claimed) to correctly identify what's missing
                   const allDoneActions = reward.allDoneActions || [];
                   const missingActions = allActions.filter(a => !allDoneActions.includes(a.type));
-                  const missingActions = allActions.filter(a => !allDoneActions.includes(a.type));
                   const missedReward = missingActions.reduce((sum, a) => sum + a.reward, 0);
                   const hasMissingActions = missingActions.length > 0;
                   
@@ -1296,8 +1295,8 @@ export function PortalTab() {
                             const isCompleted = allDoneActions.includes(action.type);
                           {allActions.map((action) => {
                             const allDoneActions = reward.allDoneActions || []; const isCompleted = allDoneActions.includes(action.type);
-                            return (
-                              <div key={action.type} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            const allDoneActions = reward.allDoneActions || [];
+                            const isCompleted = allDoneActions.includes(action.type);
                                 <span style={{ fontSize: 14 }}>{action.emoji}</span>
                                 <span style={{ color: isCompleted ? "#00ff00" : "#ff4444", fontSize: 11 }}>
                                   {isCompleted ? "OK" : "X"}

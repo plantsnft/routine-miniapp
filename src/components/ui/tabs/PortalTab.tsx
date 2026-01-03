@@ -1311,10 +1311,10 @@ export function PortalTab() {
                           onClick={handleClaimClick}
                           disabled={claiming}
                           style={{
-                            borderRadius: 4,
-                            fontSize: 12,
-                            fontWeight: 700,
-                            cursor: claiming ? "not-allowed" : "pointer",
+                            padding: "6px 14px",
+                            background: hasMissingActions ? "#ffaa00" : "#00ff00",
+                            color: "#000000",
+                            border: "none",
                             opacity: claiming ? 0.6 : 1,
                           }}
                         >

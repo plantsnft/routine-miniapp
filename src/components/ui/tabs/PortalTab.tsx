@@ -1295,7 +1295,7 @@ export function PortalTab() {
                             const allDoneActions = reward.allDoneActions || [];
                             const isCompleted = allDoneActions.includes(action.type);
                             return (
-                                <span style={{ fontSize: 14 }}>{action.emoji}</span>
+                                <div key={action.type} style={{ display: "flex", alignItems: "center", gap: 4 }}>`n                                <span style={{ fontSize: 14 }}>{action.emoji}</span>
                                 <span style={{ color: isCompleted ? "#00ff00" : "#ff4444", fontSize: 11 }}>
                                   {isCompleted ? "OK" : "X"}
                                 </span>

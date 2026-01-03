@@ -1,6 +1,21 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 
 const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY || "";
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const SUPABASE_SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE || "";
+
+const SUPABASE_HEADERS = {
+  apikey: SUPABASE_SERVICE_ROLE,
+  Authorization: `Bearer ${SUPABASE_SERVICE_ROLE}`,
+  "Content-Type": "application/json",
+};
+
+// Reward amounts per engagement type (must match claim route)
+const ENGAGEMENT_REWARDS: Record<string, number> = {
+  like: 1000,
+  recast: 2000,
+  comment: 5000,
+};
 
 interface BulkEngageRequest {
   fid: number;
@@ -47,7 +62,6 @@ export async function POST(request: Request) {
     console.log(`[Bulk Engage] Signer status:`, signerData.status);
 
     if (signerData.status !== "approved") {
-      // Return the approval URL if available
       const approvalUrl = signerData.signer_approval_url;
       console.log(`[Bulk Engage] Signer not approved. Status: ${signerData.status}, approvalUrl: ${approvalUrl ? "present" : "missing"}`);
       return NextResponse.json({ 
@@ -84,6 +98,39 @@ export async function POST(request: Request) {
               errorMessage = errorData.message || errorMessage;
             } catch { errorMessage = errorText || errorMessage; }
             throw new Error(errorMessage);
+          }
+
+          // Store the engagement in database so it can be claimed
+          const existingCheck = await fetch(
+            `${SUPABASE_URL}/rest/v1/engagement_claims?fid=eq.${fid}&cast_hash=eq.${castHash}&engagement_type=eq.${action}`,
+            { method: "GET", headers: SUPABASE_HEADERS }
+          );
+          
+          if (existingCheck.ok) {
+            const existing = await existingCheck.json() as any[];
+            if (existing.length === 0) {
+              const insertRes = await fetch(
+                `${SUPABASE_URL}/rest/v1/engagement_claims`,
+                {
+                  method: "POST",
+                  headers: SUPABASE_HEADERS,
+                  body: JSON.stringify({
+                    fid,
+                    cast_hash: castHash,
+                    engagement_type: action,
+                    reward_amount: ENGAGEMENT_REWARDS[action],
+                    verified_at: new Date().toISOString(),
+                  }),
+                }
+              );
+              if (insertRes.ok) {
+                console.log(`[Bulk Engage] Stored ${action} for claim on ${castHash.substring(0, 10)}`);
+              } else {
+                console.error(`[Bulk Engage] Failed to store ${action}:`, await insertRes.text());
+              }
+            } else {
+              console.log(`[Bulk Engage] ${action} already stored for ${castHash.substring(0, 10)}`);
+            }
           }
 
           results.push({ castHash, action, success: true });

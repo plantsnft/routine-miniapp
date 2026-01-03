@@ -1300,12 +1300,12 @@ export function PortalTab() {
                                 <span style={{ color: isCompleted ? "#00ff00" : "#ff4444", fontSize: 11 }}>
                                   {isCompleted ? "OK" : "X"}
                                 </span>
+                              </div>
+                            );
+                          })
                           <span style={{ color: "#ff9500", fontSize: 13, fontWeight: 700, marginLeft: 8 }}>
                             +{totalReward.toLocaleString()}
                           </span>
-                        </div>
-                        <button
-                          onClick={handleClaimClick}
                           disabled={claiming}
                           style={{
                             padding: "6px 14px",

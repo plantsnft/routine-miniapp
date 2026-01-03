@@ -1296,8 +1296,8 @@ export function PortalTab() {
                             const isCompleted = allDoneActions.includes(action.type);
                             return (
                               <div key={action.type} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                <span style={{ color: isCompleted ? "#00ff00" : "#ff4444", fontSize: 11 }}>
-                                  {isCompleted ? "OK" : "X"}
+                              <div key={action.type} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                <span style={{ fontSize: 14 }}>{action.emoji}</span>
                                 </span>
                               </div>
                             );

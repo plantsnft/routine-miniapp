@@ -1237,7 +1237,7 @@ export function PortalTab() {
                   ];
                   
                   // Calculate missing actions and their total reward
-                  const missingActions = allActions.filter(a => !actionTypes.includes(a.type));
+                  const allDoneActions = reward.allDoneActions || []; const missingActions = allActions.filter(a => !allDoneActions.includes(a.type));
                   const missedReward = missingActions.reduce((sum, a) => sum + a.reward, 0);
                   const hasMissingActions = missingActions.length > 0;
                   
@@ -1292,7 +1292,7 @@ export function PortalTab() {
                       }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           {allActions.map((action) => {
-                            const isCompleted = actionTypes.includes(action.type);
+                            const allDoneActions = reward.allDoneActions || []; const isCompleted = allDoneActions.includes(action.type);
                             return (
                               <div key={action.type} style={{ display: "flex", alignItems: "center", gap: 4 }}>
                                 <span style={{ fontSize: 14 }}>{action.emoji}</span>

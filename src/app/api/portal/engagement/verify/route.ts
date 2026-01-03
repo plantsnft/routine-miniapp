@@ -412,7 +412,7 @@ export async function POST(request: Request) {
             if (hasEngagement) {
               // Check if already stored
               const existingCheck = await fetch(
-                `${SUPABASE_URL}/rest/v1/engagement_claims?fid=eq.${fid}&cast_hash=eq.${castHash}&engagement_type=eq.${engagementType}`,
+                `${SUPABASE_URL}/rest/v1/engagement_claims?fid=eq.${fid}&cast_hash=eq.${castHash}&engagement_type=eq.${engagementType}&claimed_at=is.null`,
                 {
                   method: "GET",
                   headers: SUPABASE_HEADERS,
@@ -439,10 +439,18 @@ export async function POST(request: Request) {
                   );
                   
                   if (storeRes.ok) {
-                    console.log(`[Engagement Verify] ✅ Stored ${engagementType} for cast ${castHash.substring(0, 10)}...`);
+                    const storedData = await storeRes.json().catch(() => null);
+                    console.log(`[Engagement Verify] ✅ Stored ${engagementType} for cast ${castHash.substring(0, 10)}...`, storedData ? `ID: ${storedData[0]?.id}` : '');
                   } else {
                     const errorText = await storeRes.text();
-                    console.error(`[Engagement Verify] ❌ Failed to store ${engagementType} for cast ${castHash.substring(0, 10)}:`, errorText);
+                    console.error(`[Engagement Verify] ❌ Failed to store ${engagementType} for cast ${castHash.substring(0, 10)}...:`, {
+                      status: storeRes.status,
+                      statusText: storeRes.statusText,
+                      error: errorText,
+                      fid,
+                      castHash: castHash.substring(0, 12),
+                      engagementType,
+                    });
                   }
                 } else {
                   console.log(`[Engagement Verify] ${engagementType} for cast ${castHash.substring(0, 10)} already exists in database`);
@@ -640,6 +648,83 @@ export async function POST(request: Request) {
             isWithin15Days: castTimestamp >= fifteenDaysAgo,
           });
           
+          // CRITICAL: Ensure all claimable actions are stored in database BEFORE returning
+          console.log(`[Engagement Verify] 🔄 Starting storage for ${claimableActions.length} claimable actions for cast ${castHash.substring(0, 10)}...`);
+          for (const action of claimableActions) {
+            console.log(`[Engagement Verify] 🔍 Checking if ${action.type} already exists for cast ${castHash.substring(0, 10)}... (fid=${fid})`);
+            // Check if an unclaimed record already exists
+            const existingCheck = await fetch(
+              `${SUPABASE_URL}/rest/v1/engagement_claims?fid=eq.${fid}&cast_hash=eq.${castHash}&engagement_type=eq.${action.type}&claimed_at=is.null`,
+              {
+                method: "GET",
+                headers: SUPABASE_HEADERS,
+              }
+            );
+            
+            if (existingCheck.ok) {
+              const existing = await existingCheck.json() as any;
+              console.log(`[Engagement Verify] 📊 Existing check for ${action.type}: found ${existing.length} unclaimed records`);
+              if (existing.length === 0) {
+                // Check if a claimed record exists (user might have claimed before)
+                const claimedCheck = await fetch(
+                  `${SUPABASE_URL}/rest/v1/engagement_claims?fid=eq.${fid}&cast_hash=eq.${castHash}&engagement_type=eq.${action.type}&claimed_at=not.is.null`,
+                  {
+                    method: "GET",
+                    headers: SUPABASE_HEADERS,
+                  }
+                );
+                
+                if (claimedCheck.ok) {
+                  const claimed = await claimedCheck.json() as any;
+                  if (claimed.length > 0) {
+                    console.log(`[Engagement Verify] ⚠️ ${action.type} for cast ${castHash.substring(0, 10)}... was already claimed, skipping storage`);
+                    continue; // Don't create a new record if it was already claimed
+                  }
+                }
+                
+                // Store as verified but not claimed
+                const storePayload = {
+                  fid,
+                  cast_hash: castHash,
+                  engagement_type: action.type,
+                  reward_amount: action.rewardAmount,
+                  verified_at: new Date().toISOString(),
+                };
+                console.log(`[Engagement Verify] 💾 Storing claimable ${action.type} for cast ${castHash.substring(0, 10)}... (fid=${fid})`, storePayload);
+                const storeRes = await fetch(
+                  `${SUPABASE_URL}/rest/v1/engagement_claims`,
+                  {
+                    method: "POST",
+                    headers: SUPABASE_HEADERS,
+                    body: JSON.stringify(storePayload),
+                  }
+                );
+                
+                if (storeRes.ok) {
+                  const storedData = await storeRes.json().catch(() => null);
+                  const recordId = storedData?.[0]?.id || storedData?.id || storedData || 'unknown';
+                  console.log(`[Engagement Verify] ✅ SUCCESS: Stored claimable ${action.type} for cast ${castHash.substring(0, 10)}... ID: ${recordId}`, storedData);
+                } else {
+                  const errorText = await storeRes.text();
+                  console.error(`[Engagement Verify] ❌ FAILED to store claimable ${action.type} for cast ${castHash.substring(0, 10)}...:`, {
+                    status: storeRes.status,
+                    statusText: storeRes.statusText,
+                    error: errorText,
+                    fid,
+                    castHash: castHash.substring(0, 12),
+                    engagementType: action.type,
+                    payload: storePayload,
+                  });
+                }
+              } else {
+                console.log(`[Engagement Verify] Claimable ${action.type} for cast ${castHash.substring(0, 10)}... already exists in database (unclaimed)`);
+              }
+            } else {
+              const errorText = await existingCheck.text();
+              console.error(`[Engagement Verify] Failed to check existing claimable ${action.type} for cast ${castHash.substring(0, 10)}...:`, errorText);
+            }
+          }
+          
           claimableRewards.push({
             castHash,
             castUrl,
@@ -648,6 +733,7 @@ export async function POST(request: Request) {
             text: cast.text?.substring(0, 100) || "",
             timestamp: castTimestamp,
             claimableActions,
+            allDoneActions: Array.from(userHasDone), // All actions user has done (including already claimed)
           });
         }
       }

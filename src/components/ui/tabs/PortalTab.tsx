@@ -1230,7 +1230,6 @@ export function PortalTab() {
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           {allActions.map((action) => {
                             const isDone = allDoneActions.includes(action.type);
-                            const isClaimable = actionTypes.includes(action.type);
                             return (
                               <div key={action.type} style={{ display: "flex", alignItems: "center", gap: 4 }}>
                                 <span style={{ fontSize: 14 }}>{action.emoji}</span>

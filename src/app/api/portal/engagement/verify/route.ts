@@ -382,21 +382,7 @@ export async function POST(request: Request) {
                 const existing = await existingCheck.json() as any;
                 if (existing.length === 0) {
                   // Store as verified but not claimed
-                  await fetch(
-                    `${SUPABASE_URL}/rest/v1/engagement_claims`,
-                    {
-                      method: "POST",
-                      headers: SUPABASE_HEADERS,
-                      body: JSON.stringify({
-                        fid,
-                        cast_hash: castHash,
-                        engagement_type: engagementType,
-                        reward_amount: ENGAGEMENT_REWARDS[engagementType],
-                        verified_at: new Date().toISOString(),
-                      }),
-                    }
-                  );
-                  console.log(`[Engagement Verify] Stored ${engagementType} for cast ${castHash.substring(0, 10)}...`);
+                  const storeRes = await fetch(`${SUPABASE_URL}/rest/v1/engagement_claims`, { method: "POST", headers: SUPABASE_HEADERS, body: JSON.stringify({ fid, cast_hash: castHash, engagement_type: engagementType, reward_amount: ENGAGEMENT_REWARDS[engagementType], verified_at: new Date().toISOString(), }), }); if (storeRes.ok) { console.log(`[Engagement Verify] ✅ Stored ${engagementType} for cast ${castHash.substring(0, 10)}...`); } else { const errorText = await storeRes.text(); console.error(`[Engagement Verify] ❌ Failed to store ${engagementType} for cast ${castHash.substring(0, 10)}:`, errorText); }
                 }
               }
             }

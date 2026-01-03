@@ -141,22 +141,37 @@ export async function POST(request: Request) {
 
     // Check ALL claims for this cast that are verified but not yet claimed
     const typeFilter = engagementTypes.map(t => `engagement_type.eq.${t}`).join(',');
-    const checkRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/engagement_claims?fid=eq.${fid}&cast_hash=eq.${castHash}&or=(${typeFilter})&claimed_at=is.null`,
-      {
-        method: "GET",
-        headers: SUPABASE_HEADERS,
-      }
-    );
-
+    const queryUrl = `${SUPABASE_URL}/rest/v1/engagement_claims?fid=eq.${fid}&cast_hash=eq.${castHash}&or=(${typeFilter})&claimed_at=is.null`;
+    console.log(`[Engagement Claim] Query URL: ${queryUrl}`);
+    console.log(`[Engagement Claim] Query params: fid=${fid}, castHash=${castHash}, types=${engagementTypes.join(',')}`);
+    
+    const checkRes = await fetch(queryUrl, {
+      method: "GET",
+      headers: SUPABASE_HEADERS,
+    });
+    
     if (!checkRes.ok) {
       const errorText = await checkRes.text();
-      console.error("[Engagement Claim] Failed to check claim status:", errorText);
+      console.error(`[Engagement Claim] Query failed: ${checkRes.status} ${checkRes.statusText}`, errorText);
       throw new Error("Failed to check claim status");
     }
 
     const unclaimedClaims = await checkRes.json() as any[];
     console.log(`[Engagement Claim] Unclaimed claims found: ${unclaimedClaims?.length || 0}`);
+    if (unclaimedClaims && unclaimedClaims.length > 0) {
+      console.log(`[Engagement Claim] Found claims:`, unclaimedClaims.map(c => ({ id: c.id, type: c.engagement_type, verified_at: c.verified_at, claimed_at: c.claimed_at })));
+    } else {
+      // Debug: Check if ANY claims exist for this cast (even claimed ones)
+      const allClaimsRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/engagement_claims?fid=eq.${fid}&cast_hash=eq.${castHash}`,
+        { method: "GET", headers: SUPABASE_HEADERS }
+      );
+      if (allClaimsRes.ok) {
+        const allClaims = await allClaimsRes.json() as any[];
+        console.log(`[Engagement Claim] Total claims for this cast (including claimed): ${allClaims.length}`, 
+          allClaims.map(c => ({ type: c.engagement_type, verified_at: c.verified_at, claimed_at: c.claimed_at })));
+      }
+    }
 
     if (!unclaimedClaims || unclaimedClaims.length === 0) {
       return NextResponse.json(

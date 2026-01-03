@@ -22,19 +22,17 @@ export async function GET(request: Request) {
 
   try {
     // Use direct API call - SDK doesn't have fetchUserBestFriends method
-    const response = await fetch(
-      https://api.neynar.com/v2/farcaster/user/best_friends?fid=${fid}&limit=3,
-      {
-        headers: {
-          'x-api-key': NEYNAR_API_KEY,
-        },
-      }
-    );
+    const url = "https://api.neynar.com/v2/farcaster/user/best_friends?fid=" + fid + "&limit=3";
+    const response = await fetch(url, {
+      headers: {
+        'x-api-key': NEYNAR_API_KEY,
+      },
+    });
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Neynar API error:', errorText);
-      throw new Error(Neynar API error: ${response.status});
+      throw new Error("Neynar API error: " + response.status);
     }
 
     const data = await response.json() as { users?: any[] };

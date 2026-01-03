@@ -1,6 +1,5 @@
-﻿import { NextResponse } from 'next/server';
-
-const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY || "";
+import { NextResponse } from 'next/server';
+import { getNeynarClient } from '~/lib/neynar';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -13,36 +12,30 @@ export async function GET(request: Request) {
     );
   }
 
-  if (!NEYNAR_API_KEY) {
-    return NextResponse.json(
-      { error: 'Neynar API key is not configured.' },
-      { status: 500 }
-    );
-  }
-
   try {
-    // Use direct API call - SDK doesn't have fetchUserBestFriends method
-    const url = "https://api.neynar.com/v2/farcaster/user/best_friends?fid=" + fid + "&limit=3";
-    const response = await fetch(url, {
-      headers: {
-        'x-api-key': NEYNAR_API_KEY,
-      },
+    const client = getNeynarClient();
+    
+    // Use SDK method for fetching best friends
+    const result = await client.fetchUserBestFriends({
+      fid: parseInt(fid),
+      limit: 3,
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Neynar API error:', errorText);
-      throw new Error("Neynar API error: " + response.status);
-    }
-
-    const data = await response.json() as { users?: any[] };
-
-    return NextResponse.json({ bestFriends: data.users || [] });
+    return NextResponse.json({ bestFriends: result.users || [] });
   } catch (error: any) {
     console.error('Failed to fetch best friends:', error);
+    
+    // Check if it's an API key error
+    if (error?.message?.includes('NEYNAR_API_KEY')) {
+      return NextResponse.json(
+        { error: 'Neynar API key is not configured. Please add NEYNAR_API_KEY to your environment variables.' },
+        { status: 500 }
+      );
+    }
+    
     return NextResponse.json(
-      { error: 'Failed to fetch best friends. Please try again.' },
+      { error: 'Failed to fetch best friends. Please check your Neynar API key and try again.' },
       { status: 500 }
     );
   }
-}
+} 

@@ -1236,8 +1236,10 @@ export function PortalTab() {
                     { type: "comment" as const, emoji: "C", reward: 5000 },
                   ];
                   
-                  // Calculate missing actions and their total reward
-                  const allDoneActions = reward.allDoneActions || []; const missingActions = allActions.filter(a => !allDoneActions.includes(a.type));
+                  // Use allDoneActions (includes already-claimed) to correctly identify what's missing
+                  const allDoneActions = reward.allDoneActions || [];
+                  const missingActions = allActions.filter(a => !allDoneActions.includes(a.type));
+                  const missingActions = allActions.filter(a => !allDoneActions.includes(a.type));
                   const missedReward = missingActions.reduce((sum, a) => sum + a.reward, 0);
                   const hasMissingActions = missingActions.length > 0;
                   
@@ -1290,7 +1292,8 @@ export function PortalTab() {
                         borderRadius: 6,
                         border: hasMissingActions ? "1px solid #ffaa00" : "1px solid #00ff00",
                       }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            const allDoneActions = reward.allDoneActions || [];
+                            const isCompleted = allDoneActions.includes(action.type);
                           {allActions.map((action) => {
                             const allDoneActions = reward.allDoneActions || []; const isCompleted = allDoneActions.includes(action.type);
                             return (

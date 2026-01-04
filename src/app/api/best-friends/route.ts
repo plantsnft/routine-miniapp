@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 import { getNeynarApiKey } from '~/lib/neynar';
 
 export async function GET(request: Request) {

@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { wrapNeynarFetch } from "~/lib/neynarResult";
 import { getSupabaseAdmin } from "~/lib/supabaseAdmin";
 
@@ -44,8 +44,8 @@ export async function GET() {
           headers: {
             "x-api-key": apiKey,
             "Content-Type": "application/json",
-          },
-        },
+          } as any,
+        } as any,
         "cron/refresh-channel-feed"
       );
 
@@ -178,7 +178,7 @@ export async function GET() {
           as_of: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           payload,
-        },
+        } as any,
         { onConflict: "channel_id" }
       );
 

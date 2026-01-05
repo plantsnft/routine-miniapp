@@ -32,7 +32,7 @@ export async function wrapNeynarCall<T>(
     // Try to extract status code from error
     let status = 500;
     let message = error?.message || "Unknown error";
-    let raw = error;
+    const raw = error;
 
     // Check if error has status property (axios/fetch errors)
     if (error?.status) {

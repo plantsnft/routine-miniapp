@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const SUPABASE_SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE || "";
@@ -375,7 +375,7 @@ export async function POST(request: Request) {
         
         // Also log any cast where user has engaged
         if (hasLiked || finalHasRecasted || hasCommented) {
-          console.log(`[Engagement Verify] 🎯 FOUND ENGAGEMENT on cast ${castHash.substring(0, 12)}:`, { hasLiked, hasRecasted: finalHasRecasted, hasCommented });
+          console.log(`[Engagement Verify] ðŸŽ¯ FOUND ENGAGEMENT on cast ${castHash.substring(0, 12)}:`, { hasLiked, hasRecasted: finalHasRecasted, hasCommented });
         }
 
         // Store detected engagements (merge with database-verified engagements)
@@ -392,15 +392,15 @@ export async function POST(request: Request) {
           }
           if (hasLiked) {
             userEngagements.get(castHash)!.add("like");
-            console.log(`[Engagement Verify] ✓ User ${fid} has liked cast ${castHash.substring(0, 10)}...`);
+            console.log(`[Engagement Verify] âœ“ User ${fid} has liked cast ${castHash.substring(0, 10)}...`);
           }
           if (finalHasRecasted) {
             userEngagements.get(castHash)!.add("recast");
-            console.log(`[Engagement Verify] ✓ User ${fid} has recasted cast ${castHash.substring(0, 10)}...`);
+            console.log(`[Engagement Verify] âœ“ User ${fid} has recasted cast ${castHash.substring(0, 10)}...`);
           }
           if (hasCommented) {
             userEngagements.get(castHash)!.add("comment");
-            console.log(`[Engagement Verify] ✓ User ${fid} has commented on cast ${castHash.substring(0, 10)}...`);
+            console.log(`[Engagement Verify] âœ“ User ${fid} has commented on cast ${castHash.substring(0, 10)}...`);
           }
           
           // Store in Supabase if not already stored (for history tracking)
@@ -440,10 +440,10 @@ export async function POST(request: Request) {
                   
                   if (storeRes.ok) {
                     const storedData = await storeRes.json().catch(() => null);
-                    console.log(`[Engagement Verify] ✅ Stored ${engagementType} for cast ${castHash.substring(0, 10)}...`, storedData ? `ID: ${storedData[0]?.id}` : '');
+                    console.log(`[Engagement Verify] âœ… Stored ${engagementType} for cast ${castHash.substring(0, 10)}...`, storedData ? `ID: ${storedData[0]?.id}` : '');
                   } else {
                     const errorText = await storeRes.text();
-                    console.error(`[Engagement Verify] ❌ Failed to store ${engagementType} for cast ${castHash.substring(0, 10)}...:`, {
+                    console.error(`[Engagement Verify] âŒ Failed to store ${engagementType} for cast ${castHash.substring(0, 10)}...:`, {
                       status: storeRes.status,
                       statusText: storeRes.statusText,
                       error: errorText,
@@ -451,15 +451,13 @@ export async function POST(request: Request) {
                       castHash: castHash.substring(0, 12),
                       engagementType,
                     });
-                    const errorText = await storeRes.text();
-                    console.error(`[Engagement Verify] ❌ Failed to store ${engagementType} for cast ${castHash.substring(0, 10)}:`, errorText);
                   }
                 } else {
                   console.log(`[Engagement Verify] ${engagementType} for cast ${castHash.substring(0, 10)} already exists in database`);
                 }
               } else {
                 const errorText = await existingCheck.text();
-                console.error(`[Engagement Verify] ❌ Failed to check existing ${engagementType} for cast ${castHash.substring(0, 10)}:`, errorText);
+                console.error(`[Engagement Verify] âŒ Failed to check existing ${engagementType} for cast ${castHash.substring(0, 10)}:`, errorText);
               }
             }
           }
@@ -472,7 +470,7 @@ export async function POST(request: Request) {
             }
             for (const engagementType of dbVerified) {
               userEngagements.get(castHash)!.add(engagementType);
-              console.log(`[Engagement Verify] ✓ Using database-verified ${engagementType} for cast ${castHash.substring(0, 10)}...`);
+              console.log(`[Engagement Verify] âœ“ Using database-verified ${engagementType} for cast ${castHash.substring(0, 10)}...`);
             }
           }
         }
@@ -489,7 +487,7 @@ export async function POST(request: Request) {
     if (userEngagements.size > 0) {
       console.log(`[Engagement Verify] ENGAGED CASTS:`, Array.from(userEngagements.entries()).map(([hash, actions]) => ({ hash: hash.substring(0, 12), actions: Array.from(actions) })));
     } else {
-      console.log(`[Engagement Verify] ⚠️ NO ENGAGEMENTS DETECTED - this may indicate viewer_context is not working`);
+      console.log(`[Engagement Verify] âš ï¸ NO ENGAGEMENTS DETECTED - this may indicate viewer_context is not working`);
     }
 
     // Step 3.5: Check for any engaged casts that might not be in the channel feed
@@ -552,7 +550,7 @@ export async function POST(request: Request) {
     }
 
     // Step 4: Build claimable rewards list (actions done but not claimed, from last 15 days)
-    const claimableRewards: Array<{
+    type ClaimableRewardItem = {
       castHash: string;
       castUrl: string;
       authorUsername?: string;
@@ -563,7 +561,9 @@ export async function POST(request: Request) {
         type: "like" | "comment" | "recast";
         rewardAmount: number;
       }>;
-    }> = [];
+      allDoneActions?: Array<"like" | "comment" | "recast">;
+    };
+    const claimableRewards: ClaimableRewardItem[] = [];
 
     // Step 5: Build opportunities and claimable rewards lists
     for (const cast of channelCasts) {
@@ -651,9 +651,9 @@ export async function POST(request: Request) {
           });
           
           // CRITICAL: Ensure all claimable actions are stored in database BEFORE returning
-          console.log(`[Engagement Verify] 🔄 Starting storage for ${claimableActions.length} claimable actions for cast ${castHash.substring(0, 10)}...`);
+          console.log(`[Engagement Verify] ðŸ”„ Starting storage for ${claimableActions.length} claimable actions for cast ${castHash.substring(0, 10)}...`);
           for (const action of claimableActions) {
-            console.log(`[Engagement Verify] 🔍 Checking if ${action.type} already exists for cast ${castHash.substring(0, 10)}... (fid=${fid})`);
+            console.log(`[Engagement Verify] ðŸ” Checking if ${action.type} already exists for cast ${castHash.substring(0, 10)}... (fid=${fid})`);
             // Check if an unclaimed record already exists
             const existingCheck = await fetch(
               `${SUPABASE_URL}/rest/v1/engagement_claims?fid=eq.${fid}&cast_hash=eq.${castHash}&engagement_type=eq.${action.type}&claimed_at=is.null`,
@@ -665,7 +665,7 @@ export async function POST(request: Request) {
             
             if (existingCheck.ok) {
               const existing = await existingCheck.json() as any;
-              console.log(`[Engagement Verify] 📊 Existing check for ${action.type}: found ${existing.length} unclaimed records`);
+              console.log(`[Engagement Verify] ðŸ“Š Existing check for ${action.type}: found ${existing.length} unclaimed records`);
               if (existing.length === 0) {
                 // Check if a claimed record exists (user might have claimed before)
                 const claimedCheck = await fetch(
@@ -679,7 +679,7 @@ export async function POST(request: Request) {
                 if (claimedCheck.ok) {
                   const claimed = await claimedCheck.json() as any;
                   if (claimed.length > 0) {
-                    console.log(`[Engagement Verify] ⚠️ ${action.type} for cast ${castHash.substring(0, 10)}... was already claimed, skipping storage`);
+                    console.log(`[Engagement Verify] âš ï¸ ${action.type} for cast ${castHash.substring(0, 10)}... was already claimed, skipping storage`);
                     continue; // Don't create a new record if it was already claimed
                   }
                 }
@@ -692,7 +692,7 @@ export async function POST(request: Request) {
                   reward_amount: action.rewardAmount,
                   verified_at: new Date().toISOString(),
                 };
-                console.log(`[Engagement Verify] 💾 Storing claimable ${action.type} for cast ${castHash.substring(0, 10)}... (fid=${fid})`, storePayload);
+                console.log(`[Engagement Verify] ðŸ’¾ Storing claimable ${action.type} for cast ${castHash.substring(0, 10)}... (fid=${fid})`, storePayload);
                 const storeRes = await fetch(
                   `${SUPABASE_URL}/rest/v1/engagement_claims`,
                   {
@@ -705,10 +705,10 @@ export async function POST(request: Request) {
                 if (storeRes.ok) {
                   const storedData = await storeRes.json().catch(() => null);
                   const recordId = storedData?.[0]?.id || storedData?.id || storedData || 'unknown';
-                  console.log(`[Engagement Verify] ✅ SUCCESS: Stored claimable ${action.type} for cast ${castHash.substring(0, 10)}... ID: ${recordId}`, storedData);
+                  console.log(`[Engagement Verify] âœ… SUCCESS: Stored claimable ${action.type} for cast ${castHash.substring(0, 10)}... ID: ${recordId}`, storedData);
                 } else {
                   const errorText = await storeRes.text();
-                  console.error(`[Engagement Verify] ❌ FAILED to store claimable ${action.type} for cast ${castHash.substring(0, 10)}...:`, {
+                  console.error(`[Engagement Verify] âŒ FAILED to store claimable ${action.type} for cast ${castHash.substring(0, 10)}...:`, {
                     status: storeRes.status,
                     statusText: storeRes.statusText,
                     error: errorText,
@@ -735,7 +735,7 @@ export async function POST(request: Request) {
             text: cast.text?.substring(0, 100) || "",
             timestamp: castTimestamp,
             claimableActions,
-            allDoneActions: Array.from(userHasDone), // All actions user has done (including already claimed)
+            allDoneActions: Array.from(userHasDone) as Array<"like" | "comment" | "recast">, // All actions user has done (including already claimed)
           });
         }
       }

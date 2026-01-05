@@ -195,11 +195,11 @@ export async function POST(request: Request) {
         console.log(`[Engagement Verify] Page ${pageCount}: ${recentCasts.length} casts within 15 days (out of ${casts.length} total)`);
         channelCasts.push(...recentCasts);
         cursor = feedData.next?.cursor || null;
-        hasMore = !!cursor && casts.length === 100;
+        hasMore = !!cursor && recentCasts.length === 100;
         
-        // Stop if we've reached the end of available pages
-        if (casts.length < 100) {
-          console.log(`[Engagement Verify] Reached end of available pages, stopping`);
+        // Stop if we've gone past 15 days
+        if (recentCasts.length < 100) {
+          console.log(`[Engagement Verify] Reached end of 30-day window, stopping`);
           break;
         }
       } catch (err) {
@@ -451,6 +451,8 @@ export async function POST(request: Request) {
                       castHash: castHash.substring(0, 12),
                       engagementType,
                     });
+                    const errorText = await storeRes.text();
+                    console.error(`[Engagement Verify] ❌ Failed to store ${engagementType} for cast ${castHash.substring(0, 10)}:`, errorText);
                   }
                 } else {
                   console.log(`[Engagement Verify] ${engagementType} for cast ${castHash.substring(0, 10)} already exists in database`);
@@ -725,7 +727,16 @@ export async function POST(request: Request) {
             }
           }
           
-          const rewardItem: { castHash: string; castUrl: string; authorUsername?: string; authorDisplayName?: string; text?: string; timestamp: number; claimableActions: Array<{ type: "like" | "comment" | "recast"; rewardAmount: number; }>; allDoneActions?: Array<"like" | "comment" | "recast">; } = { castHash, castUrl, authorUsername: author.username, authorDisplayName: author.display_name, text: cast.text?.substring(0, 100) || "", timestamp: castTimestamp, claimableActions, allDoneActions: Array.from(userHasDone) as Array<"like" | "comment" | "recast">, }; claimableRewards.push(rewardItem);
+          claimableRewards.push({
+            castHash,
+            castUrl,
+            authorUsername: author.username,
+            authorDisplayName: author.display_name,
+            text: cast.text?.substring(0, 100) || "",
+            timestamp: castTimestamp,
+            claimableActions,
+            allDoneActions: Array.from(userHasDone), // All actions user has done (including already claimed)
+          });
         }
       }
 

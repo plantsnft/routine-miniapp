@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { wrapNeynarFetch } from "~/lib/neynarResult";
 import { getSupabaseAdmin } from "~/lib/supabaseAdmin";
 
@@ -13,7 +13,19 @@ const LOOKBACK_DAYS = 15;
  * Fetches /catwalk channel feed from Neynar (15-day lookback)
  * and stores it in channel_feed_cache table.
  */
-export async function GET() {
+export async function GET(req: Request) {
+  // Cron guard: only allow Vercel cron or local dev
+  const cronHeader = req.headers.get("x-vercel-cron");
+  const isVercelCron = cronHeader === "1";
+  const isLocalDev = process.env.NODE_ENV !== "production";
+  
+  if (!isVercelCron && !isLocalDev) {
+    return NextResponse.json(
+      { ok: false, code: "UNAUTHORIZED" },
+      { status: 401 }
+    );
+  }
+
   const apiKey = process.env.NEYNAR_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
@@ -44,8 +56,8 @@ export async function GET() {
           headers: {
             "x-api-key": apiKey,
             "Content-Type": "application/json",
-          } as any,
-        } as any,
+          },
+        },
         "cron/refresh-channel-feed"
       );
 
@@ -168,14 +180,17 @@ export async function GET() {
 
   // Store in Supabase (best-effort)
   let supabaseError: any = null;
+  let supabaseStored = false;
+  let storedAsOf: string | null = null;
   try {
     const supabase = getSupabaseAdmin();
+    const asOfTimestamp = new Date().toISOString();
     const { error } = await supabase
       .from("channel_feed_cache")
       .upsert(
         {
           channel_id: "catwalk",
-          as_of: new Date().toISOString(),
+          as_of: asOfTimestamp,
           updated_at: new Date().toISOString(),
           payload,
         } as any,
@@ -187,6 +202,24 @@ export async function GET() {
       console.error("[Cron Refresh Channel Feed] Supabase upsert error:", error);
     } else {
       console.log(`[Cron Refresh Channel Feed] Successfully cached ${recentCasts.length} casts`);
+      
+      // Verify write by reading back
+      try {
+        const { data, error: readError } = await supabase
+          .from("channel_feed_cache")
+          .select("as_of")
+          .eq("channel_id", "catwalk")
+          .single();
+        
+        if (readError) {
+          console.warn("[Cron Refresh Channel Feed] Verification read failed:", readError);
+        } else if (data) {
+          supabaseStored = true;
+          storedAsOf = data.as_of;
+        }
+      } catch (verifyErr) {
+        console.warn("[Cron Refresh Channel Feed] Verification read error:", verifyErr);
+      }
     }
   } catch (err) {
     supabaseError = err;
@@ -198,7 +231,12 @@ export async function GET() {
     ok: !structuredError && !supabaseError,
     castsCount: recentCasts.length,
     asOf: new Date().toISOString(),
+    supabaseStored,
   };
+
+  if (storedAsOf) {
+    response.storedAsOf = storedAsOf;
+  }
 
   if (structuredError) {
     response.error = structuredError;

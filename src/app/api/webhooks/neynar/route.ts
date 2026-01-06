@@ -226,8 +226,9 @@ export async function POST(req: NextRequest) {
           .single();
 
         if (replyMapRow) {
-          const userFid = replyMapRow.user_fid;
-          const parentCastHash = replyMapRow.parent_cast_hash;
+          const row = replyMapRow as any;
+          const userFid = row.user_fid;
+          const parentCastHash = row.parent_cast_hash;
 
           // Delete reply_map row
           const { error: deleteReplyError } = await supabase
@@ -349,6 +350,26 @@ export async function POST(req: NextRequest) {
         }
       } else {
         webhookMetrics.byEventType['reaction.deleted'].ignored++;
+      }
+    }
+
+    // Update webhook health tracking (on every valid event)
+    if (processed || webhookMetrics.eventsReceived > 0) {
+      try {
+        await supabase
+          .from("app_state")
+          .upsert({
+            key: "last_webhook_at",
+            value: { timestamp: new Date().toISOString() },
+            updated_at: new Date().toISOString(),
+          } as any, {
+            onConflict: "key",
+          });
+      } catch (err) {
+        // Best-effort - don't fail the webhook if health tracking fails
+        if (process.env.NODE_ENV === 'development') {
+          console.warn("[Webhook Neynar] Failed to update health tracking:", err);
+        }
       }
     }
 

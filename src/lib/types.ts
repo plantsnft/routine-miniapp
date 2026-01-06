@@ -33,7 +33,7 @@ export interface SiwnResponse {
   ok: boolean;
   fid?: number;
   username?: string;
-  error?: string;
+  error?: string;`n  details?: string;
 }
 
 /**
@@ -46,7 +46,7 @@ export interface CheckinResponse {
   total_checkins?: number;
   hasCheckedIn?: boolean;
   hasCheckedInToday?: boolean;
-  error?: string;
+  error?: string;`n  details?: string;
   mode?: "insert" | "update" | "already_checked_in";
 }
 

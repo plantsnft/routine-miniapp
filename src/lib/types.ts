@@ -35,33 +35,4 @@ export interface SiwnResponse {
   username?: string;
   error?: string;
   details?: string;
-  details?: string;`n  details?: string;
 }
-
-/**
- * Check-in API response.
- */
-export interface CheckinResponse {
-  ok: boolean;
-  streak?: number;
-  last_checkin?: string | null;
-  total_checkins?: number;
-  hasCheckedIn?: boolean;
-  hasCheckedInToday?: boolean;
-  error?: string;
-  details?: string;
-  details?: string;`n  details?: string;
-  mode?: "insert" | "update" | "already_checked_in";
-}
-
-/**
- * Check-in status for UI state.
- */
-export interface CheckinStatus {
-  checkedIn: boolean;
-  streak: number | null;
-  totalCheckins: number | null;
-  lastCheckIn: string | null;
-  timeUntilNext: string | null;
-}
-

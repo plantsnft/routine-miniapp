@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { wrapNeynarFetch } from "~/lib/neynarResult";
 import { getSupabaseAdmin } from "~/lib/supabaseAdmin";
 
@@ -13,7 +13,7 @@ const LOOKBACK_DAYS = 15;
  * Fetches /catwalk channel feed from Neynar (15-day lookback)
  * and stores it in channel_feed_cache table.
  */
-export async function GET() {
+export async function GET(req: Request) {
   const apiKey = process.env.NEYNAR_API_KEY;
   if (!apiKey) {
     return NextResponse.json(

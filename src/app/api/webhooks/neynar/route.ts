@@ -9,8 +9,19 @@ let webhookMetrics = {
   eventsIgnored: 0,
   signatureMissing: 0,
   signatureInvalid: 0,
+  byEventType: {
+    'cast.created': { received: 0, written: 0, ignored: 0 },
+    'cast.deleted': { received: 0, written: 0, ignored: 0 },
+    'reaction.created': { received: 0, written: 0, ignored: 0 },
+    'reaction.deleted': { received: 0, written: 0, ignored: 0 },
+  },
+  deletesProcessed: 0,
   lastReset: Date.now(),
 };
+
+// Channel author FID - should match the channel owner
+const AUTHOR_FID = parseInt(process.env.CATWALK_AUTHOR_FID || "0", 10);
+const CATWALK_CHANNEL_PARENT_URL = "https://warpcast.com/~/channel/catwalk";
 
 /**
  * Webhook receiver for Neynar events (cast.created, cast.deleted, reaction.created, reaction.deleted).
@@ -76,69 +87,186 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = getSupabaseAdmin();
-
-    // Get eligible casts from last 15 days for server-side filtering
     const fifteenDaysAgo = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
-    const { data: eligibleCasts } = await supabase
-      .from("eligible_casts")
-      .select("cast_hash")
-      .gte("created_at", fifteenDaysAgo);
-
-    const eligibleCastHashes = new Set((eligibleCasts || []).map((c: any) => c.cast_hash));
-
     let processed = false;
 
-    // Handle cast.created (for replies)
+    // Handle cast.created
     if (eventType === "cast.created" || eventType === "cast_created") {
       const cast = data.cast || data;
+      const castHash = cast.hash || cast.cast_hash;
+      const authorFid = cast.author?.fid;
       const parentHash = cast.parent_hash || cast.parentHash;
-      
-      if (parentHash && cast.author?.fid) {
-        // Server-side filter: only process if parent is in eligible_casts (last 15 days)
-        if (eligibleCastHashes.has(parentHash)) {
-          // Upsert engagement
+      const castTimestamp = cast.timestamp 
+        ? new Date(cast.timestamp * 1000).toISOString()
+        : new Date().toISOString();
+      const castCreatedAt = new Date(cast.timestamp * 1000 || Date.now());
+
+      webhookMetrics.byEventType['cast.created'].received++;
+
+      if (!castHash || !authorFid) {
+        webhookMetrics.byEventType['cast.created'].ignored++;
+        return NextResponse.json({ ok: true, processed: false, reason: "missing_cast_data" });
+      }
+
+      // Case 1a: Cast is from AUTHOR_FID - upsert into eligible_casts
+      if (authorFid === AUTHOR_FID && AUTHOR_FID > 0) {
+        // Only keep if within last 15 days
+        if (castCreatedAt >= new Date(Date.now() - 15 * 24 * 60 * 60 * 1000)) {
           const { error } = await supabase
-            .from("engagements")
+            .from("eligible_casts")
             .upsert({
-              user_fid: cast.author.fid,
-              cast_hash: parentHash,
-              engagement_type: 'reply',
-              engaged_at: cast.timestamp 
-                ? new Date(cast.timestamp * 1000).toISOString()
-                : new Date().toISOString(),
-              source: 'webhook',
+              cast_hash: castHash,
+              author_fid: authorFid,
+              created_at: castTimestamp,
+              parent_url: cast.parent_url || CATWALK_CHANNEL_PARENT_URL,
+              text: cast.text || null,
+              last_seen_at: new Date().toISOString(),
             } as any, {
-              onConflict: "user_fid,cast_hash,engagement_type",
+              onConflict: "cast_hash",
             });
 
           if (!error) {
+            webhookMetrics.byEventType['cast.created'].written++;
             webhookMetrics.eventsWritten++;
             processed = true;
           }
         } else {
-          webhookMetrics.eventsIgnored++;
-          if (process.env.NODE_ENV === 'development') {
-            console.log("[Webhook Neynar] Ignored cast.created - parent not eligible:", parentHash.substring(0, 10));
-          }
+          webhookMetrics.byEventType['cast.created'].ignored++;
         }
+      }
+      // Case 1b: This is a reply (has parent_hash) AND parent exists in eligible_casts
+      else if (parentHash) {
+        // Check if parent exists in eligible_casts
+        const { data: parentCast } = await supabase
+          .from("eligible_casts")
+          .select("cast_hash")
+          .eq("cast_hash", parentHash)
+          .single();
+
+        if (parentCast) {
+          // Upsert reply_map
+          const { error: replyMapError } = await supabase
+            .from("reply_map")
+            .upsert({
+              reply_hash: castHash,
+              user_fid: authorFid,
+              parent_cast_hash: parentHash,
+              created_at: castTimestamp,
+            } as any, {
+              onConflict: "reply_hash",
+            });
+
+          if (!replyMapError) {
+            // Upsert engagement for reply
+            const { error: engagementError } = await supabase
+              .from("engagements")
+              .upsert({
+                user_fid: authorFid,
+                cast_hash: parentHash, // Use parent_cast_hash for engagement
+                engagement_type: 'reply',
+                engaged_at: castTimestamp,
+                source: 'webhook',
+              } as any, {
+                onConflict: "user_fid,cast_hash,engagement_type",
+              });
+
+            if (!engagementError) {
+              webhookMetrics.byEventType['cast.created'].written++;
+              webhookMetrics.eventsWritten++;
+              processed = true;
+            }
+          }
+        } else {
+          webhookMetrics.byEventType['cast.created'].ignored++;
+        }
+      } else {
+        webhookMetrics.byEventType['cast.created'].ignored++;
       }
     }
 
-    // Handle cast.deleted (for cleanup)
+    // Handle cast.deleted
     if (eventType === "cast.deleted" || eventType === "cast_deleted") {
       const cast = data.cast || data;
       const castHash = cast.hash || cast.cast_hash;
-      
-      if (castHash) {
-        // Delete all engagements for this cast
+
+      webhookMetrics.byEventType['cast.deleted'].received++;
+
+      if (!castHash) {
+        webhookMetrics.byEventType['cast.deleted'].ignored++;
+        return NextResponse.json({ ok: true, processed: false, reason: "missing_cast_hash" });
+      }
+
+      // Case 2a: Deleted cast exists in eligible_casts
+      const { data: eligibleCast } = await supabase
+        .from("eligible_casts")
+        .select("cast_hash")
+        .eq("cast_hash", castHash)
+        .single();
+
+      if (eligibleCast) {
+        // Delete from eligible_casts (cascade will handle engagements and sync_state)
         const { error } = await supabase
-          .from("engagements")
+          .from("eligible_casts")
           .delete()
           .eq("cast_hash", castHash);
 
         if (!error) {
+          webhookMetrics.byEventType['cast.deleted'].written++;
           webhookMetrics.eventsWritten++;
+          webhookMetrics.deletesProcessed++;
           processed = true;
+        }
+      }
+      // Case 2b: Deleted cast exists in reply_map
+      else {
+        const { data: replyMapRow } = await supabase
+          .from("reply_map")
+          .select("user_fid, parent_cast_hash")
+          .eq("reply_hash", castHash)
+          .single();
+
+        if (replyMapRow) {
+          const userFid = replyMapRow.user_fid;
+          const parentCastHash = replyMapRow.parent_cast_hash;
+
+          // Delete reply_map row
+          const { error: deleteReplyError } = await supabase
+            .from("reply_map")
+            .delete()
+            .eq("reply_hash", castHash);
+
+          if (!deleteReplyError) {
+            // Check if user has any other replies for this parent
+            const { data: otherReplies } = await supabase
+              .from("reply_map")
+              .select("reply_hash")
+              .eq("user_fid", userFid)
+              .eq("parent_cast_hash", parentCastHash)
+              .limit(1);
+
+            // If no other replies exist, delete the engagement
+            if (!otherReplies || otherReplies.length === 0) {
+              const { error: deleteEngagementError } = await supabase
+                .from("engagements")
+                .delete()
+                .eq("user_fid", userFid)
+                .eq("cast_hash", parentCastHash)
+                .eq("engagement_type", "reply");
+
+              if (!deleteEngagementError) {
+                webhookMetrics.byEventType['cast.deleted'].written++;
+                webhookMetrics.eventsWritten++;
+                webhookMetrics.deletesProcessed++;
+                processed = true;
+              }
+            } else {
+              webhookMetrics.byEventType['cast.deleted'].written++;
+              webhookMetrics.eventsWritten++;
+              processed = true;
+            }
+          }
+        } else {
+          webhookMetrics.byEventType['cast.deleted'].ignored++;
         }
       }
     }
@@ -150,9 +278,18 @@ export async function POST(req: NextRequest) {
       const userFid = reaction.actor?.fid || reaction.user_fid;
       const reactionType = reaction.reaction_type || reaction.type;
 
+      webhookMetrics.byEventType['reaction.created'].received++;
+
       if (castHash && userFid && (reactionType === "like" || reactionType === "recast")) {
         // Server-side filter: only process if cast is in eligible_casts (last 15 days)
-        if (eligibleCastHashes.has(castHash)) {
+        const { data: eligibleCast } = await supabase
+          .from("eligible_casts")
+          .select("cast_hash")
+          .eq("cast_hash", castHash)
+          .gte("created_at", fifteenDaysAgo)
+          .single();
+
+        if (eligibleCast) {
           // Upsert engagement
           const { error } = await supabase
             .from("engagements")
@@ -169,15 +306,18 @@ export async function POST(req: NextRequest) {
             });
 
           if (!error) {
+            webhookMetrics.byEventType['reaction.created'].written++;
             webhookMetrics.eventsWritten++;
             processed = true;
           }
         } else {
-          webhookMetrics.eventsIgnored++;
+          webhookMetrics.byEventType['reaction.created'].ignored++;
           if (process.env.NODE_ENV === 'development') {
             console.log("[Webhook Neynar] Ignored reaction.created - cast not eligible:", castHash.substring(0, 10));
           }
         }
+      } else {
+        webhookMetrics.byEventType['reaction.created'].ignored++;
       }
     }
 
@@ -187,6 +327,8 @@ export async function POST(req: NextRequest) {
       const castHash = reaction.target?.hash || reaction.cast_hash;
       const userFid = reaction.actor?.fid || reaction.user_fid;
       const reactionType = reaction.reaction_type || reaction.type;
+
+      webhookMetrics.byEventType['reaction.deleted'].received++;
 
       if (castHash && userFid && (reactionType === "like" || reactionType === "recast")) {
         // Delete the specific engagement
@@ -198,9 +340,15 @@ export async function POST(req: NextRequest) {
           .eq("engagement_type", reactionType === "like" ? 'like' : 'recast');
 
         if (!error) {
+          webhookMetrics.byEventType['reaction.deleted'].written++;
           webhookMetrics.eventsWritten++;
+          webhookMetrics.deletesProcessed++;
           processed = true;
+        } else {
+          webhookMetrics.byEventType['reaction.deleted'].ignored++;
         }
+      } else {
+        webhookMetrics.byEventType['reaction.deleted'].ignored++;
       }
     }
 
@@ -214,6 +362,8 @@ export async function POST(req: NextRequest) {
           eventsIgnored: webhookMetrics.eventsIgnored,
           signatureMissing: webhookMetrics.signatureMissing,
           signatureInvalid: webhookMetrics.signatureInvalid,
+          deletesProcessed: webhookMetrics.deletesProcessed,
+          byEventType: webhookMetrics.byEventType,
         });
         webhookMetrics = {
           eventsReceived: 0,
@@ -221,6 +371,13 @@ export async function POST(req: NextRequest) {
           eventsIgnored: 0,
           signatureMissing: 0,
           signatureInvalid: 0,
+          byEventType: {
+            'cast.created': { received: 0, written: 0, ignored: 0 },
+            'cast.deleted': { received: 0, written: 0, ignored: 0 },
+            'reaction.created': { received: 0, written: 0, ignored: 0 },
+            'reaction.deleted': { received: 0, written: 0, ignored: 0 },
+          },
+          deletesProcessed: 0,
           lastReset: now,
         };
       }

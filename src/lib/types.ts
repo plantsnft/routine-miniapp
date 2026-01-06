@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Shared TypeScript types and interfaces for the application.
  */
 
@@ -34,6 +34,7 @@ export interface SiwnResponse {
   fid?: number;
   username?: string;
   error?: string;
+  details?: string;
   details?: string;`n  details?: string;
 }
 
@@ -48,6 +49,7 @@ export interface CheckinResponse {
   hasCheckedIn?: boolean;
   hasCheckedInToday?: boolean;
   error?: string;
+  details?: string;
   details?: string;`n  details?: string;
   mode?: "insert" | "update" | "already_checked_in";
 }

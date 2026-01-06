@@ -35,7 +35,6 @@ export interface SiwnResponse {
   username?: string;
   error?: string;
   details?: string;
-  details?: string;
   details?: string;`n  details?: string;
 }
 
@@ -50,7 +49,6 @@ export interface CheckinResponse {
   hasCheckedIn?: boolean;
   hasCheckedInToday?: boolean;
   error?: string;
-  details?: string;
   details?: string;
   details?: string;`n  details?: string;
   mode?: "insert" | "update" | "already_checked_in";

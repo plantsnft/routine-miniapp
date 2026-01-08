@@ -1,5 +1,5 @@
 ﻿import { NextResponse } from "next/server";
-import { isOpsAuthorized } from "@/lib/opsAuth";
+import { isOpsAuthorized } from "../../../../lib/opsAuth";
 
 export const dynamic = "force-dynamic";
 
@@ -15,3 +15,4 @@ export async function GET(req: Request) {
     vercelEnv: process.env.VERCEL_ENV ?? null,
   });
 }
+

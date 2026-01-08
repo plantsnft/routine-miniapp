@@ -27,29 +27,42 @@ const REWARD_MED = 20_000n * TOKEN_UNIT;
 const REWARD_HIGH = 333_333n * TOKEN_UNIT;
 const REWARD_CREATOR = 1_000_000n * TOKEN_UNIT;
 
-const signerWallet = SIGNER_PRIVATE_KEY ? new ethers.Wallet(SIGNER_PRIVATE_KEY) : null;
-if (signerWallet) {
-  console.info("[Reward Claim] Loaded signer address:", signerWallet.address);
-}
-if (signerWallet && REWARD_SIGNER_ADDRESS) {
-  const signerAddr = signerWallet.address.toLowerCase();
-  if (signerAddr !== REWARD_SIGNER_ADDRESS.toLowerCase()) {
-    console.warn(
-      "[Reward Claim] Warning: REWARD_SIGNER_PRIVATE_KEY address does not match REWARD_SIGNER_ADDRESS env.",
-      "signer=",
-      signerAddr,
-      "env=",
-      REWARD_SIGNER_ADDRESS.toLowerCase(),
-      "privateKeyPrefix=",
-      SIGNER_PRIVATE_KEY.slice(0, 10),
-      "fallbackPrefix=",
-      process.env.PRIVATE_KEY?.slice(0, 10)
-    );
+// Lazy getter for signer wallet (only initialized at request time, not at build time)
+let _signerWallet: ethers.Wallet | null = null;
+function getSignerWallet(): ethers.Wallet | null {
+  if (_signerWallet === null) {
+    if (SIGNER_PRIVATE_KEY) {
+      _signerWallet = new ethers.Wallet(SIGNER_PRIVATE_KEY);
+      
+      // Dev-only logging (never runs at build time)
+      if (process.env.NODE_ENV === 'development') {
+        console.info("[Reward Claim] Loaded signer address:", _signerWallet.address);
+      }
+      
+      // Validate signer address matches env (dev-only warnings)
+      if (REWARD_SIGNER_ADDRESS && process.env.NODE_ENV === 'development') {
+        const signerAddr = _signerWallet.address.toLowerCase();
+        if (signerAddr !== REWARD_SIGNER_ADDRESS.toLowerCase()) {
+          console.warn(
+            "[Reward Claim] Warning: REWARD_SIGNER_PRIVATE_KEY address does not match REWARD_SIGNER_ADDRESS env.",
+            "signer=",
+            signerAddr,
+            "env=",
+            REWARD_SIGNER_ADDRESS.toLowerCase(),
+            "privateKeyPrefix=",
+            SIGNER_PRIVATE_KEY.slice(0, 10),
+            "fallbackPrefix=",
+            process.env.PRIVATE_KEY?.slice(0, 10)
+          );
+        }
+      }
+    } else if (process.env.NODE_ENV === 'development' && !process.env.REWARD_SIGNER_PRIVATE_KEY) {
+      console.warn(
+        "[Reward Claim] Warning: REWARD_SIGNER_PRIVATE_KEY not set. Falling back to PRIVATE_KEY."
+      );
+    }
   }
-} else if (!process.env.REWARD_SIGNER_PRIVATE_KEY) {
-  console.warn(
-    "[Reward Claim] Warning: REWARD_SIGNER_PRIVATE_KEY not set. Falling back to PRIVATE_KEY."
-  );
+  return _signerWallet;
 }
 
 const rewardClaimAbi = [
@@ -287,6 +300,7 @@ async function generateClaimSignature(
   tierIndex: number,
   claimant: string
 ): Promise<string> {
+  const signerWallet = getSignerWallet();
   if (!signerWallet) {
     throw new Error("Signer wallet not configured. Provide REWARD_SIGNER_PRIVATE_KEY.");
   }

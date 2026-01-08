@@ -69,7 +69,7 @@ export function PortalTab() {
   const userFid = context?.user?.fid;
 
   const [creatorClaimStatus, setCreatorClaimStatus] = useState<CreatorClaimStatus | null>(null);
-  const [engagementClaimStatus, setEngagementClaimStatus] = useState<EngagementClaimStatus | null>(null);
+  const [_engagementClaimStatus, setEngagementClaimStatus] = useState<EngagementClaimStatus | null>(null);
   const [engagementOpportunities, setEngagementOpportunities] = useState<EngagementOpportunity[]>([]);
   const [claimableRewards, setClaimableRewards] = useState<ClaimableReward[]>([]);
   const [loading, setLoading] = useState(true);

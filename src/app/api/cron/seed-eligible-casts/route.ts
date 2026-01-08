@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { wrapNeynarFetch } from "~/lib/neynarResult";
 import { getSupabaseAdmin } from "~/lib/supabaseAdmin";
 
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
   }
 
   const fifteenDaysAgoUnix = Math.floor(Date.now() / 1000) - (LOOKBACK_DAYS * 24 * 60 * 60);
-  const fifteenDaysAgoISO = new Date(Date.now() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const _fifteenDaysAgoISO = new Date(Date.now() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
   
   let cursor: string | null = null;
   let pageCount = 0;

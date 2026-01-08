@@ -13,7 +13,7 @@ const LOOKBACK_DAYS = 15;
  * Fetches /catwalk channel feed from Neynar (15-day lookback)
  * and stores it in channel_feed_cache table.
  */
-export async function GET(req: Request) {
+export async function GET(_req: Request) {
   const apiKey = process.env.NEYNAR_API_KEY;
   if (!apiKey) {
     return NextResponse.json(

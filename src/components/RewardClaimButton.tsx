@@ -60,7 +60,7 @@ export function RewardClaimButton({ fid, checkedIn }: RewardClaimButtonProps) {
     }
   }, []);
   const { canClaim, claimedToday, isLoading, isClaiming, hasApiError, success, errorMessage, txHash } = status;
-  const txHashForReceipt = txHash ? (txHash as `0x${string}`) : undefined;
+  const _txHashForReceipt = txHash ? (txHash as `0x${string}`) : undefined;
 
   useEffect(() => {
     if (!checkedIn || !fid) {

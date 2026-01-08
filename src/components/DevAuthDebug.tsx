@@ -1,7 +1,7 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect } from "react";
-import { getAuthEvents, clearAuthEvents } from "~/lib/authDebug";
+import { getAuthEvents } from "~/lib/authDebug";
 
 interface DevAuthDebugProps {
   authState?: 'authenticated' | 'not_in_farcaster' | 'error' | 'loading';
@@ -112,7 +112,7 @@ export function DevAuthDebug({
                 padding: "0 8px",
               }}
             >
-              Ã—
+              ×
             </button>
           </div>
 
@@ -221,7 +221,7 @@ export function DevAuthDebug({
           }}
           title="Auth Debug"
         >
-          ðŸ”
+          🔍
         </button>
       )}
     </div>

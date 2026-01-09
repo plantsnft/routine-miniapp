@@ -174,13 +174,31 @@ export async function POST(req: NextRequest) {
     // Handle cast.created
     if (eventType === "cast.created" || eventType === "cast_created") {
       const cast = data.cast || data;
-      const castHash = cast.hash || cast.cast_hash;
+            const castHash = cast.hash || cast.cast_hash;
       const authorFid = cast.author?.fid;
       const parentHash = cast.parent_hash || cast.parentHash;
-      const castTimestamp = cast.timestamp 
-        ? new Date(cast.timestamp * 1000).toISOString()
-        : new Date().toISOString();
-      const castCreatedAt = new Date(cast.timestamp * 1000 || Date.now());
+      const parentAuthorFid = cast.parent_author?.fid || cast.parent?.author?.fid;
+      
+      // Track receipt info
+      receiptInfo.actorFid = authorFid;
+      receiptInfo.targetCastHash = castHash;
+      receiptInfo.parentCastHash = parentHash;
+      receiptInfo.parentAuthorFid = parentAuthorFid;
+      const rawTimestamp = cast.timestamp || cast.created_at || cast.timestamp_ms;
+      const castTimestampDate = safeParseTimestamp(rawTimestamp);
+      const castTimestamp = safeISO(rawTimestamp);
+      const castCreatedAt = castTimestampDate || new Date();
+      
+      // Log warning if timestamp was invalid
+      if (!castTimestampDate && rawTimestamp) {
+        console.warn(JSON.stringify({
+          type: "webhook_timestamp_warning",
+          eventType,
+          rawTimestamp,
+          field: "cast.timestamp|cast.created_at|cast.timestamp_ms",
+          fallback: "using current time",
+        }));
+      }
 
       webhookMetrics.byEventType['cast.created'].received++;
 
@@ -494,3 +512,4 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+

@@ -24,6 +24,62 @@ const AUTHOR_FID = parseInt(process.env.CATWALK_AUTHOR_FID || "0", 10);
 const CATWALK_CHANNEL_PARENT_URL = "https://warpcast.com/~/channel/catwalk";
 
 /**
+ * Safe timestamp parser that returns a valid Date or null.
+ * Handles various input formats: ISO strings, numbers (seconds or ms), numeric strings.
+ * If number looks like seconds (< 1e12), converts to ms.
+ * If invalid, returns null (never throws).
+ */
+function safeParseTimestamp(input: unknown): Date | null {
+  if (!input) {
+    return null;
+  }
+  
+  // Already an ISO string
+  if (typeof input === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(input)) {
+    const date = new Date(input);
+    if (!isNaN(date.getTime())) {
+      return date;
+    }
+    return null;
+  }
+  
+  // Number or numeric string
+  let num: number;
+  if (typeof input === 'number') {
+    num = input;
+  } else if (typeof input === 'string') {
+    num = parseFloat(input);
+    if (isNaN(num)) {
+      return null;
+    }
+  } else {
+    return null;
+  }
+  
+  // If seconds (looks like Unix timestamp in seconds: < 1e12), convert to milliseconds
+  if (num > 0 && num < 1e12) {
+    num = num * 1000;
+  }
+  
+  const date = new Date(num);
+  if (isNaN(date.getTime())) {
+    return null;
+  }
+  
+  return date;
+}
+
+/**
+ * Safe ISO timestamp converter that handles various input formats.
+ * Returns ISO string, falling back to current time if invalid.
+ * Used for database writes where we always need a valid timestamp.
+ */
+function safeISO(input: unknown): string {
+  const date = safeParseTimestamp(input);
+  return date ? date.toISOString() : new Date().toISOString();
+}
+
+/**
  * Webhook receiver for Neynar events (cast.created, cast.deleted, reaction.created, reaction.deleted).
  * Captures engagements in real-time and writes to engagements table.
  * 

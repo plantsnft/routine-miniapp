@@ -34,6 +34,31 @@ const CATWALK_CHANNEL_PARENT_URL = "https://warpcast.com/~/channel/catwalk";
  * 
  * POST /api/webhooks/neynar
  */
+
+export async function GET() {
+  return NextResponse.json({
+    ok: true,
+    now: new Date().toISOString(),
+    vercelEnv: process.env.VERCEL_ENV ?? "unknown",
+    gitSha: process.env.VERCEL_GIT_COMMIT_SHA ?? null,
+  });
+}
+
+export async function HEAD() {
+  return new Response(null, { status: 200 });
+}
+
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET,POST,HEAD,OPTIONS",
+      "Access-Control-Allow-Headers": "*",
+    },
+  });
+}
+
 export async function POST(req: NextRequest) {
   // Read raw body ONCE for signature verification
   const rawBody = await req.text();

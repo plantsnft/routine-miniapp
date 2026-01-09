@@ -172,6 +172,94 @@ export async function POST(req: NextRequest) {
     let processed = false;
 
     // Handle cast.created
+    if (eventType === "cast.created" || eventType === "cast_created") {
+      const cast = data.cast || data;
+      const castHash = cast.hash || cast.cast_hash;
+      const authorFid = cast.author?.fid;
+      const parentHash = cast.parent_hash || cast.parentHash;
+      const castTimestamp = cast.timestamp 
+        ? new Date(cast.timestamp * 1000).toISOString()
+        : new Date().toISOString();
+      const castCreatedAt = new Date(cast.timestamp * 1000 || Date.now());
+
+      webhookMetrics.byEventType['cast.created'].received++;
+
+      if (!castHash || !authorFid) {
+        webhookMetrics.byEventType['cast.created'].ignored++;
+        return NextResponse.json({ ok: true, processed: false, reason: "missing_cast_data" });
+      }
+
+      // Case 1a: Cast is from AUTHOR_FID - upsert into eligible_casts
+      if (authorFid === AUTHOR_FID && AUTHOR_FID > 0) {
+        // Only keep if within last 15 days
+        if (castCreatedAt >= new Date(Date.now() - 15 * 24 * 60 * 60 * 1000)) {
+          const { error } = await supabase
+            .from("eligible_casts")
+            .upsert({
+              cast_hash: castHash,
+              author_fid: authorFid,
+              created_at: castTimestamp,
+              parent_url: cast.parent_url || CATWALK_CHANNEL_PARENT_URL,
+              text: cast.text || null,
+              last_seen_at: new Date().toISOString(),
+            } as any, {
+              onConflict: "cast_hash",
+            });
+
+          if (!error) {
+            webhookMetrics.byEventType['cast.created'].written++;
+            webhookMetrics.eventsWritten++;
+            processed = true;
+          }
+        } else {
+          webhookMetrics.byEventType['cast.created'].ignored++;
+        }
+      }
+      // Case 1b: This is a reply (has parent_hash) AND parent exists in eligible_casts
+      else if (parentHash) {
+        // Check if parent exists in eligible_casts
+        const { data: parentCast } = await supabase
+          .from("eligible_casts")
+          .select("cast_hash")
+          .eq("cast_hash", parentHash)
+          .single();
+
+        if (parentCast) {
+          // Upsert reply_map
+          const { error: replyMapError } = await supabase
+            .from("reply_map")
+            .upsert({
+              reply_hash: castHash,
+              user_fid: authorFid,
+              parent_cast_hash: parentHash,
+              created_at: castTimestamp,
+            } as any, {
+              onConflict: "reply_hash",
+            });
+
+          if (!replyMapError) {
+            // Upsert engagement for reply
+            const { error: engagementError } = await supabase
+              .from("engagements")
+              .upsert({
+                user_fid: authorFid,
+                cast_hash: parentHash, // Use parent_cast_hash for engagement
+                engagement_type: 'reply',
+                engaged_at: castTimestamp,
+                source: 'webhook',
+              } as any, {
+                onConflict: "user_fid,cast_hash,engagement_type",
+              });
+
+            if (!engagementError) {
+              webhookMetrics.byEventType['cast.created'].written++;
+              webhookMetrics.eventsWritten++;
+              processed = true;
+            }
+          }
+        } else {
+          webhookMetrics.byEventType['cast.created'].ignored++;
+        }
       } else {
         webhookMetrics.byEventType['cast.created'].ignored++;
       }
@@ -406,5 +494,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-
-

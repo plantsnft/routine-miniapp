@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getNeynarUser } from "~/lib/neynar";
+import { getSupabaseAdmin } from "~/lib/supabaseAdmin";
 import { createWalletClient, createPublicClient, http, encodeFunctionData } from "viem";
 import { base } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
@@ -359,6 +360,27 @@ export async function POST(request: Request) {
     const totalRewardTokens = Number(totalRewardAmount / (10n ** 18n));
     console.log(`[Engagement Claim] ✅ SUCCESS! Sent ${totalRewardTokens} CATWALK to ${recipientAddress}`);
     console.log(`[Engagement Claim] BaseScan: https://basescan.org/tx/${transactionHash}`);
+
+    // ===== PHASE 2.1: INVALIDATE CACHE ON CLAIM =====
+    // Delete engagement_cache entry so next verification shows updated claimable rewards
+    try {
+      const supabase = getSupabaseAdmin();
+      const { error: deleteError } = await supabase
+        .from("engagement_cache")
+        .delete()
+        .eq("fid", fid)
+        .eq("channel_id", "catwalk");
+
+      if (deleteError) {
+        console.warn("[Engagement Claim] Failed to invalidate cache (non-fatal):", deleteError.message);
+      } else {
+        console.log(`[Engagement Claim] ✅ Invalidated engagement cache for FID ${fid}`);
+      }
+    } catch (cacheErr) {
+      // Non-fatal: if cache invalidation fails, still return success
+      console.warn("[Engagement Claim] Cache invalidation error (non-fatal):", cacheErr);
+    }
+    // ===== END CACHE INVALIDATION =====
 
     return NextResponse.json({
       success: true,

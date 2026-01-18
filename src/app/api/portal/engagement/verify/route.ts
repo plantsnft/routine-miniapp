@@ -1,7 +1,8 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { getSupabaseAdmin } from "~/lib/supabaseAdmin";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const SUPABASE_SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE || "";
+const SUPABASE_SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const CATWALK_CHANNEL_PARENT_URL = "https://warpcast.com/~/channel/catwalk";
 
 const SUPABASE_HEADERS = {
@@ -9,6 +10,9 @@ const SUPABASE_HEADERS = {
   Authorization: `Bearer ${SUPABASE_SERVICE_ROLE}`,
   "Content-Type": "application/json",
 };
+
+// Cache TTL: 1 hour in milliseconds
+const CACHE_TTL_MS = 60 * 60 * 1000;
 
 // Reward amounts per engagement type
 const ENGAGEMENT_REWARDS = {
@@ -28,6 +32,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json() as any;
     const { fid } = body;
+    const forceRefresh = new URL(request.url).searchParams.get("force") === "true";
 
     if (!fid || typeof fid !== "number") {
       return NextResponse.json(
@@ -35,6 +40,45 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    // ===== PHASE 2.1: CACHE CHECK =====
+    // Check engagement_cache table first (1-hour TTL)
+    if (!forceRefresh) {
+      try {
+        const supabase = getSupabaseAdmin();
+        const { data: cacheData, error: cacheError } = await supabase
+          .from("engagement_cache")
+          .select("as_of, payload")
+          .eq("fid", fid)
+          .eq("channel_id", "catwalk")
+          .single() as { data: { as_of: string; payload: any } | null; error: any };
+
+        if (!cacheError && cacheData) {
+          const cacheAge = Date.now() - new Date(cacheData.as_of).getTime();
+          if (cacheAge < CACHE_TTL_MS) {
+            // Cache is valid - return cached results
+            console.log(`[Engagement Verify] ✅ Cache HIT for FID ${fid} (age: ${Math.round(cacheAge / 1000)}s)`);
+            const cachedPayload = cacheData.payload as any;
+            return NextResponse.json({
+              ...cachedPayload,
+              cached: true,
+              as_of: cacheData.as_of,
+            });
+          } else {
+            console.log(`[Engagement Verify] ⏰ Cache STALE for FID ${fid} (age: ${Math.round(cacheAge / 1000)}s, TTL: ${CACHE_TTL_MS / 1000}s)`);
+          }
+        } else if (cacheError && cacheError.code !== 'PGRST116') {
+          // PGRST116 = no rows returned (expected if no cache exists)
+          console.warn(`[Engagement Verify] Cache query error (non-fatal):`, cacheError.message);
+        }
+      } catch (cacheErr) {
+        // Non-fatal: if cache check fails, continue with fresh computation
+        console.warn("[Engagement Verify] Cache check failed (non-fatal), computing fresh:", cacheErr);
+      }
+    } else {
+      console.log(`[Engagement Verify] 🔄 Force refresh requested for FID ${fid}`);
+    }
+    // ===== END CACHE CHECK =====
 
     const opportunities: Array<{
       castHash: string;
@@ -120,20 +164,79 @@ export async function POST(request: Request) {
       console.error("[Engagement Verify] Error fetching verified unclaimed engagements:", dbErr);
     }
 
-    // Step 2: Get all casts from /catwalk channel in last 15 days
-    const channelCasts: any[] = [];
-    let cursor: string | null = null;
-    let hasMore = true;
-    let pageCount = 0;
-    const maxPages = 20; // Get more casts to find opportunities
+    // ===== PHASE 2.1: USE WEBHOOK DATA FIRST =====
+    // Step 2: Get user's engagements from webhook-populated engagements table (FREE, no API calls)
+    const userEngagementsFromWebhook = new Map<string, Set<string>>(); // castHash -> Set<"like"|"comment"|"recast">
+    
+    try {
+      const fifteenDaysAgoISO = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
+      const engagementsRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/engagements?user_fid=eq.${fid}&engaged_at=gte.${fifteenDaysAgoISO}`,
+        {
+          method: "GET",
+          headers: SUPABASE_HEADERS,
+        }
+      );
 
-    while (hasMore && channelCasts.length < 2000 && pageCount < maxPages) {
-      pageCount++;
+      if (engagementsRes.ok) {
+        const engagementsData = await engagementsRes.json() as any[];
+        for (const engagement of engagementsData) {
+          const castHash = engagement.cast_hash;
+          const engagementType = engagement.engagement_type;
+          if (castHash && engagementType) {
+            if (!userEngagementsFromWebhook.has(castHash)) {
+              userEngagementsFromWebhook.set(castHash, new Set());
+            }
+            // Map 'reply' to 'comment' for consistency
+            const mappedType = engagementType === 'reply' ? 'comment' : engagementType;
+            userEngagementsFromWebhook.get(castHash)!.add(mappedType);
+          }
+        }
+        console.log(`[Engagement Verify] ✅ Found ${userEngagementsFromWebhook.size} casts with webhook-populated engagements (FREE)`);
+      }
+    } catch (webhookErr) {
+      console.warn("[Engagement Verify] Error fetching webhook engagements (non-fatal):", webhookErr);
+    }
+
+    // Step 2.5: Get eligible casts from database (FREE, no API calls)
+    // This gives us all casts from last 15 days without making API calls
+    const eligibleCastsFromDB: any[] = [];
+    try {
+      const fifteenDaysAgoISO = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
+      const eligibleRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/eligible_casts?parent_url=eq.${encodeURIComponent(CATWALK_CHANNEL_PARENT_URL)}&created_at=gte.${fifteenDaysAgoISO}&order=created_at.desc&limit=100`,
+        {
+          method: "GET",
+          headers: SUPABASE_HEADERS,
+        }
+      );
+
+      if (eligibleRes.ok) {
+        const eligibleData = await eligibleRes.json() as any[];
+        for (const cast of eligibleData) {
+          // Convert database format to API-like format for compatibility
+          eligibleCastsFromDB.push({
+            hash: cast.cast_hash,
+            author: { fid: cast.author_fid },
+            text: cast.text,
+            timestamp: Math.floor(new Date(cast.created_at).getTime() / 1000),
+            parent_url: cast.parent_url,
+          });
+        }
+        console.log(`[Engagement Verify] ✅ Found ${eligibleCastsFromDB.length} eligible casts from database (FREE)`);
+      }
+    } catch (dbErr) {
+      console.warn("[Engagement Verify] Error fetching eligible casts from DB (non-fatal):", dbErr);
+    }
+
+    // Step 2.6: Fallback to API if database doesn't have enough casts
+    // Only fetch from API if we have fewer than 30 casts in DB (to ensure we have enough to check)
+    let channelCasts: any[] = eligibleCastsFromDB;
+    if (eligibleCastsFromDB.length < 30) {
+      console.log(`[Engagement Verify] ⚠️ Only ${eligibleCastsFromDB.length} casts in DB, fetching from API to get at least 30...`);
+      // Fetch minimal amount from API (just 1 page = 100 casts, then limit to 30)
       try {
-        const url = cursor
-          ? `https://api.neynar.com/v2/farcaster/feed?feed_type=filter&filter_type=parent_url&parent_url=${encodeURIComponent(CATWALK_CHANNEL_PARENT_URL)}&limit=100&cursor=${cursor}`
-          : `https://api.neynar.com/v2/farcaster/feed?feed_type=filter&filter_type=parent_url&parent_url=${encodeURIComponent(CATWALK_CHANNEL_PARENT_URL)}&limit=100`;
-
+        const url = `https://api.neynar.com/v2/farcaster/feed?feed_type=filter&filter_type=parent_url&parent_url=${encodeURIComponent(CATWALK_CHANNEL_PARENT_URL)}&limit=100`;
         const feedResponse = await fetch(url, {
           headers: {
             "x-api-key": apiKey,
@@ -141,88 +244,80 @@ export async function POST(request: Request) {
           },
         });
 
-        if (!feedResponse.ok) break;
-
-        const feedData = await feedResponse.json() as any;
-        const casts = feedData.casts || feedData.result?.casts || feedData.result?.feed || [];
-        
-        console.log(`[Engagement Verify] Page ${pageCount}: Got ${casts.length} casts from feed API`);
-        
-        if (casts.length === 0) {
-          console.log(`[Engagement Verify] No casts returned, stopping pagination`);
-          break;
-        }
-        
-        // Debug: Check first cast's timestamp format
-        if (pageCount === 1 && casts.length > 0) {
-          const firstCast = casts[0];
-          console.log(`[Engagement Verify] Sample cast timestamp:`, {
-            raw: firstCast.timestamp,
-            type: typeof firstCast.timestamp,
-            parsed: firstCast.timestamp ? parseInt(firstCast.timestamp) : null,
-            fifteenDaysAgo,
-            now: Math.floor(Date.now() / 1000),
-          });
-        }
-        
-        // Filter casts from last 15 days
-        // Timestamps might be in seconds (Unix) or ISO string format
-        const recentCasts = casts.filter((c: any) => {
-          let castTimestamp = 0;
+        if (feedResponse.ok) {
+          const feedData = await feedResponse.json() as any;
+          const apiCasts = feedData.casts || feedData.result?.casts || feedData.result?.feed || [];
           
-          if (c.timestamp) {
-            // Try parsing as Unix timestamp (seconds)
-            if (typeof c.timestamp === 'number') {
-              castTimestamp = c.timestamp;
-            } else if (typeof c.timestamp === 'string') {
-              // Try parsing as Unix timestamp string
-              const parsed = parseInt(c.timestamp);
-              if (!isNaN(parsed) && parsed > 1000000000) { // Valid Unix timestamp
-                castTimestamp = parsed;
-              } else {
-                // Try parsing as ISO date string
-                const date = new Date(c.timestamp);
-                if (!isNaN(date.getTime())) {
-                  castTimestamp = Math.floor(date.getTime() / 1000);
+          // Filter to last 15 days and merge with DB casts (avoid duplicates)
+          const dbCastHashes = new Set(eligibleCastsFromDB.map(c => c.hash));
+          const recentApiCasts = apiCasts
+            .filter((c: any) => {
+              let castTimestamp = 0;
+              if (c.timestamp) {
+                if (typeof c.timestamp === 'number') {
+                  castTimestamp = c.timestamp;
+                } else if (typeof c.timestamp === 'string') {
+                  const parsed = parseInt(c.timestamp);
+                  if (!isNaN(parsed) && parsed > 1000000000) {
+                    castTimestamp = parsed;
+                  } else {
+                    const date = new Date(c.timestamp);
+                    if (!isNaN(date.getTime())) {
+                      castTimestamp = Math.floor(date.getTime() / 1000);
+                    }
+                  }
                 }
               }
-            }
-          }
+              return castTimestamp >= fifteenDaysAgo && !dbCastHashes.has(c.hash);
+            })
+            .slice(0, 30); // Limit to 30 max
           
-          return castTimestamp >= fifteenDaysAgo;
-        });
-
-        console.log(`[Engagement Verify] Page ${pageCount}: ${recentCasts.length} casts within 15 days (out of ${casts.length} total)`);
-        channelCasts.push(...recentCasts);
-        cursor = feedData.next?.cursor || null;
-        hasMore = !!cursor && recentCasts.length === 100;
-        
-        // Stop if we've gone past 15 days
-        if (recentCasts.length < 100) {
-          console.log(`[Engagement Verify] Reached end of 30-day window, stopping`);
-          break;
+          channelCasts = [...eligibleCastsFromDB, ...recentApiCasts];
+          console.log(`[Engagement Verify] 📡 Fetched ${recentApiCasts.length} additional casts from API (total: ${channelCasts.length})`);
         }
-      } catch (err) {
-        console.error("[Engagement Verify] Error fetching channel feed:", err);
-        break;
+      } catch (apiErr) {
+        console.warn("[Engagement Verify] API fallback failed (using DB casts only):", apiErr);
+        // Continue with DB casts only
       }
+    } else {
+      // Limit to 30 casts max from DB (oldest first, so we get recent ones)
+      channelCasts = eligibleCastsFromDB.slice(0, 30);
+      console.log(`[Engagement Verify] ✅ Using ${channelCasts.length} casts from database (no API calls needed)`);
     }
+    // ===== END WEBHOOK DATA OPTIMIZATION =====
 
-    console.log(`[Engagement Verify] Found ${channelCasts.length} casts from last 15 days`);
+    console.log(`[Engagement Verify] Processing ${channelCasts.length} casts from last 15 days`);
 
-    // Step 3: For each cast, check user's engagement using Neynar's reactions API
-    // Use the proper Neynar API endpoint: /v2/farcaster/reactions/cast
-    const userEngagements = new Map<string, Set<string>>(); // castHash -> Set<"like"|"comment"|"recast">
-    const processedCastHashes = new Set<string>(); // Track which casts we've already processed
+    // ===== PHASE 2.1: USE WEBHOOK DATA FIRST, THEN API FOR MISSING =====
+    // Step 3: Start with webhook data, then only check API for casts not in engagements table
+    const userEngagements = new Map<string, Set<string>>(userEngagementsFromWebhook); // Start with webhook data
+    const processedCastHashes = new Set<string>();
+    const castsNeedingApiCheck: string[] = []; // Casts not in webhook data that need API verification
     
-    console.log(`[Engagement Verify] Checking engagement for ${channelCasts.length} casts, user FID: ${fid}`);
+    console.log(`[Engagement Verify] Starting with ${userEngagements.size} engagements from webhook data`);
     
-    // Process ALL casts to check reactions (need to check all to filter correctly)
-    for (let i = 0; i < channelCasts.length; i++) {
-      const cast = channelCasts[i];
+    // Identify casts that need API verification (not in webhook data)
+    for (const cast of channelCasts) {
       const castHash = cast.hash;
       if (!castHash || processedCastHashes.has(castHash)) continue;
       processedCastHashes.add(castHash);
+      
+      // If we don't have webhook data for this cast, we need to check via API
+      if (!userEngagements.has(castHash)) {
+        castsNeedingApiCheck.push(castHash);
+      }
+    }
+    
+    console.log(`[Engagement Verify] ${castsNeedingApiCheck.length} casts need API verification (${userEngagements.size} already have webhook data)`);
+    
+    // Step 3.1: Only make API calls for casts NOT in webhook data, limit to 30 max
+    const maxApiCalls = 30;
+    const castsToCheckViaApi = castsNeedingApiCheck.slice(0, maxApiCalls);
+    
+    for (let i = 0; i < castsToCheckViaApi.length; i++) {
+      const castHash = castsToCheckViaApi[i];
+      const cast = channelCasts.find(c => c.hash === castHash);
+      if (!cast) continue;
 
       // Parse timestamp (handle both Unix seconds and ISO strings)
       let castTimestamp = 0;
@@ -793,7 +888,8 @@ export async function POST(request: Request) {
       }, 0),
     });
 
-    return NextResponse.json({
+    // Build response
+    const response = {
       eligibleCount: opportunities.length,
       opportunities: opportunities.slice(0, 100), // Limit to 100 for UI performance
       totalReward: opportunities.reduce((sum, opp) => {
@@ -804,7 +900,38 @@ export async function POST(request: Request) {
       totalClaimableReward: claimableRewards.reduce((sum, reward) => {
         return sum + reward.claimableActions.reduce((actionSum, action) => actionSum + action.rewardAmount, 0);
       }, 0),
-    });
+      cached: false,
+      as_of: new Date().toISOString(),
+    };
+
+    // ===== PHASE 2.1: STORE RESULTS IN CACHE =====
+    // Store computed results in engagement_cache for future use
+    try {
+      const supabase = getSupabaseAdmin();
+      const { error: cacheError } = await supabase
+        .from("engagement_cache")
+        .upsert({
+          fid,
+          channel_id: "catwalk",
+          as_of: response.as_of,
+          payload: response,
+          updated_at: response.as_of,
+        } as any, {
+          onConflict: "fid,channel_id",
+        });
+
+      if (cacheError) {
+        console.warn("[Engagement Verify] Failed to store cache (non-fatal):", cacheError.message);
+      } else {
+        console.log(`[Engagement Verify] ✅ Stored results in cache for FID ${fid}`);
+      }
+    } catch (cacheErr) {
+      // Non-fatal: if cache storage fails, still return results
+      console.warn("[Engagement Verify] Cache storage error (non-fatal):", cacheErr);
+    }
+    // ===== END CACHE STORAGE =====
+
+    return NextResponse.json(response);
   } catch (error: any) {
     console.error("[Engagement Verify] Error:", error);
     return NextResponse.json(

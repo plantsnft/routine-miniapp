@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getSupabaseAdmin } from "~/lib/supabaseAdmin";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const SUPABASE_SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE || "";
@@ -10,6 +11,9 @@ const SUPABASE_HEADERS = {
   Authorization: `Bearer ${SUPABASE_SERVICE_ROLE}`,
   "Content-Type": "application/json",
 };
+
+// Channel feed cache TTL: 5 minutes
+const CHANNEL_FEED_CACHE_TTL_MS = 5 * 60 * 1000;
 
 /**
  * Cron job for auto-engagement
@@ -55,24 +59,84 @@ export async function GET(request: Request) {
       return NextResponse.json({ message: "No users with auto-engage enabled", processed: 0 });
     }
 
-    // Step 2: Get recent casts from /catwalk (last 10 minutes, to catch any we might have missed)
+    // ===== PHASE 2.2: USE CHANNEL FEED CACHE =====
+    // Step 2: Get recent casts from /catwalk using cached feed (5-minute TTL)
     const tenMinutesAgo = Math.floor(Date.now() / 1000) - (10 * 60);
-    
-    const castsRes = await fetch(
-      `https://api.neynar.com/v2/farcaster/feed/channels?channel_ids=catwalk&limit=25&with_recasts=false`,
-      {
-        headers: {
-          "x-api-key": NEYNAR_API_KEY,
-        },
-      }
-    );
+    let allCasts: any[] = [];
+    let usedCache = false;
 
-    if (!castsRes.ok) {
-      throw new Error("Failed to fetch channel feed");
+    try {
+      const supabase = getSupabaseAdmin();
+      const { data: cacheData, error: cacheError } = await supabase
+        .from("channel_feed_cache")
+        .select("as_of, payload")
+        .eq("channel_id", "catwalk")
+        .single() as { data: { as_of: string; payload: any } | null; error: any };
+
+      if (!cacheError && cacheData) {
+        const cacheAge = Date.now() - new Date(cacheData.as_of).getTime();
+        if (cacheAge < CHANNEL_FEED_CACHE_TTL_MS) {
+          // Cache is valid - use cached feed
+          const cachedPayload = cacheData.payload as any;
+          allCasts = cachedPayload.casts || [];
+          usedCache = true;
+          console.log(`[Auto-Engage Cron] ✅ Using cached channel feed (age: ${Math.round(cacheAge / 1000)}s, ${allCasts.length} casts)`);
+        } else {
+          console.log(`[Auto-Engage Cron] ⏰ Cache STALE (age: ${Math.round(cacheAge / 1000)}s), fetching fresh...`);
+        }
+      }
+    } catch (cacheErr) {
+      console.warn("[Auto-Engage Cron] Cache check failed (non-fatal), fetching fresh:", cacheErr);
     }
 
-    const castsData = await castsRes.json() as any;
-    const allCasts = castsData.casts || [];
+    // If cache miss or stale, fetch fresh feed
+    if (!usedCache) {
+      try {
+        const castsRes = await fetch(
+          `https://api.neynar.com/v2/farcaster/feed/channels?channel_ids=catwalk&limit=25&with_recasts=false`,
+          {
+            headers: {
+              "x-api-key": NEYNAR_API_KEY,
+            },
+          }
+        );
+
+        if (!castsRes.ok) {
+          throw new Error("Failed to fetch channel feed");
+        }
+
+        const castsData = await castsRes.json() as any;
+        allCasts = castsData.casts || [];
+        console.log(`[Auto-Engage Cron] 📡 Fetched ${allCasts.length} casts from API`);
+
+        // Store in cache for future use
+        try {
+          const supabase = getSupabaseAdmin();
+          const { error: storeError } = await supabase
+            .from("channel_feed_cache")
+            .upsert({
+              channel_id: "catwalk",
+              as_of: new Date().toISOString(),
+              payload: { casts: allCasts },
+              updated_at: new Date().toISOString(),
+            } as any, {
+              onConflict: "channel_id",
+            });
+
+          if (storeError) {
+            console.warn("[Auto-Engage Cron] Failed to store cache (non-fatal):", storeError.message);
+          } else {
+            console.log(`[Auto-Engage Cron] ✅ Stored ${allCasts.length} casts in cache`);
+          }
+        } catch (storeErr) {
+          console.warn("[Auto-Engage Cron] Cache storage error (non-fatal):", storeErr);
+        }
+      } catch (apiErr) {
+        console.error("[Auto-Engage Cron] Failed to fetch channel feed:", apiErr);
+        throw apiErr;
+      }
+    }
+    // ===== END CHANNEL FEED CACHE =====
 
     // Filter to casts from last 10 minutes and in /catwalk channel
     const recentCasts = allCasts.filter((cast: any) => {
@@ -105,7 +169,32 @@ export async function GET(request: Request) {
 
         const castHash = cast.hash;
 
-        // Check if we already processed this cast for this user
+        // ===== PHASE 3: SMART ENGAGEMENT TRACKING =====
+        // Check if user already engaged with this cast (from webhook-populated engagements table)
+        // This avoids duplicate API calls if webhook already recorded the engagement
+        try {
+          const engagementCheck = await fetch(
+            `${SUPABASE_URL}/rest/v1/engagements?user_fid=eq.${fid}&cast_hash=eq.${castHash}&engagement_type=in.(like,recast)&limit=1`,
+            {
+              method: "GET",
+              headers: SUPABASE_HEADERS,
+            }
+          );
+
+          if (engagementCheck.ok) {
+            const engagementData = await engagementCheck.json() as any[];
+            if (engagementData && engagementData.length > 0) {
+              // User already engaged (webhook recorded it) - skip
+              console.log(`[Auto-Engage Cron] ⏭️ FID ${fid} already engaged with cast ${castHash.substring(0, 10)} (from webhook data)`);
+              continue;
+            }
+          }
+        } catch (engagementErr) {
+          // Non-fatal: if check fails, continue with engagement attempt
+          console.warn(`[Auto-Engage Cron] Engagement check failed (non-fatal):`, engagementErr);
+        }
+
+        // Check if we already processed this cast for this user (queue check)
         const queueCheck = await fetch(
           `${SUPABASE_URL}/rest/v1/auto_engage_queue?fid=eq.${fid}&cast_hash=eq.${castHash}&limit=1`,
           {
@@ -119,6 +208,7 @@ export async function GET(request: Request) {
           // Already processed
           continue;
         }
+        // ===== END SMART TRACKING =====
 
         // Perform like
         try {

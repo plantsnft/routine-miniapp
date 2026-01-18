@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "~/lib/supabaseAdmin";
 import { verifyNeynarWebhookSignature, getWebhookSecrets } from "~/lib/webhookSecurity";
 
@@ -177,10 +177,9 @@ export async function POST(req: NextRequest) {
       const castHash = cast.hash || cast.cast_hash;
       const authorFid = cast.author?.fid;
       const parentHash = cast.parent_hash || cast.parentHash;
-      const castTimestamp = cast.timestamp 
-        ? new Date(cast.timestamp * 1000).toISOString()
-        : new Date().toISOString();
-      const castCreatedAt = new Date(cast.timestamp * 1000 || Date.now());
+      // Use safeISO to handle invalid timestamps gracefully
+      const castTimestamp = safeISO(cast.timestamp);
+      const castCreatedAt = safeParseTimestamp(cast.timestamp) || new Date();
 
       webhookMetrics.byEventType['cast.created'].received++;
 
@@ -373,15 +372,14 @@ export async function POST(req: NextRequest) {
 
         if (eligibleCast) {
           // Upsert engagement
+          // Use safeISO to handle invalid timestamps gracefully
           const { error } = await supabase
             .from("engagements")
             .upsert({
               user_fid: userFid,
               cast_hash: castHash,
               engagement_type: reactionType === "like" ? 'like' : 'recast',
-              engaged_at: reaction.timestamp 
-                ? new Date(reaction.timestamp * 1000).toISOString()
-                : new Date().toISOString(),
+              engaged_at: safeISO(reaction.timestamp),
               source: 'webhook',
             } as any, {
               onConflict: "user_fid,cast_hash,engagement_type",

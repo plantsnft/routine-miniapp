@@ -6,6 +6,7 @@ import { isGlobalAdmin } from "~/lib/permissions";
 import { getCorrelationId } from "~/lib/correlation-id";
 import { safeLog } from "~/lib/redaction";
 import { normalizeGame, enrichGameWithRegistrationStatus } from "~/lib/games";
+import { getBaseScanTxUrl } from "~/lib/explorer";
 import type { ApiResponse, Game } from "~/lib/types";
 
 /**
@@ -88,28 +89,53 @@ export async function GET(
     }
     
     // Map additional fields for API compatibility and enrich with registration status
+    const settleTxHash = gamesRaw[0].settle_tx_hash || null;
     const baseGame: Game = {
       ...normalizedGame,
       scheduled_time: gamesRaw[0].game_date || null,
       title: gamesRaw[0].name || null,
       max_participants: gamesRaw[0].max_participants || null,
-      settle_tx_hash: gamesRaw[0].settle_tx_hash || null,
+      settle_tx_hash: settleTxHash,
+      settle_tx_url: getBaseScanTxUrl(settleTxHash) ?? undefined,
       game_type: gamesRaw[0].game_type || 'standard',
       registration_close_minutes: gamesRaw[0].registration_close_minutes ?? 0,
     } as Game;
-    
+
     const game = enrichGameWithRegistrationStatus(baseGame, currentParticipantCount);
+
+    // Payouts with Basescan URLs when game is settled (for tracking and verification)
+    let payouts: Array<{ fid: number; amount: number; txHash: string; txUrl: string | null }> = [];
+    if (settleTxHash && (gamesRaw[0].status === 'settled' || gamesRaw[0].status === 'completed')) {
+      try {
+        const withPayout = await pokerDb.fetch<any>('participants', {
+          filters: { game_id: gameId },
+          select: 'fid,payout_amount,payout_tx_hash',
+          limit: 500,
+        });
+        payouts = (withPayout || [])
+          .filter((p: any) => p?.payout_tx_hash)
+          .map((p: any) => ({
+            fid: Number(p.fid),
+            amount: parseFloat(String(p.payout_amount || 0)),
+            txHash: String(p.payout_tx_hash),
+            txUrl: getBaseScanTxUrl(p.payout_tx_hash),
+          }));
+      } catch {
+        // non-blocking
+      }
+    }
 
     // Get version for deployment verification
     const gitSha = process.env.VERCEL_GIT_COMMIT_SHA || process.env.GIT_SHA || 'unknown';
 
-    // Return game with optional viewer participant data
+    // Return game with optional viewer participant data and payouts (Basescan URLs for verification)
     // IMPORTANT: Use no-store to ensure refund status is always fresh
-    const response = NextResponse.json<ApiResponse<Game & { viewerParticipant?: any }>>({
+    const response = NextResponse.json<ApiResponse<Game & { viewerParticipant?: any; payouts?: Array<{ fid: number; amount: number; txHash: string; txUrl: string | null }> }>>({
       ok: true,
       data: {
         ...game,
         ...(viewerParticipant && { viewerParticipant }),
+        ...(payouts.length > 0 && { payouts }),
       },
     });
     

@@ -45,6 +45,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [gameForPayment, setGameForPayment] = useState<Game | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
   const paymentButtonRef = useRef<HTMLButtonElement | null>(null);
 
   // Refs for deep linking from notifications
@@ -530,6 +531,38 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     }
   };
 
+  const handleShare = async () => {
+    try {
+      const { sdk } = await import('@farcaster/miniapp-sdk');
+      if (sdk?.actions?.composeCast) {
+        const { APP_URL } = await import('~/lib/constants');
+        const url = APP_URL + `/games/${id}`;
+        await sdk.actions.composeCast({
+          text: 'Join my poker game',
+          embeds: [url],
+        });
+      } else {
+        alert('This feature requires Warpcast. Please open this mini app in Warpcast to share.');
+      }
+    } catch (error) {
+      console.error('Failed to open cast composer:', error);
+      alert('Failed to open cast composer. Please try again.');
+    }
+  };
+
+  const handleCopyGameUrl = async () => {
+    try {
+      const { APP_URL } = await import('~/lib/constants');
+      const url = APP_URL + `/games/${id}`;
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 1500);
+    } catch {
+      const { APP_URL } = await import('~/lib/constants');
+      alert('Copy failed. URL: ' + (APP_URL + `/games/${id}`));
+    }
+  };
+
   const handleJoin = async () => {
     if (authStatus !== 'authed' || !currentUserFid) {
       if (authStatus === 'error') {
@@ -695,7 +728,25 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         {/* Game Card - matching homepage style */}
         <div className={`hl-card ${participant && currentUserFid ? 'hl-card--joined' : ''}`}>
           <div className="flex-1" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-            <h2 className="text-lg font-semibold mb-2 text-primary" style={{ color: 'var(--text-0)', fontWeight: 600 }}>{game.title || 'Untitled Game'}</h2>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: '8px' }}>
+              <h2 className="text-lg font-semibold mb-2 text-primary" style={{ color: 'var(--text-0)', fontWeight: 600, flex: 1, textAlign: 'center' }}>{game.title || 'Untitled Game'}</h2>
+              <div style={{ display: 'flex', gap: 8, marginLeft: '12px' }}>
+                <button
+                  onClick={handleShare}
+                  className="btn-secondary"
+                  style={{ padding: '6px 12px', fontSize: '0.875rem', minHeight: 'auto' }}
+                >
+                  Share
+                </button>
+                <button
+                  onClick={handleCopyGameUrl}
+                  className="btn-secondary"
+                  style={{ padding: '6px 12px', fontSize: '0.875rem', minHeight: 'auto' }}
+                >
+                  {linkCopied ? 'Copied!' : 'Copy link'}
+                </button>
+              </div>
+            </div>
             {game.description && (
               <p className="text-sm text-secondary mb-2" style={{ color: 'var(--text-1)' }}>{game.description}</p>
             )}

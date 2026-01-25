@@ -10,6 +10,7 @@ import { amountToUnits } from "~/lib/amounts";
 import { logSettlementEvent } from "~/lib/audit-logger";
 import { safeLog } from "~/lib/redaction";
 import { verifyPaymentOnChain } from "~/lib/payment-verifier";
+import { getBaseScanTxUrl } from "~/lib/explorer";
 import type { ApiResponse, Game } from "~/lib/types";
 
 /**
@@ -98,6 +99,8 @@ export async function POST(
       });
       return NextResponse.json<ApiResponse<{
         settleTxHash: string | null;
+        settleTxUrl: string | null;
+        txUrls: string[];
         recipients: string[];
         amounts: string[];
         message: string;
@@ -105,6 +108,8 @@ export async function POST(
         ok: true,
         data: {
           settleTxHash: null,
+          settleTxUrl: null,
+          txUrls: [],
           recipients: [],
           amounts: [],
           message: 'Game already settled',
@@ -1010,6 +1015,8 @@ export async function POST(
 
     return NextResponse.json<ApiResponse<{
       settleTxHash: string;
+      settleTxUrl: string | undefined;
+      txUrls: string[];
       recipients: string[];
       amounts: string[];
       payouts: Array<{ fid?: number; recipient: string; amountDecimal: string; amountBaseUnits: string; bps?: number }>;
@@ -1018,6 +1025,8 @@ export async function POST(
       ok: true,
       data: {
         settleTxHash,
+        settleTxUrl: getBaseScanTxUrl(settleTxHash) ?? undefined,
+        txUrls: [getBaseScanTxUrl(settleTxHash)].filter((u): u is string => !!u),
         recipients: finalRecipients,
         amounts: amountsForResponse,
         payouts: payoutBreakdown,

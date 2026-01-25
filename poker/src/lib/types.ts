@@ -137,6 +137,7 @@ export interface Game {
   settled_at?: string | null;
   can_settle_at?: string | null;
   settle_tx_hash?: string | null; // Transaction hash for game settlement
+  settle_tx_url?: string | null; // Basescan URL for settle_tx_hash (for verification)
   // Payment contract
   escrow_contract_address?: string | null;
   // API response fields (computed, only present in /api/games endpoint)

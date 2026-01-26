@@ -56,14 +56,45 @@ export async function POST(request: Request) {
         if (!cacheError && cacheData) {
           const cacheAge = Date.now() - new Date(cacheData.as_of).getTime();
           if (cacheAge < CACHE_TTL_MS) {
-            // Cache is valid - return cached results
-            console.log(`[Engagement Verify] ✅ Cache HIT for FID ${fid} (age: ${Math.round(cacheAge / 1000)}s)`);
-            const cachedPayload = cacheData.payload as any;
-            return NextResponse.json({
-              ...cachedPayload,
-              cached: true,
-              as_of: cacheData.as_of,
-            });
+            // Check if new engagements exist since cache was created (smart invalidation)
+            // This ensures cache doesn't show stale opportunities if user engaged via webhook
+            try {
+              const { data: newEngagements, error: newEngError } = await supabase
+                .from("engagements")
+                .select("id")
+                .eq("user_fid", fid)
+                .gt("engaged_at", cacheData.as_of)
+                .limit(1);
+
+              if (!newEngError && newEngagements && newEngagements.length > 0) {
+                // New engagements exist since cache - invalidate and recompute
+                console.log(`[Engagement Verify] ⚠️ New engagements since cache (${cacheData.as_of}), invalidating cache...`);
+                await supabase
+                  .from("engagement_cache")
+                  .delete()
+                  .eq("fid", fid)
+                  .eq("channel_id", "catwalk");
+                // Continue with fresh computation below
+              } else {
+                // No new engagements - cache is still valid
+                console.log(`[Engagement Verify] ✅ Cache HIT for FID ${fid} (age: ${Math.round(cacheAge / 1000)}s, no new engagements)`);
+                const cachedPayload = cacheData.payload as any;
+                return NextResponse.json({
+                  ...cachedPayload,
+                  cached: true,
+                  as_of: cacheData.as_of,
+                });
+              }
+            } catch (invCheckErr) {
+              // Non-fatal: if invalidation check fails, use cache anyway
+              console.warn("[Engagement Verify] Invalidation check failed (non-fatal), using cache:", invCheckErr);
+              const cachedPayload = cacheData.payload as any;
+              return NextResponse.json({
+                ...cachedPayload,
+                cached: true,
+                as_of: cacheData.as_of,
+              });
+            }
           } else {
             console.log(`[Engagement Verify] ⏰ Cache STALE for FID ${fid} (age: ${Math.round(cacheAge / 1000)}s, TTL: ${CACHE_TTL_MS / 1000}s)`);
           }
@@ -204,7 +235,7 @@ export async function POST(request: Request) {
     try {
       const fifteenDaysAgoISO = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
       const eligibleRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/eligible_casts?parent_url=eq.${encodeURIComponent(CATWALK_CHANNEL_PARENT_URL)}&created_at=gte.${fifteenDaysAgoISO}&order=created_at.desc&limit=100`,
+        `${SUPABASE_URL}/rest/v1/eligible_casts?parent_url=eq.${encodeURIComponent(CATWALK_CHANNEL_PARENT_URL)}&created_at=gte.${fifteenDaysAgoISO}&order=created_at.desc&limit=30`,
         {
           method: "GET",
           headers: SUPABASE_HEADERS,
@@ -280,7 +311,7 @@ export async function POST(request: Request) {
         // Continue with DB casts only
       }
     } else {
-      // Limit to 30 casts max from DB (oldest first, so we get recent ones)
+      // Limit to 30 casts max from DB (newest first, so we get recent ones)
       channelCasts = eligibleCastsFromDB.slice(0, 30);
       console.log(`[Engagement Verify] ✅ Using ${channelCasts.length} casts from database (no API calls needed)`);
     }

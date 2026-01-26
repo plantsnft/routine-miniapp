@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-0: #ffffff;
+  --bg-1: #f5f5f5;
+  --bg-2: #e5e5e5;
+  
+  --text-0: #000000;
+  --text-1: #666666;
+  --text-2: #999999;
+  
+  --radius: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-0: #000000;
+    --bg-1: #111111;
+    --bg-2: #222222;
+    
+    --text-0: #ffffff;
+    --text-1: #aaaaaa;
+    --text-2: #666666;
+  }
+}
+
+body {
+  background-color: var(--bg-0);
+  color: var(--text-0);
+}

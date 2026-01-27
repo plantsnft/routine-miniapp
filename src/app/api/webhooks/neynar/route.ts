@@ -23,6 +23,13 @@ let webhookMetrics = {
 const AUTHOR_FID = parseInt(process.env.CATWALK_AUTHOR_FID || "0", 10);
 const CATWALK_CHANNEL_PARENT_URL = "https://warpcast.com/~/channel/catwalk";
 
+// Reward amounts per engagement type (must match other routes)
+const ENGAGEMENT_REWARDS: Record<string, number> = {
+  like: 1_000,    // 1k CATWALK per like
+  recast: 2_000,  // 2k CATWALK per recast
+  comment: 5_000, // 5k CATWALK per comment
+};
+
 /**
  * Safe timestamp parser that returns a valid Date or null.
  * Handles various input formats: ISO strings, numbers (seconds or ms), numeric strings.
@@ -373,12 +380,13 @@ export async function POST(req: NextRequest) {
         if (eligibleCast) {
           // Upsert engagement
           // Use safeISO to handle invalid timestamps gracefully
+          const engagementType = reactionType === "like" ? 'like' : 'recast';
           const { error } = await supabase
             .from("engagements")
             .upsert({
               user_fid: userFid,
               cast_hash: castHash,
-              engagement_type: reactionType === "like" ? 'like' : 'recast',
+              engagement_type: engagementType,
               engaged_at: safeISO(reaction.timestamp),
               source: 'webhook',
             } as any, {
@@ -389,6 +397,46 @@ export async function POST(req: NextRequest) {
             webhookMetrics.byEventType['reaction.created'].written++;
             webhookMetrics.eventsWritten++;
             processed = true;
+
+            // Create engagement_claim for manual users (immediate rewards)
+            // Only create if doesn't already exist (avoid duplicates)
+            try {
+              const { data: existingClaim } = await supabase
+                .from("engagement_claims")
+                .select("id")
+                .eq("fid", userFid)
+                .eq("cast_hash", castHash)
+                .eq("engagement_type", engagementType)
+                .single();
+
+              if (!existingClaim) {
+                // Claim doesn't exist - create it
+                const rewardAmount = ENGAGEMENT_REWARDS[engagementType] || 0;
+                const { error: claimError } = await supabase
+                  .from("engagement_claims")
+                  .insert({
+                    fid: userFid,
+                    cast_hash: castHash,
+                    engagement_type: engagementType,
+                    reward_amount: rewardAmount,
+                    verified_at: safeISO(reaction.timestamp),
+                  } as any);
+
+                if (!claimError) {
+                  console.log(`[Webhook Neynar] ✅ Created engagement_claim for manual ${engagementType} (${rewardAmount} CATWALK) - FID ${userFid}, cast ${castHash.substring(0, 10)}`);
+                } else {
+                  console.warn(`[Webhook Neynar] Failed to create engagement_claim for ${engagementType}:`, claimError);
+                }
+              } else {
+                // Claim already exists - skip (user might have auto-engage or already claimed)
+                if (process.env.NODE_ENV === 'development') {
+                  console.log(`[Webhook Neynar] Engagement claim already exists for ${engagementType} - FID ${userFid}, cast ${castHash.substring(0, 10)}`);
+                }
+              }
+            } catch (claimErr) {
+              // Non-fatal: log but don't fail webhook processing
+              console.warn(`[Webhook Neynar] Error creating engagement_claim (non-fatal):`, claimErr);
+            }
           }
         } else {
           webhookMetrics.byEventType['reaction.created'].ignored++;

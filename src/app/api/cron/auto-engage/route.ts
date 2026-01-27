@@ -228,6 +228,7 @@ export async function GET(request: Request) {
         }
 
         // Check if we already processed this cast for this user (queue check)
+        // Check for either 'like' or 'recast' - if either exists, we've already processed
         const queueCheck = await fetch(
           `${SUPABASE_URL}/rest/v1/auto_engage_queue?fid=eq.${fid}&cast_hash=eq.${castHash}&limit=1`,
           {
@@ -238,7 +239,7 @@ export async function GET(request: Request) {
 
         const queueData = await queueCheck.json() as any[];
         if (queueData && queueData.length > 0) {
-          // Already processed
+          // Already processed (either like or recast was recorded)
           continue;
         }
         // ===== END SMART TRACKING =====
@@ -299,25 +300,32 @@ export async function GET(request: Request) {
             errors.push(`FID ${fid} recast failed: ${recastRes.status}`);
           }
 
-          // Record in queue so we don't repeat
-          await fetch(
-            `${SUPABASE_URL}/rest/v1/auto_engage_queue`,
-            {
-              method: "POST",
-              headers: {
-                ...SUPABASE_HEADERS,
-                Prefer: "resolution=ignore-duplicates",
-              },
-              body: JSON.stringify({
-                fid,
-                cast_hash: castHash,
-                action_type: "like_recast",
-                scheduled_for: new Date().toISOString(),
-                executed_at: new Date().toISOString(),
-                success: true,
-              }),
-            }
-          );
+          // Record in queue so we don't repeat (record both actions separately to match schema constraint)
+          // The schema only allows 'like' or 'recast', not 'like_recast'
+          // We record both to prevent duplicate processing
+          for (const actionType of ["like", "recast"]) {
+            await fetch(
+              `${SUPABASE_URL}/rest/v1/auto_engage_queue`,
+              {
+                method: "POST",
+                headers: {
+                  ...SUPABASE_HEADERS,
+                  Prefer: "resolution=ignore-duplicates",
+                },
+                body: JSON.stringify({
+                  fid,
+                  cast_hash: castHash,
+                  action_type: actionType,
+                  scheduled_for: new Date().toISOString(),
+                  executed_at: new Date().toISOString(),
+                  success: true,
+                }),
+              }
+            ).catch((err) => {
+              // Non-fatal: log but don't fail
+              console.warn(`[Auto-Engage Cron] Failed to record queue entry for ${actionType}:`, err);
+            });
+          }
 
           // Create engagement claims ONLY for successful API calls
           // Create engagement claim for like (if succeeded)

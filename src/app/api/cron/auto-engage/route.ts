@@ -15,12 +15,18 @@ const SUPABASE_HEADERS = {
 // Channel feed cache TTL: 5 minutes
 const CHANNEL_FEED_CACHE_TTL_MS = 5 * 60 * 1000;
 
+// Reward amounts per engagement type (must match other routes)
+const ENGAGEMENT_REWARDS: Record<string, number> = {
+  like: 1_000,    // 1k CATWALK per like
+  recast: 2_000,  // 2k CATWALK per recast
+};
+
 /**
  * Cron job for auto-engagement
  * GET /api/cron/auto-engage
  * 
- * This runs every minute and:
- * 1. Finds new casts in /catwalk from the last 6 minutes
+ * This runs hourly (Vercel free tier limitation) and:
+ * 1. Finds new casts in /catwalk from the last 70 minutes
  * 2. For users with auto_engage_enabled = true
  * 3. Performs like + recast on those casts
  * 
@@ -61,7 +67,8 @@ export async function GET(request: Request) {
 
     // ===== PHASE 2.2: USE CHANNEL FEED CACHE =====
     // Step 2: Get recent casts from /catwalk using cached feed (5-minute TTL)
-    const tenMinutesAgo = Math.floor(Date.now() / 1000) - (10 * 60);
+    // 70 minutes = 60 min for hourly cron + 10 min buffer for execution variance
+    const seventyMinutesAgo = Math.floor(Date.now() / 1000) - (70 * 60);
     let allCasts: any[] = [];
     let usedCache = false;
 
@@ -138,10 +145,10 @@ export async function GET(request: Request) {
     }
     // ===== END CHANNEL FEED CACHE =====
 
-    // Filter to casts from last 10 minutes and in /catwalk channel
+    // Filter to casts from last 70 minutes and in /catwalk channel
     const recentCasts = allCasts.filter((cast: any) => {
       const timestamp = new Date(cast.timestamp).getTime() / 1000;
-      const isRecent = timestamp >= tenMinutesAgo;
+      const isRecent = timestamp >= seventyMinutesAgo;
       const isInChannel = cast.parent_url === CATWALK_CHANNEL_PARENT_URL;
       return isRecent && isInChannel;
     });
@@ -162,6 +169,32 @@ export async function GET(request: Request) {
       const signerUuid = user.signer_uuid;
 
       if (!signerUuid) continue;
+
+      // Verify signer is still approved before using it
+      try {
+        const signerCheck = await fetch(
+          `https://api.neynar.com/v2/farcaster/signer?signer_uuid=${signerUuid}`,
+          {
+            headers: {
+              "x-api-key": NEYNAR_API_KEY,
+            },
+          }
+        );
+
+        if (signerCheck.ok) {
+          const signerData = await signerCheck.json() as any;
+          if (signerData.status !== "approved") {
+            console.log(`[Auto-Engage Cron] ⚠️ FID ${fid} signer not approved (status: ${signerData.status}), skipping`);
+            continue;
+          }
+        } else {
+          console.warn(`[Auto-Engage Cron] ⚠️ Could not verify signer for FID ${fid}, proceeding anyway`);
+          // Non-fatal: proceed with engagement attempt
+        }
+      } catch (signerErr) {
+        console.warn(`[Auto-Engage Cron] Signer check failed for FID ${fid} (non-fatal):`, signerErr);
+        // Non-fatal: proceed with engagement attempt
+      }
 
       for (const cast of recentCasts) {
         // Don't engage with your own casts
@@ -227,9 +260,14 @@ export async function GET(request: Request) {
             }),
           });
 
-          if (likeRes.ok) {
+          const likeSuccess = likeRes.ok;
+          if (likeSuccess) {
             successfulEngagements++;
             console.log(`[Auto-Engage Cron] ✅ FID ${fid} liked ${castHash.substring(0, 10)}...`);
+          } else {
+            const errorText = await likeRes.text().catch(() => "Unknown error");
+            console.error(`[Auto-Engage Cron] ❌ Failed to like for FID ${fid}, cast ${castHash.substring(0, 10)}: ${likeRes.status} ${errorText}`);
+            errors.push(`FID ${fid} like failed: ${likeRes.status}`);
           }
 
           // Small delay
@@ -251,9 +289,14 @@ export async function GET(request: Request) {
             }),
           });
 
-          if (recastRes.ok) {
+          const recastSuccess = recastRes.ok;
+          if (recastSuccess) {
             successfulEngagements++;
             console.log(`[Auto-Engage Cron] ✅ FID ${fid} recasted ${castHash.substring(0, 10)}...`);
+          } else {
+            const errorText = await recastRes.text().catch(() => "Unknown error");
+            console.error(`[Auto-Engage Cron] ❌ Failed to recast for FID ${fid}, cast ${castHash.substring(0, 10)}: ${recastRes.status} ${errorText}`);
+            errors.push(`FID ${fid} recast failed: ${recastRes.status}`);
           }
 
           // Record in queue so we don't repeat
@@ -276,24 +319,71 @@ export async function GET(request: Request) {
             }
           );
 
-          // Also create engagement claims for rewards
-          for (const action of ["like", "recast"]) {
-            await fetch(
-              `${SUPABASE_URL}/rest/v1/engagement_claims`,
-              {
-                method: "POST",
-                headers: {
-                  ...SUPABASE_HEADERS,
-                  Prefer: "resolution=ignore-duplicates",
-                },
-                body: JSON.stringify({
-                  fid,
-                  cast_hash: castHash,
-                  engagement_type: action,
-                  verified_at: new Date().toISOString(),
-                }),
+          // Create engagement claims ONLY for successful API calls
+          // Create engagement claim for like (if succeeded)
+          if (likeSuccess) {
+            try {
+              const likeClaimRes = await fetch(
+                `${SUPABASE_URL}/rest/v1/engagement_claims`,
+                {
+                  method: "POST",
+                  headers: {
+                    ...SUPABASE_HEADERS,
+                    Prefer: "resolution=ignore-duplicates",
+                  },
+                  body: JSON.stringify({
+                    fid,
+                    cast_hash: castHash,
+                    engagement_type: "like",
+                    reward_amount: ENGAGEMENT_REWARDS.like,
+                    verified_at: new Date().toISOString(),
+                  }),
+                }
+              );
+
+              if (!likeClaimRes.ok) {
+                const errorText = await likeClaimRes.text();
+                console.error(`[Auto-Engage Cron] Failed to create like engagement_claim for FID ${fid}, cast ${castHash.substring(0, 10)}:`, errorText);
+              } else {
+                console.log(`[Auto-Engage Cron] ✅ Created like engagement_claim (${ENGAGEMENT_REWARDS.like} CATWALK)`);
               }
-            );
+            } catch (claimErr) {
+              console.error(`[Auto-Engage Cron] Error creating like engagement_claim:`, claimErr);
+              // Non-fatal: log but don't fail the job
+            }
+          }
+
+          // Create engagement claim for recast (if succeeded)
+          if (recastSuccess) {
+            try {
+              const recastClaimRes = await fetch(
+                `${SUPABASE_URL}/rest/v1/engagement_claims`,
+                {
+                  method: "POST",
+                  headers: {
+                    ...SUPABASE_HEADERS,
+                    Prefer: "resolution=ignore-duplicates",
+                  },
+                  body: JSON.stringify({
+                    fid,
+                    cast_hash: castHash,
+                    engagement_type: "recast",
+                    reward_amount: ENGAGEMENT_REWARDS.recast,
+                    verified_at: new Date().toISOString(),
+                  }),
+                }
+              );
+
+              if (!recastClaimRes.ok) {
+                const errorText = await recastClaimRes.text();
+                console.error(`[Auto-Engage Cron] Failed to create recast engagement_claim for FID ${fid}, cast ${castHash.substring(0, 10)}:`, errorText);
+              } else {
+                console.log(`[Auto-Engage Cron] ✅ Created recast engagement_claim (${ENGAGEMENT_REWARDS.recast} CATWALK)`);
+              }
+            } catch (claimErr) {
+              console.error(`[Auto-Engage Cron] Error creating recast engagement_claim:`, claimErr);
+              // Non-fatal: log but don't fail the job
+            }
           }
 
         } catch (err: any) {

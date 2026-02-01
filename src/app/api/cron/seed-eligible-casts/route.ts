@@ -148,12 +148,18 @@ export async function POST(req: NextRequest) {
         break;
       }
 
-      // Filter casts by AUTHOR_FIDS and within 15 days
+      // Filter casts by AUTHOR_FIDS, top-level only, and within 15 days
       const eligibleCasts = casts.filter((cast: any) => {
         const authorFid = cast.author?.fid;
         const castTimestamp = cast.timestamp || (cast.created_at ? Math.floor(new Date(cast.created_at).getTime() / 1000) : null);
         
+        // Must be from an approved creator
         if (!AUTHOR_FIDS.includes(authorFid)) {
+          return false;
+        }
+        
+        // Must be a top-level cast (not a reply)
+        if (cast.parent_hash) {
           return false;
         }
 

@@ -199,7 +199,11 @@ export async function POST(req: NextRequest) {
       }
 
       // Case 1a: Cast is from one of the AUTHOR_FIDS - upsert into eligible_casts
-      if (AUTHOR_FIDS.length > 0 && AUTHOR_FIDS.includes(authorFid)) {
+      // Must be: top-level cast (not a reply) AND in /catwalk channel
+      const isTopLevelCast = !parentHash;
+      const isInCatwalkChannel = cast.parent_url === CATWALK_CHANNEL_PARENT_URL;
+      
+      if (AUTHOR_FIDS.length > 0 && AUTHOR_FIDS.includes(authorFid) && isTopLevelCast && isInCatwalkChannel) {
         // Only keep if within last 15 days
         if (castCreatedAt >= new Date(Date.now() - 15 * 24 * 60 * 60 * 1000)) {
           const { error } = await supabase

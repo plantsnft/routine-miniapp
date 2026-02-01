@@ -248,7 +248,7 @@ export async function POST(request: Request) {
           // Convert database format to API-like format for compatibility
           eligibleCastsFromDB.push({
             hash: cast.cast_hash,
-            author: { fid: cast.author_fid },
+            author: { fid: cast.author_fid, username: cast.author_username },
             text: cast.text,
             timestamp: Math.floor(new Date(cast.created_at).getTime() / 1000),
             parent_url: cast.parent_url,

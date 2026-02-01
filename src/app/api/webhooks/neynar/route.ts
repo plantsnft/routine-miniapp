@@ -211,6 +211,7 @@ export async function POST(req: NextRequest) {
             .upsert({
               cast_hash: castHash,
               author_fid: authorFid,
+              author_username: cast.author?.username || null,
               created_at: castTimestamp,
               parent_url: cast.parent_url || CATWALK_CHANNEL_PARENT_URL,
               text: cast.text || null,

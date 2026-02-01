@@ -6,6 +6,30 @@ const CATWALK_CHANNEL_PARENT_URL = "https://warpcast.com/~/channel/catwalk";
 const LOOKBACK_DAYS = 15;
 
 /**
+ * Safely parse a timestamp and return ISO string, or null if invalid
+ */
+function safeISO(timestamp: number | string | null | undefined): string | null {
+  if (timestamp === null || timestamp === undefined) return null;
+  try {
+    // If it's a Unix timestamp (number), convert to milliseconds
+    const ms = typeof timestamp === "number" 
+      ? (timestamp > 1e12 ? timestamp : timestamp * 1000) // Already ms or needs conversion
+      : new Date(timestamp).getTime();
+    
+    if (isNaN(ms) || ms <= 0) return null;
+    
+    const iso = new Date(ms).toISOString();
+    // Sanity check - reject dates before 2020 or after 2030
+    const year = new Date(ms).getFullYear();
+    if (year < 2020 || year > 2030) return null;
+    
+    return iso;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Cron endpoint to seed eligible_casts from AUTHOR_FID casts (one-time seeding)
  * POST /api/cron/seed-eligible-casts
  * 
@@ -151,8 +175,7 @@ export async function POST(req: NextRequest) {
       // Upsert eligible casts
       for (const cast of eligibleCasts) {
         const castHash = cast.hash || cast.cast_hash;
-        const castTimestamp = cast.timestamp || Math.floor(new Date(cast.created_at || Date.now()).getTime() / 1000);
-        const castCreatedAt = new Date(castTimestamp * 1000).toISOString();
+        const castCreatedAt = safeISO(cast.timestamp) || safeISO(cast.created_at) || new Date().toISOString();
 
         if (!castHash) {
           continue;

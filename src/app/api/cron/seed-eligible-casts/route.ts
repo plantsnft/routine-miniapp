@@ -53,13 +53,19 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const AUTHOR_FID = parseInt(process.env.CATWALK_AUTHOR_FID || "0", 10);
-  if (!AUTHOR_FID || AUTHOR_FID === 0) {
+  const AUTHOR_FIDS = (process.env.CATWALK_AUTHOR_FIDS || "")
+    .split(",")
+    .map(s => parseInt(s.trim(), 10))
+    .filter(n => n > 0);
+  
+  if (AUTHOR_FIDS.length === 0) {
     return NextResponse.json(
-      { ok: false, error: "CATWALK_AUTHOR_FID is not configured" },
+      { ok: false, error: "CATWALK_AUTHOR_FIDS is not configured" },
       { status: 500 }
     );
   }
+  
+  console.log(`[Cron Seed Eligible Casts] Configured for ${AUTHOR_FIDS.length} author FIDs`);
 
   const fifteenDaysAgoUnix = Math.floor(Date.now() / 1000) - (LOOKBACK_DAYS * 24 * 60 * 60);
   const _fifteenDaysAgoISO = new Date(Date.now() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
@@ -118,12 +124,12 @@ export async function POST(req: NextRequest) {
         break;
       }
 
-      // Filter casts by AUTHOR_FID and within 15 days
+      // Filter casts by AUTHOR_FIDS and within 15 days
       const eligibleCasts = casts.filter((cast: any) => {
         const authorFid = cast.author?.fid;
         const castTimestamp = cast.timestamp || (cast.created_at ? Math.floor(new Date(cast.created_at).getTime() / 1000) : null);
         
-        if (authorFid !== AUTHOR_FID) {
+        if (!AUTHOR_FIDS.includes(authorFid)) {
           return false;
         }
 
@@ -156,7 +162,7 @@ export async function POST(req: NextRequest) {
           .from("eligible_casts")
           .upsert({
             cast_hash: castHash,
-            author_fid: AUTHOR_FID,
+            author_fid: cast.author?.fid,
             created_at: castCreatedAt,
             parent_url: cast.parent_url || CATWALK_CHANNEL_PARENT_URL,
             text: cast.text || null,
@@ -218,4 +224,11 @@ export async function POST(req: NextRequest) {
     skippedOld,
     pagesFetched: pageCount,
   });
+}
+
+/**
+ * GET handler for browser access - reuses POST logic
+ */
+export async function GET(req: NextRequest) {
+  return POST(req);
 }

@@ -10,12 +10,15 @@ import { getSupabaseAdmin } from "~/lib/supabaseAdmin";
 export async function GET() {
   const checks: Record<string, { ok: boolean; value?: any; error?: string }> = {};
 
-  // 1. Check CATWALK_AUTHOR_FID
-  const authorFid = parseInt(process.env.CATWALK_AUTHOR_FID || "0", 10);
-  checks.CATWALK_AUTHOR_FID = {
-    ok: authorFid > 0,
-    value: authorFid > 0 ? authorFid : "NOT SET or 0",
-    error: authorFid === 0 ? "CRITICAL: Webhook won't save any casts without this" : undefined,
+  // 1. Check CATWALK_AUTHOR_FIDS
+  const authorFids = (process.env.CATWALK_AUTHOR_FIDS || "")
+    .split(",")
+    .map(s => parseInt(s.trim(), 10))
+    .filter(n => n > 0);
+  checks.CATWALK_AUTHOR_FIDS = {
+    ok: authorFids.length > 0,
+    value: authorFids.length > 0 ? `${authorFids.length} FIDs configured` : "NOT SET",
+    error: authorFids.length === 0 ? "CRITICAL: Webhook won't save any casts without this" : undefined,
   };
 
   // 2. Check NEYNAR_API_KEY

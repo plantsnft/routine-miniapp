@@ -19,8 +19,11 @@ let webhookMetrics = {
   lastReset: Date.now(),
 };
 
-// Channel author FID - should match the channel owner
-const AUTHOR_FID = parseInt(process.env.CATWALK_AUTHOR_FID || "0", 10);
+// Channel author FIDs - all creators whose casts are eligible for engagement rewards
+const AUTHOR_FIDS = (process.env.CATWALK_AUTHOR_FIDS || "")
+  .split(",")
+  .map(s => parseInt(s.trim(), 10))
+  .filter(n => n > 0);
 const CATWALK_CHANNEL_PARENT_URL = "https://warpcast.com/~/channel/catwalk";
 
 // Reward amounts per engagement type (must match other routes)
@@ -195,8 +198,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true, processed: false, reason: "missing_cast_data" });
       }
 
-      // Case 1a: Cast is from AUTHOR_FID - upsert into eligible_casts
-      if (authorFid === AUTHOR_FID && AUTHOR_FID > 0) {
+      // Case 1a: Cast is from one of the AUTHOR_FIDS - upsert into eligible_casts
+      if (AUTHOR_FIDS.length > 0 && AUTHOR_FIDS.includes(authorFid)) {
         // Only keep if within last 15 days
         if (castCreatedAt >= new Date(Date.now() - 15 * 24 * 60 * 60 * 1000)) {
           const { error } = await supabase

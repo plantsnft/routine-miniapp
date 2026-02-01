@@ -759,7 +759,8 @@ export async function POST(request: Request) {
 
         if (claimableActions.length > 0) {
           const author = cast.author || {};
-          const castUrl = `https://warpcast.com/${author.username || 'unknown'}/${castHash}`;
+          // Use ~/conversations/ format - only needs cast hash, works regardless of author data
+          const castUrl = `https://warpcast.com/~/conversations/${castHash}`;
           
           console.log(`[Engagement Verify] Found claimable reward for cast ${castHash}:`, {
             castHash,
@@ -891,7 +892,8 @@ export async function POST(request: Request) {
       // Only include casts where user can still do at least one action (haven't done it yet)
       if (availableActions.length > 0) {
         const author = cast.author || {};
-        const castUrl = `https://warpcast.com/${author.username || 'unknown'}/${castHash}`;
+        // Use ~/conversations/ format - only needs cast hash, works regardless of author data
+        const castUrl = `https://warpcast.com/~/conversations/${castHash}`;
         
         opportunities.push({
           castHash,

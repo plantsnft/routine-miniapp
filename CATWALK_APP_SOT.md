@@ -1,8 +1,6 @@
 # Catwalk Mini App - Source of Truth
 
-> **FOR AI/AGENT USE:** This document is the single source of truth for the Catwalk mini app.
-> All information is verifiable against the codebase. Update this document with every code change.
-> Never add information that cannot be verified. When in doubt, check the actual source files.
+> **FOR AI/AGENT USE:** This is the single source of truth for Catwalk. Reference this before making changes.
 
 **Last Updated:** 2026-02-02  
 **Last Verified:** 2026-02-02  
@@ -11,30 +9,70 @@
 
 ---
 
+## HOW TO USE THIS DOCUMENT
+
+**Before making changes:**
+1. Search this document for relevant section (Ctrl+F keywords)
+2. Check file paths listed - they are relative to `c:\miniapps\routine\`
+3. Verify claims against actual source if uncertain
+
+**After making changes:**
+1. Update the relevant section in this SOT
+2. Add entry to [Change Log](#change-log) with files modified
+3. Update "Last Updated" date at top
+
+**Verification Rule:** Every fact in this document has been verified against source code. If you cannot verify something, do not add it.
+
+---
+
 ## QUICK REFERENCE (Most Used)
 
-### Critical Paths
+### File Paths (relative to c:\miniapps\routine\)
 ```
-CATWALK SOURCE CODE:     c:\miniapps\routine\src\
-PORTAL SOT:              c:\miniapps\routine\CREATOR_PORTAL_COMPREHENSIVE_SOT.md
-THIS SOT:                c:\miniapps\routine\CATWALK_APP_SOT.md
+src/                          ← ALL Catwalk code lives here
+src/app/api/                  ← API routes (47 routes)
+src/app/api/checkin/          ← Check-in endpoints
+src/app/api/portal/           ← Portal endpoints
+src/app/api/webhooks/neynar/  ← Neynar webhook handler
+src/lib/                      ← Utility libraries (23 files)
+src/lib/constants.ts          ← App constants, creator FIDs
+src/lib/supabase.ts           ← Database operations
+src/lib/neynar.ts             ← Neynar API client
+src/lib/dateUtils.ts          ← 9 AM Pacific reset logic
+src/components/               ← React components
+src/hooks/                    ← Custom hooks (6 files)
+public/                       ← Static assets
+vercel.json                   ← Cron jobs config
 ```
 
-### Key Constants (from src/lib/constants.ts)
-| Constant | Value | Line |
-|----------|-------|------|
-| `CATWALK_CREATOR_FIDS` | 31 FIDs array | 75-107 |
-| `APP_URL` | `https://catwalk-smoky.vercel.app` | 23 |
-| `CHECK_IN_RESET_HOUR` | 9 (9 AM Pacific) | 153 |
-| `PACIFIC_TIMEZONE` | `America/Los_Angeles` | 154 |
+### Key Files to Know
+| Purpose | File |
+|---------|------|
+| Creator FIDs (31) | `src/lib/constants.ts` lines 75-107 |
+| Date/Reset logic | `src/lib/dateUtils.ts` |
+| Token address | `src/app/api/token-price/route.ts` line 10 |
+| Webhook handler | `src/app/api/webhooks/neynar/route.ts` |
+| Check-in API | `src/app/api/checkin/route.ts` |
+| Portal status | `src/app/api/portal/status/route.ts` |
 
-### Token (verified in 14+ source files)
-| Property | Value |
-|----------|-------|
-| Address | `0xa5eb1cAD0dFC1c4f8d4f84f995aeDA9a7A047B07` |
-| Chain | Base (mainnet) |
-| Decimals | 18 |
-| Uniswap Pair | `0xAcf65dDaF08570076D1Dfba9539f21ae5A30b8Bc` |
+### Key Constants
+| Constant | Value | Source |
+|----------|-------|--------|
+| `CATWALK_CREATOR_FIDS` | 31 FIDs | `constants.ts:75-107` |
+| `CHECK_IN_RESET_HOUR` | 9 (9 AM Pacific) | `constants.ts:153` |
+| `TOKEN_ADDRESS` | `0xa5eb1cAD0dFC1c4f8d4f84f995aeDA9a7A047B07` | multiple files |
+| `PAIR_ADDRESS` | `0xAcf65dDaF08570076D1Dfba9539f21ae5A30b8Bc` | `token-price/route.ts:12` |
+
+### Environment Variables (Required)
+| Variable | Purpose |
+|----------|---------|
+| `CATWALK_AUTHOR_FIDS` | 47 creator FIDs (comma-separated) |
+| `NEYNAR_API_KEY` | Neynar API access |
+| `NEYNAR_WEBHOOK_SECRETS` | Webhook signature verification |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
+| `REWARD_SIGNER_PRIVATE_KEY` | Wallet for token rewards |
+| `CRON_SECRET` | Cron endpoint auth |
 
 ### DO NOT MODIFY (Other Apps in Monorepo)
 ```
@@ -43,6 +81,19 @@ THIS SOT:                c:\miniapps\routine\CATWALK_APP_SOT.md
 ❌ /basketball/     - Basketball app
 ❌ /catwalkagent/   - AI agent scripts
 ```
+
+### Common Tasks → Files to Edit
+| Task | Primary File(s) |
+|------|-----------------|
+| Fix check-in logic | `src/app/api/checkin/route.ts`, `src/lib/dateUtils.ts` |
+| Fix portal rewards | `src/app/api/portal/*/route.ts`, see Portal SOT |
+| Fix webhook processing | `src/app/api/webhooks/neynar/route.ts` |
+| Add creator FID | `CATWALK_AUTHOR_FIDS` env var (Vercel) |
+| Fix token price | `src/app/api/token-price/route.ts` |
+| Fix leaderboard | `src/app/api/leaderboard/route.ts` |
+| Add new API endpoint | Create `src/app/api/{name}/route.ts` |
+| Fix UI component | `src/components/ui/tabs/*.tsx` |
+| Update cron schedule | `vercel.json` |
 
 ---
 

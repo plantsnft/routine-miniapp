@@ -34,6 +34,9 @@
 24. [Monorepo Structure](#monorepo-structure)
 25. [Deployment](#deployment)
 26. [Troubleshooting](#troubleshooting)
+27. [Known Issues & Gotchas](#known-issues--gotchas)
+28. [Testing Checklist](#testing-checklist)
+29. [Recent Changes](#recent-changes)
 
 ---
 
@@ -515,36 +518,179 @@ export enum Tab {
 
 Users can "walk" (check in) once per day to build a streak and earn CATWALK tokens.
 
-### Reset Time
+### Check-In Data Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                      DAILY CHECK-IN FLOW                             │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  User opens app                                                     │
+│         │                                                           │
+│         ▼                                                           │
+│  GET /api/checkin?fid={fid}                                         │
+│         │                                                           │
+│         ├──► Has checked in today? ──Yes──► Show "Already walked"   │
+│         │           │                                               │
+│         │          No                                               │
+│         │           │                                               │
+│         │           ▼                                               │
+│         │   Show "Walk" button                                      │
+│         │                                                           │
+│  User clicks "Walk"                                                 │
+│         │                                                           │
+│         ▼                                                           │
+│  POST /api/checkin { fid }                                          │
+│         │                                                           │
+│         ├──► First check-in ever? ──Yes──► INSERT streak=1          │
+│         │           │                                               │
+│         │          No                                               │
+│         │           │                                               │
+│         │           ├──► Last check-in was yesterday?               │
+│         │           │           │                                   │
+│         │           │    Yes ───► UPDATE streak = streak + 1        │
+│         │           │           │                                   │
+│         │           │    No ────► UPDATE streak = 1 (reset)         │
+│         │                                                           │
+│         ▼                                                           │
+│  Return { ok: true, streak, total_checkins }                        │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Reset Time Logic
 
 - **9 AM Pacific Time** daily reset
 - Uses `America/Los_Angeles` timezone
 - Implemented in `src/lib/dateUtils.ts`
 
-### Streak Logic
+```typescript
+// src/lib/dateUtils.ts
+export const CHECK_IN_RESET_HOUR = 9; // 9 AM Pacific
+export const PACIFIC_TIMEZONE = "America/Los_Angeles";
+
+// Get "day ID" - changes at 9 AM Pacific each day
+export function getCheckInDayId(date: Date = new Date()): string {
+  const pacificDate = new Date(date.toLocaleString("en-US", { 
+    timeZone: PACIFIC_TIMEZONE 
+  }));
+  
+  // If before 9 AM, consider it previous day
+  if (pacificDate.getHours() < CHECK_IN_RESET_HOUR) {
+    pacificDate.setDate(pacificDate.getDate() - 1);
+  }
+  
+  return `${pacificDate.getFullYear()}-${pacificDate.getMonth()}-${pacificDate.getDate()}`;
+}
+
+// Check if user can check in
+export function canCheckIn(lastCheckin: Date | null): boolean {
+  if (!lastCheckin) return true;
+  return getCheckInDayId(lastCheckin) !== getCheckInDayId(new Date());
+}
+```
+
+### Streak Calculation
 
 ```typescript
 // If checked in yesterday → increment streak
 // If missed a day → reset streak to 1
 // Same day → no change (already checked in)
+
+function calculateNewStreak(lastCheckin: Date | null, currentStreak: number): number {
+  if (!lastCheckin) return 1;
+  
+  const daysDiff = getPacificDaysDiff(lastCheckin, new Date());
+  
+  if (daysDiff === 0) {
+    // Same day - no change (shouldn't happen, already blocked)
+    return currentStreak;
+  } else if (daysDiff === 1) {
+    // Yesterday - increment streak
+    return currentStreak + 1;
+  } else {
+    // Missed days - reset to 1
+    return 1;
+  }
+}
 ```
 
-### Database Fields
+### Database Schema: `checkins` Table
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `fid` | BIGINT | Farcaster user ID |
-| `last_checkin` | TIMESTAMPTZ | Last check-in timestamp |
-| `streak` | INTEGER | Current streak count |
-| `total_checkins` | INTEGER | All-time total walks |
-| `reward_claimed_at` | TIMESTAMPTZ | When daily reward was claimed |
-| `total_walk_rewards` | NUMERIC | Total CATWALK earned from walks |
+```sql
+CREATE TABLE checkins (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  fid BIGINT NOT NULL UNIQUE,           -- One record per user
+  last_checkin TIMESTAMPTZ,             -- Last check-in timestamp
+  streak INTEGER DEFAULT 0,              -- Current streak count
+  total_checkins INTEGER DEFAULT 0,      -- All-time total walks
+  reward_claimed_at TIMESTAMPTZ,         -- When daily reward was claimed
+  total_walk_rewards NUMERIC DEFAULT 0,  -- Total CATWALK earned
+  inserted_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
 
-### API Flow
+CREATE INDEX idx_checkins_fid ON checkins(fid);
+CREATE INDEX idx_checkins_streak ON checkins(streak DESC);
+CREATE INDEX idx_checkins_total ON checkins(total_checkins DESC);
+```
 
-1. `GET /api/checkin?fid=123` - Check current status
-2. `POST /api/checkin` with `{ fid: 123 }` - Perform check-in
-3. `POST /api/checkin/reward` - Claim token reward
+### API Endpoints
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/checkin` | GET | Get user's status: streak, last_checkin, hasCheckedInToday |
+| `/api/checkin` | POST | Perform check-in, update streak |
+| `/api/checkin/reward` | POST | Claim token reward for check-in |
+
+### API Response Types
+
+```typescript
+interface CheckinResponse {
+  ok: boolean;
+  streak?: number;
+  last_checkin?: string | null;
+  total_checkins?: number;
+  hasCheckedIn?: boolean;
+  hasCheckedInToday?: boolean;
+  error?: string;
+  mode?: "insert" | "update" | "already_checked_in";
+}
+```
+
+### Frontend Hook: `useCheckin`
+
+```typescript
+// src/hooks/useCheckin.ts
+const { 
+  status,           // { checkedIn, streak, totalCheckins, lastCheckIn, timeUntilNext }
+  loading,          // boolean
+  saving,           // boolean  
+  error,            // string | null
+  fetchStreak,      // (userId) => Promise<void>
+  performCheckIn,   // (userId) => Promise<{ success, streak }>
+  clearError,       // () => void
+} = useCheckin();
+```
+
+### Diagnostic Queries
+
+```sql
+-- Check a user's status
+SELECT fid, streak, total_checkins, last_checkin, reward_claimed_at 
+FROM checkins WHERE fid = 318447;
+
+-- Top 10 by streak
+SELECT fid, streak, total_checkins FROM checkins 
+ORDER BY streak DESC LIMIT 10;
+
+-- Users who checked in today (approximate - depends on timezone)
+SELECT COUNT(*) FROM checkins 
+WHERE last_checkin > NOW() - INTERVAL '24 hours';
+
+-- Total walks across all users
+SELECT SUM(total_checkins) as total_walks FROM checkins;
+```
 
 ---
 
@@ -573,17 +719,96 @@ Users can "walk" (check in) once per day to build a streak and earn CATWALK toke
 | `walks` | `total_checkins DESC` | All-time total walks |
 | `holdings` | Token balance | CATWALK token holdings |
 
+### Data Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                      LEADERBOARD DATA FLOW                           │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  User opens Leaderboard tab                                         │
+│         │                                                           │
+│         ▼                                                           │
+│  GET /api/leaderboard?type={type}&limit={limit}                     │
+│         │                                                           │
+│         ├──► type = "streak" or "walks"?                            │
+│         │           │                                               │
+│         │    Yes ───► Query checkins table (fast)                   │
+│         │           │                                               │
+│         │    No ────► type = "holdings"                             │
+│         │           │                                               │
+│         │           ▼                                               │
+│         │   Get top users from checkins                             │
+│         │           │                                               │
+│         │           ▼                                               │
+│         │   For each user: fetch balance via Neynar API             │
+│         │   (Uses fetchUserBalance - EXPENSIVE!)                    │
+│         │           │                                               │
+│         │           ▼                                               │
+│         │   Sort by balance, return top N                           │
+│         │                                                           │
+│         ▼                                                           │
+│  For each user: fetch profile from Neynar (username, pfp)           │
+│         │                                                           │
+│         ▼                                                           │
+│  Return LeaderboardEntry[]                                          │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
 ### Data Sources
 
-- **Streak/Walks:** `checkins` table in Supabase
-- **Holdings:** Neynar API `fetchUserBalance` for each user
+| Type | Source | Speed | API Cost |
+|------|--------|-------|----------|
+| `streak` | `checkins` table | Fast | None |
+| `walks` | `checkins` table | Fast | None |
+| `holdings` | Neynar API per user | Slow | High |
 
 ### API
 
-```
+```bash
+# Get top streaks
 GET /api/leaderboard?type=streak&limit=100
+
+# Get top total walks
 GET /api/leaderboard?type=walks&limit=100
+
+# Get top holders (expensive - Neynar API calls)
 GET /api/leaderboard?type=holdings&limit=50
+```
+
+### Response Type
+
+```typescript
+interface LeaderboardEntry {
+  fid: number;
+  username?: string;
+  displayName?: string;
+  pfp_url?: string;
+  streak?: number;
+  total_checkins?: number;
+  balance?: number;      // CATWALK token balance
+  profileUrl?: string;   // Warpcast profile URL
+}
+```
+
+### Diagnostic Queries
+
+```sql
+-- Top 20 by streak
+SELECT fid, streak, total_checkins, last_checkin 
+FROM checkins ORDER BY streak DESC LIMIT 20;
+
+-- Top 20 by total walks
+SELECT fid, streak, total_checkins, last_checkin 
+FROM checkins ORDER BY total_checkins DESC LIMIT 20;
+
+-- Users with broken streaks (haven't checked in recently)
+SELECT fid, streak, last_checkin 
+FROM checkins 
+WHERE streak > 5 
+  AND last_checkin < NOW() - INTERVAL '2 days'
+ORDER BY streak DESC;
 ```
 
 ---
@@ -937,7 +1162,14 @@ curl "https://your-app.vercel.app/api/checkin?fid=318447"
 ### Quick Health Check
 
 ```bash
+# Full portal health (most comprehensive)
 curl https://catwalk-smoky.vercel.app/api/ops/portal-health | jq
+
+# Auth system health
+curl https://catwalk-smoky.vercel.app/api/ops/auth-health | jq
+
+# Environment wiring check
+curl https://catwalk-smoky.vercel.app/api/ops/wiring-check | jq
 ```
 
 ### Common Issues
@@ -949,11 +1181,148 @@ curl https://catwalk-smoky.vercel.app/api/ops/portal-health | jq
 | Leaderboard empty | No check-in records | Users need to check in |
 | Portal not showing rewards | Webhook not configured | Set up Neynar webhook |
 | Creators not earning | Missing in `CATWALK_AUTHOR_FIDS` | Add FID to env var |
+| "SDK not loaded" | Farcaster context missing | Open in Warpcast app |
+| Profile pictures not loading | Neynar API key | Check `NEYNAR_API_KEY` |
+| Channel feed empty | API error | Check Neynar dashboard |
 
 ### Logs
 
 - **Vercel Runtime Logs:** Vercel dashboard → Project → Logs
 - **Database:** Supabase dashboard → SQL Editor
+- **Neynar:** Neynar dashboard → Logs
+
+---
+
+## Known Issues & Gotchas
+
+### ⚠️ Timezone: 9 AM Pacific Reset
+
+**Issue:** Check-in day resets at 9 AM Pacific, not midnight.
+
+**Impact:** Users checking in at 11 PM Pacific and then 10 AM next day = 2 days (streak maintained). Users checking in at 10 AM and then 8 AM next day = same day (blocked).
+
+**Code Location:** `src/lib/dateUtils.ts`
+
+### ⚠️ Holdings Leaderboard is Expensive
+
+**Issue:** `?type=holdings` makes Neynar API calls for EACH user to get token balances.
+
+**Impact:** High Neynar credit usage, slow response time.
+
+**Recommendation:** Limit to 50 users max, consider caching.
+
+### ⚠️ Base RPC 503 Errors
+
+**Issue:** `https://mainnet.base.org` occasionally returns 503.
+
+**Affected Endpoints:** 
+- `/api/token-price` (partial)
+- `/api/portal/lifetime-rewards`
+- `/api/recent-purchases`
+
+**Impact:** Features fail gracefully but show stale/no data.
+
+### ⚠️ Token Price Caching
+
+**Issue:** DexScreener rate limits requests.
+
+**Mitigation:** 
+- `price_history` table stores snapshots
+- 24h change calculated from stored data
+- Fallback to cached value if API fails
+
+### ⚠️ SIWN May Fail on Web
+
+**Issue:** Sign In With Neynar (SIWN) requires Farcaster context.
+
+**Impact:** App shows "SDK not loaded" if opened directly in browser instead of Warpcast.
+
+**Solution:** Always test in Warpcast app, not browser.
+
+---
+
+## Testing Checklist
+
+### After Any Deployment, Verify:
+
+#### 1. Basic App Loads
+- Open in Warpcast
+- Check SDK initializes (no "Loading SDK..." stuck)
+- Verify user context is available
+
+#### 2. Check-In Works
+```bash
+# Get status
+curl "https://catwalk-smoky.vercel.app/api/checkin?fid=318447"
+
+# Should return: { ok: true, streak: N, hasCheckedInToday: true/false }
+```
+
+#### 3. Leaderboard Loads
+```bash
+curl "https://catwalk-smoky.vercel.app/api/leaderboard?type=streak&limit=10"
+```
+
+#### 4. Token Price Shows
+```bash
+curl "https://catwalk-smoky.vercel.app/api/token-price"
+
+# Should return: { price, priceChange24h, ... }
+```
+
+#### 5. Channel Feed Loads
+```bash
+curl "https://catwalk-smoky.vercel.app/api/channel-feed"
+```
+
+#### 6. Portal Health (Comprehensive)
+```bash
+curl "https://catwalk-smoky.vercel.app/api/ops/portal-health" | jq
+
+# Verify: criticalIssues = 0, all checks pass
+```
+
+### SQL Health Checks
+
+```sql
+-- Total users
+SELECT COUNT(*) FROM checkins;
+
+-- Active users (checked in last 7 days)
+SELECT COUNT(*) FROM checkins 
+WHERE last_checkin > NOW() - INTERVAL '7 days';
+
+-- Top streaks
+SELECT fid, streak FROM checkins ORDER BY streak DESC LIMIT 5;
+
+-- Webhook receiving events
+SELECT * FROM app_state WHERE key = 'last_webhook_at';
+```
+
+---
+
+## Recent Changes
+
+### 2026-02-02: Full App SOT Created
+- Created comprehensive `CATWALK_APP_SOT.md`
+- Documents all features, not just portal
+- References `CREATOR_PORTAL_COMPREHENSIVE_SOT.md` for portal details
+
+### 2026-02-02: Creator Portal Fixes
+- Fixed creator_claims not being created
+- Fixed engagement_claims `claimed_at` default trap
+- Added author_username to eligible_casts
+- See [CREATOR_PORTAL_COMPREHENSIVE_SOT.md](./CREATOR_PORTAL_COMPREHENSIVE_SOT.md) for details
+
+### 2026-02-01: Multiple Creator FIDs
+- Changed from single `CATWALK_AUTHOR_FID` to `CATWALK_AUTHOR_FIDS` (47 FIDs)
+- All creator casts now tracked
+
+### Historical
+- Daily check-in system implemented
+- Leaderboard with streak/walks/holdings
+- Token price ticker from DexScreener
+- Channel feed integration
 
 ---
 

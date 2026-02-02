@@ -62,11 +62,17 @@ The Creator Portal rewards users for engaging with casts from approved creators 
 
 ## Reward Amounts
 
+### Engagement Rewards (for users who engage with creator posts)
 | Engagement Type | Reward |
 |-----------------|--------|
 | Like | 1,000 CATWALK |
 | Recast | 2,000 CATWALK |
 | Comment | 5,000 CATWALK |
+
+### Creator Rewards (for creators who post in /catwalk)
+| Action | Reward |
+|--------|--------|
+| Post in /catwalk | 1,000,000 CATWALK per cast |
 
 ## Key Endpoints
 
@@ -132,6 +138,17 @@ The Creator Portal rewards users for engaging with casts from approved creators 
 - `src/app/api/cron/seed-eligible-casts/route.ts` - Use AUTHOR_FIDS array, add GET handler, safe timestamp parsing
 - `src/app/api/ops/portal-health/route.ts` - Check AUTHOR_FIDS
 - `tsconfig.json` - Exclude scripts folder from build
+
+### 2026-02-02: Creator Claims Fix
+- **Problem**: Creators posting in /catwalk couldn't claim their 1M CATWALK reward - `creator_claims` records were never created
+- **Root Cause**: Webhook created `eligible_casts` but NOT `creator_claims`
+- **Fix**:
+  1. Webhook now creates `creator_claims` when creator posts (alongside `eligible_casts`)
+  2. Backfilled 92 missing `creator_claims` from existing `eligible_casts`
+  3. Fixed display amount from 500K to 1M in status endpoint
+- **Files Changed**:
+  - `src/app/api/webhooks/neynar/route.ts` - Create creator_claims on cast.created
+  - `src/app/api/portal/status/route.ts` - Fix default reward display to 1M
 
 ## Troubleshooting
 

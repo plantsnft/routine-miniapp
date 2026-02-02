@@ -26,6 +26,12 @@
 16. [Recent Changes](#recent-changes)
 17. [Neynar API Credit Conservation](#neynar-api-credit-conservation)
 18. [Monorepo Structure - STAY OUT OF THESE FOLDERS](#monorepo-structure---stay-out-of-these-folders)
+19. [Required Migrations](#required-migrations)
+20. [Security & RLS Policies](#security--rls-policies)
+21. [Known Issues & Gotchas](#known-issues--gotchas)
+22. [Signer Wallet Requirements](#signer-wallet-requirements)
+23. [Data Retention](#data-retention)
+24. [Testing Checklist](#testing-checklist)
 
 ---
 
@@ -929,6 +935,234 @@ These files affect ALL apps - modify with caution:
 | `tsconfig.json` | TypeScript config for all (excludes other app folders) |
 | `.eslintrc.json` | Linting for all |
 | `package.json` | Dependencies for root Catwalk app |
+
+---
+
+---
+
+## Required Migrations
+
+### Migration Files (Run in Order)
+
+These SQL files must be executed in Supabase SQL Editor for the Creator Portal to work:
+
+| Order | File | Purpose |
+|-------|------|---------|
+| 1 | `supabase_schema.sql` | Base tables: `eligible_casts`, `engagements`, `engagement_cache`, `channel_feed_cache`, `reply_map`, `app_state` |
+| 2 | `supabase_migration_portal_claims.sql` | `creator_claims` and `engagement_claims` tables |
+| 3 | `supabase_migration_auto_engage.sql` | `user_engage_preferences` and `auto_engage_queue` tables |
+| 4 | `supabase_migration_creator_claims_multi_cast.sql` | Fix unique constraint, reward amount, remove `claimed_at` default |
+| 5 | `supabase_migration_cache_indexes.sql` | Performance indexes |
+
+### Manual SQL Changes (Not in Migration Files)
+
+These must be run manually after migrations:
+
+```sql
+-- Add author_username column to eligible_casts
+ALTER TABLE eligible_casts ADD COLUMN author_username TEXT;
+
+-- CRITICAL: Remove claimed_at default from engagement_claims
+-- (Already in migration_creator_claims_multi_cast.sql, but verify!)
+ALTER TABLE engagement_claims ALTER COLUMN claimed_at DROP DEFAULT;
+
+-- Reset any fake-claimed records (claims without token transfer)
+UPDATE engagement_claims SET claimed_at = NULL WHERE transaction_hash IS NULL;
+```
+
+---
+
+## Security & RLS Policies
+
+### Row Level Security
+
+Portal tables have RLS **enabled** with public read access:
+
+```sql
+-- creator_claims and engagement_claims
+ALTER TABLE public.creator_claims ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.engagement_claims ENABLE ROW LEVEL SECURITY;
+
+-- Allow anyone to read (for checking claim status)
+CREATE POLICY "Allow public read access on creator_claims"
+  ON public.creator_claims FOR SELECT USING (true);
+
+CREATE POLICY "Allow public read access on engagement_claims"
+  ON public.engagement_claims FOR SELECT USING (true);
+```
+
+### Write Access
+
+- **Insert/Update:** Only via service role key (used in API routes)
+- **No anonymous writes:** All mutations go through authenticated API endpoints
+
+### Webhook Security
+
+```typescript
+// Webhook signature verification using HMAC SHA-512
+const secrets = getWebhookSecrets(); // From NEYNAR_WEBHOOK_SECRETS (comma-separated)
+const isValid = verifyNeynarWebhookSignature(rawBody, signature, secrets);
+```
+
+---
+
+## Known Issues & Gotchas
+
+### ⚠️ CRITICAL: `claimed_at` Default Trap
+
+**Problem:** The original `engagement_claims` table had `claimed_at DEFAULT now()`, which auto-marked claims as "claimed" on insert, even without token transfer.
+
+**Symptom:** Users can't claim - endpoint returns 404 "no unclaimed claims"
+
+**Fix:**
+```sql
+ALTER TABLE engagement_claims ALTER COLUMN claimed_at DROP DEFAULT;
+UPDATE engagement_claims SET claimed_at = NULL WHERE transaction_hash IS NULL;
+```
+
+**Prevention:** Always check that `transaction_hash IS NOT NULL` when querying for "actually claimed" records.
+
+### ⚠️ Base RPC 503 Errors
+
+**Problem:** `https://mainnet.base.org` occasionally returns 503 "no backend is currently healthy"
+
+**Symptom:** `/api/portal/lifetime-rewards` fails to query on-chain data
+
+**Impact:** Lifetime rewards display may fail; does NOT affect token transfers (uses different flow)
+
+**Workaround:** The code has retry logic, but during Base outages, this feature will fail gracefully
+
+### ⚠️ Frontend vs Backend Creator FIDs
+
+**Problem:** Two different lists of creator FIDs exist:
+- `CATWALK_AUTHOR_FIDS` env var: 47 FIDs (backend - determines reward eligibility)
+- `CATWALK_CREATOR_FIDS` in constants.ts: 31 FIDs (frontend - determines UI display)
+
+**Impact:** If a creator is in env var but not constants.ts:
+- ✅ They CAN earn rewards
+- ❌ They WON'T see "Creator" UI elements
+
+**Fix:** Keep both lists in sync, or update frontend to fetch from API
+
+### ⚠️ Webhook Must Be Configured in Neynar Dashboard
+
+The portal won't create claims automatically unless Neynar webhook is configured to send:
+- `cast.created`
+- `cast.deleted`
+- `reaction.created`
+- `reaction.deleted`
+
+To URL: `https://catwalk-smoky.vercel.app/api/webhooks/neynar`
+
+---
+
+## Signer Wallet Requirements
+
+### REWARD_SIGNER_PRIVATE_KEY Wallet Must Have:
+
+| Asset | Minimum | Purpose |
+|-------|---------|---------|
+| **CATWALK tokens** | Millions | To pay out rewards |
+| **ETH on Base** | ~0.01 ETH | Gas for ERC20 transfers |
+
+### Check Wallet Balance
+
+1. Get wallet address from private key
+2. Check on [BaseScan](https://basescan.org)
+3. Verify CATWALK balance at `0xa5eb1cAD0dFC1c4f8d4f84f995aeDA9a7A047B07`
+
+### Warning Signs
+
+- Token transfers failing → Check CATWALK balance
+- "insufficient funds" error → Check ETH balance for gas
+
+---
+
+## Data Retention
+
+### 15-Day Eligibility Window
+
+```typescript
+// In webhook and seed cron
+const ELIGIBILITY_WINDOW = 15 * 24 * 60 * 60 * 1000; // 15 days
+
+if (castCreatedAt >= new Date(Date.now() - ELIGIBILITY_WINDOW)) {
+  // Cast is eligible
+}
+```
+
+### What Gets Cleaned Up
+
+| Data | Retention | Cleanup Method |
+|------|-----------|----------------|
+| `eligible_casts` | 15 days | Webhook ignores old casts; manual cleanup needed |
+| `engagements` | Indefinite | No automatic cleanup |
+| `engagement_claims` | Indefinite | Keep for audit trail |
+| `creator_claims` | Indefinite | Keep for audit trail |
+| `engagement_cache` | 1 hour TTL | Overwritten on next verify |
+| `channel_feed_cache` | 5 minute TTL | Overwritten on next fetch |
+
+### Manual Cleanup (If Needed)
+
+```sql
+-- Remove eligible_casts older than 30 days (optional)
+DELETE FROM eligible_casts WHERE created_at < NOW() - INTERVAL '30 days';
+
+-- Remove old cache entries (optional)
+DELETE FROM engagement_cache WHERE as_of < NOW() - INTERVAL '7 days';
+```
+
+---
+
+## Testing Checklist
+
+### After Any Portal Change, Verify:
+
+#### 1. Health Check
+```bash
+curl https://catwalk-smoky.vercel.app/api/ops/portal-health | jq
+```
+**Expected:** All checks pass, `criticalIssues: 0`
+
+#### 2. Eligible Casts Exist
+```sql
+SELECT COUNT(*) FROM eligible_casts WHERE created_at > NOW() - INTERVAL '15 days';
+```
+**Expected:** > 0 casts
+
+#### 3. Webhook is Receiving Events
+```sql
+SELECT * FROM app_state WHERE key = 'last_webhook_at';
+```
+**Expected:** Timestamp within last hour
+
+#### 4. Claims Can Be Created
+1. Like a creator's post in /catwalk channel
+2. Wait 1-2 minutes for webhook
+3. Check:
+```sql
+SELECT * FROM engagement_claims WHERE fid = YOUR_FID ORDER BY verified_at DESC LIMIT 5;
+```
+**Expected:** New claim with `claimed_at IS NULL`
+
+#### 5. Claims Can Be Paid Out
+1. Open portal, click "Claim"
+2. Check:
+```sql
+SELECT * FROM engagement_claims WHERE fid = YOUR_FID AND transaction_hash IS NOT NULL;
+```
+**Expected:** `transaction_hash` is set, `claimed_at` is set
+
+#### 6. Auto-Engage Working
+```sql
+SELECT COUNT(*) FROM user_engage_preferences WHERE auto_engage_enabled = true AND signer_uuid IS NOT NULL;
+```
+**Expected:** > 0 users
+
+Check cron ran:
+```sql
+SELECT * FROM auto_engage_queue ORDER BY created_at DESC LIMIT 10;
+```
 
 ---
 

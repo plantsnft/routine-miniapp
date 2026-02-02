@@ -36,11 +36,14 @@ The Creator Portal is a reward system built into the Catwalk mini app that:
 3. **Auto-Engage** - Users can enable automatic like/recast on new creator posts
 
 ### Key Metrics
-- **47 approved creators** (stored in `CATWALK_AUTHOR_FIDS` env var)
+- **47 approved creators** in `CATWALK_AUTHOR_FIDS` env var (backend/webhook)
+- **31 creators** in `constants.ts` `CATWALK_CREATOR_FIDS` array (frontend detection)
 - **15 auto-engage users** with approved signers
 - **Hourly cron job** for auto-engagement
 - **1-hour cache TTL** for engagement verification
 - **5-minute cache TTL** for channel feed
+
+> **Note:** The frontend uses `CATWALK_CREATOR_FIDS` from `constants.ts` to detect if the current user is a creator. The backend webhook uses `CATWALK_AUTHOR_FIDS` env var to determine which casts are eligible. These may differ - the env var is the authoritative source for reward eligibility.
 
 ---
 
@@ -82,7 +85,7 @@ export enum Tab {
 ### Entry Points
 - **URL:** `https://catwalk-smoky.vercel.app/portal`
 - **Route:** `src/app/portal/page.tsx` → Renders `PortalTab` component
-- **Component:** `src/components/ui/tabs/PortalTab.tsx` (1700+ lines)
+- **Component:** `src/components/ui/tabs/PortalTab.tsx` (~1650 lines)
 
 ---
 
@@ -345,8 +348,12 @@ CREATE TABLE public.user_engage_preferences (
 ### Auto-Engage Cron (`/api/cron/auto-engage`)
 
 **Schedule:** Every hour at minute 0  
-**Auth:** Requires `CRON_SECRET` header  
+**Auth:** Requires `Authorization: Bearer {CRON_SECRET}` header  
 **Location:** `src/app/api/cron/auto-engage/route.ts`
+
+> **Note:** Different cron endpoints use different auth:
+> - `auto-engage`: `Authorization: Bearer {secret}`
+> - `seed-eligible-casts`, `webhook-health`: `x-cron-secret: {secret}` header
 
 **What it does:**
 1. Fetches users with `auto_engage_enabled = true` and valid `signer_uuid`
@@ -571,7 +578,7 @@ if (receipt.status !== 'reverted') {
 ### Main Component: PortalTab
 
 **Location:** `src/components/ui/tabs/PortalTab.tsx`  
-**Lines:** ~1700  
+**Lines:** ~1650  
 **Framework:** React with Neynar SDK
 
 ### State Management
@@ -613,8 +620,11 @@ claimCreatorReward();    // POST /api/portal/creator/claim
 ```typescript
 import { CATWALK_CREATOR_FIDS } from "~/lib/constants";
 
+// Frontend uses hardcoded array (31 FIDs in constants.ts)
 const isCreator = userFid && CATWALK_CREATOR_FIDS.includes(userFid);
 ```
+
+> **Important:** The frontend `CATWALK_CREATOR_FIDS` (31 FIDs) may differ from the backend `CATWALK_AUTHOR_FIDS` env var (47 FIDs). If a creator is in the env var but not in constants.ts, they can still earn rewards, but the frontend won't show the "Creator" UI elements.
 
 ---
 
@@ -691,7 +701,7 @@ src/
 ├── components/
 │   └── ui/
 │       └── tabs/
-│           └── PortalTab.tsx                # Main portal UI (1700+ lines)
+│           └── PortalTab.tsx                # Main portal UI (~1650 lines)
 └── lib/
     ├── constants.ts                          # CATWALK_CREATOR_FIDS
     ├── neynar.ts                             # Neynar API helpers

@@ -213,7 +213,23 @@ See **[CREATOR_PORTAL_COMPREHENSIVE_SOT.md](./CREATOR_PORTAL_COMPREHENSIVE_SOT.m
 | `/api/siwn` | POST | Sign In With Neynar (verify Farcaster auth) |
 | `/api/users` | GET | Get user profiles by FID |
 | `/api/auth/signer` | GET | Get managed signer status |
+| `/api/auth/signer/signed_key` | POST | Create signed key request |
+| `/api/auth/signers` | GET | List all signers |
+| `/api/auth/session-signers` | GET | Get session signers |
+| `/api/auth/nonce` | GET | Generate auth nonce |
 | `/api/auth/validate` | POST | Validate auth token |
+
+### Social
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/best-friends` | GET | Get user's best friends (top 3) |
+
+### Notifications
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/send-notification` | POST | Send push notification to user |
 
 ### Creator Stats
 
@@ -221,7 +237,18 @@ See **[CREATOR_PORTAL_COMPREHENSIVE_SOT.md](./CREATOR_PORTAL_COMPREHENSIVE_SOT.m
 |----------|--------|---------|
 | `/api/creator-stats` | GET | Get creator statistics |
 | `/api/creator-stats/sync` | POST | Sync creator stats (cron) |
+| `/api/creator-stats/casts-by-label` | GET | Get casts filtered by label |
+| `/api/creator-stats/top-casts` | GET | Get top performing casts |
+| `/api/creator-stats/populate-placeholders` | POST | Populate placeholder data |
 | `/api/creator-fids` | GET | Get list of creator FIDs |
+| `/api/creator-cast-counts` | GET | Get cast counts per creator |
+| `/api/update-creator-fids` | POST | Update creator FID list |
+
+### OpenGraph & Sharing
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/opengraph-image` | GET | Generate OG image for sharing |
 
 ### Portal Endpoints
 
@@ -272,9 +299,15 @@ See **[CREATOR_PORTAL_COMPREHENSIVE_SOT.md](./CREATOR_PORTAL_COMPREHENSIVE_SOT.m
 |----------|-------------|---------|
 | `NEXT_PUBLIC_APP_NAME` | App display name | "Catwalk" |
 | `NEXT_PUBLIC_APP_DESCRIPTION` | App description | - |
+| `NEXT_PUBLIC_APP_BUTTON_TEXT` | Mini app button text | - |
+| `NEXT_PUBLIC_APP_WEBHOOK_URL` | App webhook URL | - |
+| `NEXT_PUBLIC_APP_ACCOUNT_ASSOCIATION` | Farcaster account association JSON | - |
 | `BASESCAN_API_KEY` | BaseScan API for token stats | - |
 | `BASE_RPC_URL` | Base chain RPC | https://mainnet.base.org |
-| `NEYNAR_CLIENT_ID` | Neynar client ID | - |
+| `NEYNAR_CLIENT_ID` | Neynar client ID (for notifications) | - |
+| `KV_REST_API_URL` | Upstash Redis URL (for notifications) | - |
+| `KV_REST_API_TOKEN` | Upstash Redis token | - |
+| `CATWALK_PROFILE_BASE_URL` | Profile URL base | https://warpcast.com |
 
 ---
 
@@ -328,6 +361,39 @@ The app relies on Farcaster SDK context - no separate session management needed.
 
 ---
 
+## Pages & Routes
+
+### App Pages
+
+| Route | File | Purpose |
+|-------|------|---------|
+| `/` | `src/app/page.tsx` | Main app entry (renders App component) |
+| `/portal` | `src/app/portal/page.tsx` | Direct portal page access |
+| `/share/[fid]` | `src/app/share/[fid]/page.tsx` | Shareable profile page with OG image |
+
+### Special Routes
+
+| Route | File | Purpose |
+|-------|------|---------|
+| `/.well-known/farcaster.json` | `src/app/.well-known/farcaster.json/route.ts` | Farcaster mini app manifest |
+
+---
+
+## React Hooks
+
+### Custom Hooks
+
+| Hook | File | Purpose |
+|------|------|---------|
+| `useCheckin` | `src/hooks/useCheckin.ts` | Check-in state management, streak fetching |
+| `useNeynarUser` | `src/hooks/useNeynarUser.ts` | Fetch Neynar user data |
+| `useAuth` | `src/hooks/useAuth.ts` | Authentication state |
+| `useQuickAuth` | `src/hooks/useQuickAuth.ts` | Quick auth flow |
+| `useHapticFeedback` | `src/hooks/useHapticFeedback.ts` | Haptic feedback for interactions |
+| `useDetectClickOutside` | `src/hooks/useDetectClickOutside.ts` | Detect clicks outside element |
+
+---
+
 ## UI Components
 
 ### Main App Structure
@@ -369,6 +435,34 @@ export enum Tab {
   Portal = "portal",
 }
 ```
+
+---
+
+## Library Utilities
+
+### Key Lib Files
+
+| File | Purpose |
+|------|---------|
+| `src/lib/supabase.ts` | Supabase client, check-in CRUD operations |
+| `src/lib/supabaseAdmin.ts` | Supabase admin client (service role) |
+| `src/lib/neynar.ts` | Neynar API client and helpers |
+| `src/lib/constants.ts` | App constants, creator FIDs, config |
+| `src/lib/dateUtils.ts` | Date utilities, check-in reset logic |
+| `src/lib/types.ts` | TypeScript type definitions |
+| `src/lib/utils.ts` | General utilities |
+| `src/lib/auth.ts` | Auth utilities |
+| `src/lib/kv.ts` | Key-value store (Redis/in-memory) |
+| `src/lib/notifs.ts` | Push notification helpers |
+| `src/lib/webhookSecurity.ts` | Webhook signature verification |
+| `src/lib/creatorStats.ts` | Creator statistics helpers |
+| `src/lib/castUtils.ts` | Cast/post utilities |
+| `src/lib/devices.ts` | Device detection |
+| `src/lib/errorUtils.tsx` | Error handling components |
+| `src/lib/localStorage.ts` | Local storage utilities |
+| `src/lib/models.ts` | Data models |
+| `src/lib/opsAuth.ts` | Ops endpoint auth |
+| `src/lib/truncateAddress.ts` | Wallet address formatting |
 
 ---
 
@@ -486,6 +580,33 @@ GET /api/leaderboard?type=holdings&limit=50
 
 ---
 
+## Feature: Notifications
+
+### Overview
+
+The app can send push notifications to users via Farcaster's notification system.
+
+### Two Methods
+
+| Method | When Used | Storage |
+|--------|-----------|---------|
+| **Neynar Notifications** | When `NEYNAR_CLIENT_ID` is set | Managed by Neynar |
+| **Direct Notifications** | Fallback | Upstash Redis or in-memory |
+
+### Flow
+
+1. User enables notifications in Warpcast
+2. Notification details sent to `/api/send-notification`
+3. App stores token (if not using Neynar)
+4. App sends notification via Farcaster notification URL
+
+### Environment
+
+- `NEYNAR_CLIENT_ID` - Enables Neynar-managed notifications
+- `KV_REST_API_URL` + `KV_REST_API_TOKEN` - Upstash Redis for direct method
+
+---
+
 ## Feature: Channel Feed
 
 ### Data Flow
@@ -500,6 +621,30 @@ GET /api/leaderboard?type=holdings&limit=50
 - `channel_feed_cache` table stores responses
 - 5-minute TTL
 - Reduces Neynar API credit usage
+
+---
+
+## Feature: Sharing & OpenGraph
+
+### Share Pages
+
+The app supports shareable profile pages at `/share/[fid]`.
+
+**Example:** `https://catwalk-smoky.vercel.app/share/318447`
+
+### How It Works
+
+1. User visits `/share/{fid}`
+2. Server generates OpenGraph metadata
+3. `/api/opengraph-image?fid={fid}` generates custom image
+4. Page redirects to home, but share card shows user's profile
+
+### Farcaster Manifest
+
+Located at `/.well-known/farcaster.json`, provides:
+- App name and description
+- Mini app embed metadata
+- Account association (for verified apps)
 
 ---
 

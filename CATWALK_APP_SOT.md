@@ -1,42 +1,83 @@
-# Catwalk Mini App - Full Source of Truth
+# Catwalk Mini App - Source of Truth
+
+> **FOR AI/AGENT USE:** This document is the single source of truth for the Catwalk mini app.
+> All information is verifiable against the codebase. Update this document with every code change.
+> Never add information that cannot be verified. When in doubt, check the actual source files.
 
 **Last Updated:** 2026-02-02  
+**Last Verified:** 2026-02-02  
 **Status:** ✅ LIVE  
 **Production URL:** https://catwalk-smoky.vercel.app
 
 ---
 
+## QUICK REFERENCE (Most Used)
+
+### Critical Paths
+```
+CATWALK SOURCE CODE:     c:\miniapps\routine\src\
+PORTAL SOT:              c:\miniapps\routine\CREATOR_PORTAL_COMPREHENSIVE_SOT.md
+THIS SOT:                c:\miniapps\routine\CATWALK_APP_SOT.md
+```
+
+### Key Constants (from src/lib/constants.ts)
+| Constant | Value | Line |
+|----------|-------|------|
+| `CATWALK_CREATOR_FIDS` | 31 FIDs array | 75-107 |
+| `APP_URL` | `https://catwalk-smoky.vercel.app` | 23 |
+| `CHECK_IN_RESET_HOUR` | 9 (9 AM Pacific) | 153 |
+| `PACIFIC_TIMEZONE` | `America/Los_Angeles` | 154 |
+
+### Token (verified in 14+ source files)
+| Property | Value |
+|----------|-------|
+| Address | `0xa5eb1cAD0dFC1c4f8d4f84f995aeDA9a7A047B07` |
+| Chain | Base (mainnet) |
+| Decimals | 18 |
+| Uniswap Pair | `0xAcf65dDaF08570076D1Dfba9539f21ae5A30b8Bc` |
+
+### DO NOT MODIFY (Other Apps in Monorepo)
+```
+❌ /burrfriends/    - BurrFriends/Betr app
+❌ /poker/          - Poker mini app  
+❌ /basketball/     - Basketball app
+❌ /catwalkagent/   - AI agent scripts
+```
+
+---
+
 ## Table of Contents
 
-1. [Overview](#overview)
-2. [App Features](#app-features)
-3. [Tech Stack](#tech-stack)
-4. [App Architecture](#app-architecture)
-5. [Database Schema](#database-schema)
-6. [API Endpoints](#api-endpoints)
-7. [Environment Variables](#environment-variables)
-8. [Authentication](#authentication)
-9. [Token Information](#token-information)
-10. [Pages & Routes](#pages--routes)
-11. [React Hooks](#react-hooks)
-12. [UI Components](#ui-components)
-13. [Library Utilities](#library-utilities)
-14. [Cron Jobs](#cron-jobs)
-15. [Feature: Daily Check-In](#feature-daily-check-in)
-16. [Feature: Creator Portal](#feature-creator-portal)
-17. [Feature: Leaderboard](#feature-leaderboard)
-18. [Feature: Notifications](#feature-notifications)
-19. [Feature: Channel Feed](#feature-channel-feed)
-20. [Feature: Sharing & OpenGraph](#feature-sharing--opengraph)
-21. [Neynar Integration](#neynar-integration)
-22. [Webhook Configuration](#webhook-configuration)
-23. [Farcaster Manifest Details](#farcaster-manifest-details)
-24. [Monorepo Structure](#monorepo-structure)
-25. [Deployment](#deployment)
-26. [Troubleshooting](#troubleshooting)
-27. [Known Issues & Gotchas](#known-issues--gotchas)
-28. [Testing Checklist](#testing-checklist)
-29. [Recent Changes](#recent-changes)
+1. [Quick Reference](#quick-reference-most-used)
+2. [Overview](#overview)
+3. [App Features](#app-features)
+4. [Tech Stack](#tech-stack)
+5. [App Architecture](#app-architecture)
+6. [Database Schema](#database-schema)
+7. [API Endpoints](#api-endpoints)
+8. [Environment Variables](#environment-variables)
+9. [Authentication](#authentication)
+10. [Token Information](#token-information)
+11. [Pages & Routes](#pages--routes)
+12. [React Hooks](#react-hooks)
+13. [UI Components](#ui-components)
+14. [Library Utilities](#library-utilities)
+15. [Cron Jobs](#cron-jobs)
+16. [Feature: Daily Check-In](#feature-daily-check-in)
+17. [Feature: Creator Portal](#feature-creator-portal)
+18. [Feature: Leaderboard](#feature-leaderboard)
+19. [Feature: Notifications](#feature-notifications)
+20. [Feature: Channel Feed](#feature-channel-feed)
+21. [Feature: Sharing & OpenGraph](#feature-sharing--opengraph)
+22. [Neynar Integration](#neynar-integration)
+23. [Webhook Configuration](#webhook-configuration)
+24. [Farcaster Manifest Details](#farcaster-manifest-details)
+25. [Monorepo Structure](#monorepo-structure)
+26. [Deployment](#deployment)
+27. [Troubleshooting](#troubleshooting)
+28. [Known Issues & Gotchas](#known-issues--gotchas)
+29. [Testing Checklist](#testing-checklist)
+30. [Change Log](#change-log)
 
 ---
 
@@ -201,105 +242,116 @@ See **[CREATOR_PORTAL_COMPREHENSIVE_SOT.md](./CREATOR_PORTAL_COMPREHENSIVE_SOT.m
 
 ## API Endpoints
 
-### Check-In
+> **Total:** 47 route files in `src/app/api/`
 
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/checkin` | GET | Get user's check-in status |
-| `/api/checkin` | POST | Perform daily check-in |
-| `/api/checkin/reward` | POST | Claim check-in reward |
+### Check-In (`src/app/api/checkin/`)
 
-### Leaderboard
+| Endpoint | Method | File | Purpose |
+|----------|--------|------|---------|
+| `/api/checkin` | GET/POST | `route.ts` | Get status / perform check-in |
+| `/api/checkin/reward` | POST | `reward/route.ts` | Claim check-in reward |
 
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/leaderboard` | GET | Get top users by streak, walks, or holdings |
+### Leaderboard (`src/app/api/leaderboard/`)
 
-### Channel & Feed
+| Endpoint | Method | File | Purpose |
+|----------|--------|------|---------|
+| `/api/leaderboard` | GET | `route.ts` | Get top users by streak, walks, or holdings |
 
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/channel-feed` | GET | Get /catwalk channel posts |
-| `/api/channel-stats` | GET | Get channel follower count |
-| `/api/cast-comments` | GET | Get comments on a cast |
-| `/api/cast-react` | POST | Like/recast a cast |
+### Channel & Feed (`src/app/api/`)
 
-### Token & Price
+| Endpoint | Method | File | Purpose |
+|----------|--------|------|---------|
+| `/api/channel-feed` | GET | `channel-feed/route.ts` | Get /catwalk channel posts |
+| `/api/channel-stats` | GET | `channel-stats/route.ts` | Get channel follower count |
+| `/api/cast-comments` | GET | `cast-comments/route.ts` | Get comments on a cast |
+| `/api/cast-react` | POST | `cast-react/route.ts` | Like/recast a cast |
 
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/token-price` | GET | Get CATWALK price, 24h change, market cap |
-| `/api/recent-purchases` | GET | Get recent token transfer events |
+### Token & Price (`src/app/api/`)
 
-### Authentication
+| Endpoint | Method | File | Purpose |
+|----------|--------|------|---------|
+| `/api/token-price` | GET | `token-price/route.ts` | CATWALK price, 24h change, market cap |
+| `/api/recent-purchases` | GET | `recent-purchases/route.ts` | Recent token transfer events |
 
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/siwn` | POST | Sign In With Neynar (verify Farcaster auth) |
-| `/api/users` | GET | Get user profiles by FID |
-| `/api/auth/signer` | GET | Get managed signer status |
-| `/api/auth/signer/signed_key` | POST | Create signed key request |
-| `/api/auth/signers` | GET | List all signers |
-| `/api/auth/session-signers` | GET | Get session signers |
-| `/api/auth/nonce` | GET | Generate auth nonce |
-| `/api/auth/validate` | POST | Validate auth token |
+### Authentication (`src/app/api/auth/`)
 
-### Social
+| Endpoint | Method | File | Purpose |
+|----------|--------|------|---------|
+| `/api/siwn` | POST | `siwn/route.ts` | Sign In With Neynar |
+| `/api/users` | GET | `users/route.ts` | Get user profiles by FID |
+| `/api/auth/signer` | GET | `auth/signer/route.ts` | Get managed signer status |
+| `/api/auth/signer/signed_key` | POST | `auth/signer/signed_key/route.ts` | Create signed key request |
+| `/api/auth/signers` | GET | `auth/signers/route.ts` | List all signers |
+| `/api/auth/session-signers` | GET | `auth/session-signers/route.ts` | Get session signers |
+| `/api/auth/nonce` | GET | `auth/nonce/route.ts` | Generate auth nonce |
+| `/api/auth/validate` | POST | `auth/validate/route.ts` | Validate auth token |
 
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/best-friends` | GET | Get user's best friends (top 3) |
+### Social & Notifications (`src/app/api/`)
 
-### Notifications
+| Endpoint | Method | File | Purpose |
+|----------|--------|------|---------|
+| `/api/best-friends` | GET | `best-friends/route.ts` | User's best friends (top 3) |
+| `/api/send-notification` | POST | `send-notification/route.ts` | Send push notification |
 
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/send-notification` | POST | Send push notification to user |
+### Creator Stats (`src/app/api/creator-stats/`)
 
-### Creator Stats
+| Endpoint | Method | File | Purpose |
+|----------|--------|------|---------|
+| `/api/creator-stats` | GET | `route.ts` | Get creator statistics |
+| `/api/creator-stats/sync` | POST | `sync/route.ts` | Sync creator stats (cron) |
+| `/api/creator-stats/casts-by-label` | GET | `casts-by-label/route.ts` | Casts filtered by label |
+| `/api/creator-stats/top-casts` | GET | `top-casts/route.ts` | Top performing casts |
+| `/api/creator-stats/populate-placeholders` | POST | `populate-placeholders/route.ts` | Populate placeholder data |
+| `/api/creator-fids` | GET | `creator-fids/route.ts` | List of creator FIDs |
+| `/api/creator-cast-counts` | GET | `creator-cast-counts/route.ts` | Cast counts per creator |
+| `/api/update-creator-fids` | POST | `update-creator-fids/route.ts` | Update creator FID list |
 
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/creator-stats` | GET | Get creator statistics |
-| `/api/creator-stats/sync` | POST | Sync creator stats (cron) |
-| `/api/creator-stats/casts-by-label` | GET | Get casts filtered by label |
-| `/api/creator-stats/top-casts` | GET | Get top performing casts |
-| `/api/creator-stats/populate-placeholders` | POST | Populate placeholder data |
-| `/api/creator-fids` | GET | Get list of creator FIDs |
-| `/api/creator-cast-counts` | GET | Get cast counts per creator |
-| `/api/update-creator-fids` | POST | Update creator FID list |
+### OpenGraph (`src/app/api/opengraph-image/`)
 
-### OpenGraph & Sharing
+| Endpoint | Method | File | Purpose |
+|----------|--------|------|---------|
+| `/api/opengraph-image` | GET | `route.tsx` | Generate OG image for sharing |
 
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/opengraph-image` | GET | Generate OG image for sharing |
+### Portal Endpoints (`src/app/api/portal/`)
 
-### Portal Endpoints
+> **See:** [CREATOR_PORTAL_COMPREHENSIVE_SOT.md](./CREATOR_PORTAL_COMPREHENSIVE_SOT.md)
 
-See **[CREATOR_PORTAL_COMPREHENSIVE_SOT.md](./CREATOR_PORTAL_COMPREHENSIVE_SOT.md)** for:
-- `/api/portal/status`
-- `/api/portal/engagement/verify`
-- `/api/portal/engagement/claim`
-- `/api/portal/creator/claim`
-- `/api/portal/engage/*`
-- `/api/portal/lifetime-rewards`
+| Endpoint | File |
+|----------|------|
+| `/api/portal/status` | `status/route.ts` |
+| `/api/portal/engagement/verify` | `engagement/verify/route.ts` |
+| `/api/portal/engagement/claim` | `engagement/claim/route.ts` |
+| `/api/portal/creator/claim` | `creator/claim/route.ts` |
+| `/api/portal/engage/preferences` | `engage/preferences/route.ts` |
+| `/api/portal/engage/authorize` | `engage/authorize/route.ts` |
+| `/api/portal/engage/bulk` | `engage/bulk/route.ts` |
+| `/api/portal/lifetime-rewards` | `lifetime-rewards/route.ts` |
 
-### Ops/Diagnostics
+### Ops/Diagnostics (`src/app/api/ops/`)
 
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/ops/portal-health` | GET | Full portal health check |
-| `/api/ops/auth-health` | GET | Auth system health |
-| `/api/ops/wiring-check` | GET | Verify env var wiring |
-| `/api/ops/webhook-metrics` | GET | Basic webhook status |
+| Endpoint | Method | File | Purpose |
+|----------|--------|------|---------|
+| `/api/ops/portal-health` | GET | `portal-health/route.ts` | Full portal health check |
+| `/api/ops/auth-health` | GET | `auth-health/route.ts` | Auth system health |
+| `/api/ops/wiring-check` | GET | `wiring-check/route.ts` | Verify env var wiring |
+| `/api/ops/webhook-metrics` | GET | `webhook-metrics/route.ts` | Basic webhook status |
 
-### Webhooks
+### Cron Endpoints (`src/app/api/cron/`)
 
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/webhooks/neynar` | POST | Receive Neynar webhook events |
-| `/api/webhook` | POST | Legacy webhook endpoint |
+| Endpoint | File | Schedule | Auth |
+|----------|------|----------|------|
+| `/api/cron/auto-engage` | `auto-engage/route.ts` | Hourly | `Authorization: Bearer {CRON_SECRET}` |
+| `/api/cron/seed-eligible-casts` | `seed-eligible-casts/route.ts` | Manual | `x-cron-secret` header |
+| `/api/cron/webhook-health` | `webhook-health/route.ts` | Manual | `x-cron-secret` header |
+| `/api/cron/refresh-channel-feed` | `refresh-channel-feed/route.ts` | Manual | `x-cron-secret` header |
+| `/api/cron/refresh-engagement-cache` | `refresh-engagement-cache/route.ts` | Manual | `x-cron-secret` header |
+
+### Webhooks (`src/app/api/`)
+
+| Endpoint | Method | File | Purpose |
+|----------|--------|------|---------|
+| `/api/webhooks/neynar` | POST | `webhooks/neynar/route.ts` | Receive Neynar webhook events |
+| `/api/webhook` | POST | `webhook/route.ts` | Legacy webhook endpoint |
 
 ---
 
@@ -1373,36 +1425,56 @@ SELECT * FROM app_state WHERE key = 'last_webhook_at';
 
 ---
 
-## Recent Changes
+## Change Log
 
-### 2026-02-02: Full App SOT Created
-- Created comprehensive `CATWALK_APP_SOT.md`
-- Documents all features, not just portal
-- References `CREATOR_PORTAL_COMPREHENSIVE_SOT.md` for portal details
+> **IMPORTANT:** Update this log with every code change. Include date, files modified, and what changed.
 
-### 2026-02-02: Creator Portal Fixes
-- Fixed creator_claims not being created
-- Fixed engagement_claims `claimed_at` default trap
-- Added author_username to eligible_casts
-- See [CREATOR_PORTAL_COMPREHENSIVE_SOT.md](./CREATOR_PORTAL_COMPREHENSIVE_SOT.md) for details
+### 2026-02-02
 
-### 2026-02-01: Multiple Creator FIDs
-- Changed from single `CATWALK_AUTHOR_FID` to `CATWALK_AUTHOR_FIDS` (47 FIDs)
-- All creator casts now tracked
+| Change | Files Modified | Details |
+|--------|---------------|---------|
+| SOT restructured for AI use | `CATWALK_APP_SOT.md` | Added quick reference, file paths, change log format |
+| Full App SOT created | `CATWALK_APP_SOT.md` | Comprehensive documentation of all features |
+| Creator Portal fixes | `webhooks/neynar/route.ts`, `portal/status/route.ts` | Fixed creator_claims creation, engagement_claims default |
+| Author username added | `eligible_casts` table | Added `author_username` column |
 
-### Historical
-- Daily check-in system implemented
-- Leaderboard with streak/walks/holdings
-- Token price ticker from DexScreener
-- Channel feed integration
+### 2026-02-01
+
+| Change | Files Modified | Details |
+|--------|---------------|---------|
+| Multiple creator FIDs | `webhooks/neynar/route.ts` | Changed `CATWALK_AUTHOR_FID` → `CATWALK_AUTHOR_FIDS` (47 FIDs) |
+| Cast URL fix | `portal/engagement/verify/route.ts` | Fixed Warpcast URL format for opening casts |
+
+### Earlier (Historical)
+
+| Feature | Status |
+|---------|--------|
+| Daily check-in system | ✅ Implemented |
+| Leaderboard (streak/walks/holdings) | ✅ Implemented |
+| Token price ticker (DexScreener) | ✅ Implemented |
+| Channel feed integration | ✅ Implemented |
+| Creator Portal rewards | ✅ Implemented |
+| Auto-engage feature | ✅ Implemented |
 
 ---
 
 ## Related Documentation
 
-- **[CREATOR_PORTAL_COMPREHENSIVE_SOT.md](./CREATOR_PORTAL_COMPREHENSIVE_SOT.md)** - Complete Creator Portal documentation
-- **[CREATOR_PORTAL_SOT.md](./CREATOR_PORTAL_SOT.md)** - Shorter portal reference
+| Document | Path | Purpose |
+|----------|------|---------|
+| **Creator Portal SOT** | `CREATOR_PORTAL_COMPREHENSIVE_SOT.md` | Complete portal documentation |
+| **Creator Portal (Short)** | `CREATOR_PORTAL_SOT.md` | Quick portal reference |
 
 ---
 
-*Last verified: 2026-02-02*
+## SOT Maintenance Rules
+
+1. **Every code change** → Update this SOT
+2. **Never add unverified info** → Check source files first
+3. **Include file paths** → Makes future reference easier
+4. **Update "Last Updated" date** at top of document
+5. **Log changes** in Change Log section with files modified
+
+---
+
+*Document verified against codebase: 2026-02-02*

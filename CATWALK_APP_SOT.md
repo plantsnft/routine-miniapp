@@ -163,11 +163,21 @@ CREATE TABLE app_state (
 #### price_history
 Token price snapshots for 24h change calculation.
 ```sql
-CREATE TABLE price_history (
-  id SERIAL PRIMARY KEY,
+-- From supabase_migration_price_history.sql
+CREATE TABLE IF NOT EXISTS public.price_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  token_address TEXT NOT NULL,
   price NUMERIC NOT NULL,
-  timestamp TIMESTAMPTZ DEFAULT now()
+  price_usd NUMERIC NOT NULL,
+  market_cap NUMERIC,
+  volume_24h NUMERIC,
+  timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  inserted_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Indexes for performance
+CREATE INDEX idx_price_history_token_address ON price_history(token_address);
+CREATE INDEX idx_price_history_timestamp ON price_history(timestamp DESC);
 ```
 
 ### Portal Tables
@@ -563,76 +573,103 @@ Users can "walk" (check in) once per day to build a streak and earn CATWALK toke
 - **9 AM Pacific Time** daily reset
 - Uses `America/Los_Angeles` timezone
 - Implemented in `src/lib/dateUtils.ts`
+- Constants also exported from `src/lib/constants.ts`
 
 ```typescript
-// src/lib/dateUtils.ts
-export const CHECK_IN_RESET_HOUR = 9; // 9 AM Pacific
-export const PACIFIC_TIMEZONE = "America/Los_Angeles";
+// src/lib/dateUtils.ts (actual implementation)
+const PACIFIC_TIMEZONE = "America/Los_Angeles";
+const CHECK_IN_RESET_HOUR = 9; // 9 AM Pacific
 
 // Get "day ID" - changes at 9 AM Pacific each day
-export function getCheckInDayId(date: Date = new Date()): string {
-  const pacificDate = new Date(date.toLocaleString("en-US", { 
-    timeZone: PACIFIC_TIMEZONE 
-  }));
+export function getCheckInDayId(date: Date): string {
+  // Uses Intl.DateTimeFormat for accurate timezone handling
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: PACIFIC_TIMEZONE,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  });
   
-  // If before 9 AM, consider it previous day
-  if (pacificDate.getHours() < CHECK_IN_RESET_HOUR) {
-    pacificDate.setDate(pacificDate.getDate() - 1);
-  }
+  const parts = formatter.formatToParts(date);
+  const hour = parseInt(parts.find(p => p.type === "hour")?.value || "0");
   
-  return `${pacificDate.getFullYear()}-${pacificDate.getMonth()}-${pacificDate.getDate()}`;
+  // If before 9 AM, it belongs to previous day's check-in window
+  // Returns YYYY-MM-DD string
 }
 
-// Check if user can check in
-export function canCheckIn(lastCheckin: Date | null): boolean {
-  if (!lastCheckin) return true;
-  return getCheckInDayId(lastCheckin) !== getCheckInDayId(new Date());
+// Check if user can check in (different check-in window)
+export function canCheckIn(lastCheckinDate: Date | null, nowDate: Date): boolean {
+  if (!lastCheckinDate) return true;
+  return getCheckInDayId(lastCheckinDate) !== getCheckInDayId(nowDate);
+}
+
+// Calculate days difference between two check-in windows
+export function getPacificDaysDiff(date1: Date, date2: Date): number {
+  // Returns number of check-in days between dates
 }
 ```
+
+> **Note:** The actual implementation uses `Intl.DateTimeFormat` for reliable timezone conversion, not `toLocaleString`. See `src/lib/dateUtils.ts` for complete code.
 
 ### Streak Calculation
 
-```typescript
-// If checked in yesterday → increment streak
-// If missed a day → reset streak to 1
-// Same day → no change (already checked in)
+The streak calculation happens in `src/app/api/checkin/route.ts`:
 
-function calculateNewStreak(lastCheckin: Date | null, currentStreak: number): number {
-  if (!lastCheckin) return 1;
-  
-  const daysDiff = getPacificDaysDiff(lastCheckin, new Date());
-  
-  if (daysDiff === 0) {
-    // Same day - no change (shouldn't happen, already blocked)
-    return currentStreak;
-  } else if (daysDiff === 1) {
-    // Yesterday - increment streak
-    return currentStreak + 1;
-  } else {
-    // Missed days - reset to 1
-    return 1;
-  }
+```typescript
+// From the actual POST /api/checkin handler:
+
+// Calculate days difference in Pacific check-in windows
+const daysDiff = getPacificDaysDiff(lastDate, nowDate);
+
+let newStreak: number;
+if (daysDiff === 1) {
+  // Checked in consecutive day - increment streak
+  newStreak = currentStreak + 1;
+} else if (daysDiff > 1) {
+  // Missed a day or more - reset streak
+  newStreak = 1;
+} else {
+  // Same window (shouldn't happen due to canCheckIn check)
+  newStreak = currentStreak;
 }
 ```
 
+**Important:** The GET endpoint also adjusts displayed streak:
+- If user hasn't checked in today (daysDiff >= 1), streak displays as **0**
+- This is for display purposes only - the actual streak is preserved in DB
+- When they check in again, the real streak calculation runs
+
 ### Database Schema: `checkins` Table
 
+> **Note:** No migration file exists for this table. Schema inferred from `CheckinRecord` interface in `src/lib/supabase.ts`.
+
+```typescript
+// From src/lib/supabase.ts
+interface CheckinRecord {
+  id?: string;
+  fid: number;                          // Farcaster user ID (unique)
+  last_checkin: string | null;          // ISO timestamp of last check-in
+  streak: number;                        // Current streak count
+  total_checkins?: number;               // All-time total walks
+  reward_claimed_at?: string | null;     // When daily reward was claimed
+  inserted_at?: string;
+  updated_at?: string;
+}
+// Note: total_walk_rewards also exists (accessed via type cast)
+```
+
+**Expected SQL (create if not exists):**
 ```sql
-CREATE TABLE checkins (
+CREATE TABLE IF NOT EXISTS checkins (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  fid BIGINT NOT NULL UNIQUE,           -- One record per user
-  last_checkin TIMESTAMPTZ,             -- Last check-in timestamp
-  streak INTEGER DEFAULT 0,              -- Current streak count
-  total_checkins INTEGER DEFAULT 0,      -- All-time total walks
-  reward_claimed_at TIMESTAMPTZ,         -- When daily reward was claimed
-  total_walk_rewards NUMERIC DEFAULT 0,  -- Total CATWALK earned
+  fid BIGINT NOT NULL UNIQUE,
+  last_checkin TIMESTAMPTZ,
+  streak INTEGER DEFAULT 0,
+  total_checkins INTEGER DEFAULT 0,
+  reward_claimed_at TIMESTAMPTZ,
+  total_walk_rewards NUMERIC DEFAULT 0,
   inserted_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
-
-CREATE INDEX idx_checkins_fid ON checkins(fid);
-CREATE INDEX idx_checkins_streak ON checkins(streak DESC);
-CREATE INDEX idx_checkins_total ON checkins(total_checkins DESC);
 ```
 
 ### API Endpoints
@@ -780,15 +817,20 @@ GET /api/leaderboard?type=holdings&limit=50
 ### Response Type
 
 ```typescript
+// From src/lib/models.ts
 interface LeaderboardEntry {
   fid: number;
+  streak: number;
+  last_checkin: string | null;
+  total_checkins?: number;      // All-time total check-ins
+  allTimeStreak?: number;       // Derived longest streak
   username?: string;
   displayName?: string;
   pfp_url?: string;
-  streak?: number;
-  total_checkins?: number;
-  balance?: number;      // CATWALK token balance
-  profileUrl?: string;   // Warpcast profile URL
+  profileUrl?: string;
+  rank: number;
+  // For holdings type:
+  balance?: number;             // CATWALK token balance (added at runtime)
 }
 ```
 

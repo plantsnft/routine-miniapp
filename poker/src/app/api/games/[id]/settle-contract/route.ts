@@ -4,14 +4,246 @@ import { requireAuth } from "~/lib/auth";
 import { pokerDb } from "~/lib/pokerDb";
 import { getClubForGame, requireClubOwner } from "~/lib/pokerPermissions";
 import { isGlobalAdmin } from "~/lib/permissions";
-import { GAME_ESCROW_CONTRACT, BASE_RPC_URL, BASE_USDC_ADDRESS, BASE_CHAIN_ID } from "~/lib/constants";
-import { GAME_ESCROW_ABI } from "~/lib/contracts";
+import { GAME_ESCROW_CONTRACT, BASE_RPC_URL, BASE_USDC_ADDRESS, BASE_CHAIN_ID, PRIZE_DISTRIBUTION_CONTRACT } from "~/lib/constants";
+import { GAME_ESCROW_ABI, PRIZE_DISTRIBUTION_ABI } from "~/lib/contracts";
 import { amountToUnits } from "~/lib/amounts";
 import { logSettlementEvent } from "~/lib/audit-logger";
 import { safeLog } from "~/lib/redaction";
 import { verifyPaymentOnChain } from "~/lib/payment-verifier";
 import { getBaseScanTxUrl } from "~/lib/explorer";
 import type { ApiResponse, Game } from "~/lib/types";
+
+/**
+ * Handle settlement for giveaway wheel games
+ * CRITICAL: Uses Neynar API for wallet addresses (no payment transactions)
+ * CRITICAL: Uses PrizeDistribution contract (not GameEscrow)
+ */
+async function handleWheelGameSettlement(
+  game: Game,
+  gameId: string,
+  fid: number
+): Promise<NextResponse<ApiResponse>> {
+  // Wheel games: winner is already determined
+  const winnerFid = game.wheel_winner_fid;
+  if (!winnerFid) {
+    return NextResponse.json<ApiResponse>(
+      { ok: false, error: 'Wheel not spun yet. Spin the wheel before settling.' },
+      { status: 400 }
+    );
+  }
+
+  // CRITICAL FIX: Use Neynar API for wallet address (no payment tx)
+  const { getAllPlayerWalletAddresses } = await import('~/lib/neynar-wallet');
+  const addresses = await getAllPlayerWalletAddresses(winnerFid);
+
+  if (!addresses || addresses.length === 0) {
+    return NextResponse.json<ApiResponse>(
+      { ok: false, error: `Could not retrieve wallet address for winner FID ${winnerFid}` },
+      { status: 400 }
+    );
+  }
+
+  // Filter out known contract addresses
+  const knownContracts = [
+    GAME_ESCROW_CONTRACT?.toLowerCase(),
+    BASE_USDC_ADDRESS.toLowerCase(),
+  ].filter(Boolean);
+
+  const walletAddresses = addresses.filter(addr =>
+    !knownContracts.includes(addr.toLowerCase())
+  );
+
+  if (walletAddresses.length === 0) {
+    return NextResponse.json<ApiResponse>(
+      { ok: false, error: `No valid wallet address found for winner FID ${winnerFid}` },
+      { status: 400 }
+    );
+  }
+
+  const winnerAddress = walletAddresses[walletAddresses.length - 1]; // Prefer verified
+
+  // Fetch prize configuration for position 1 only (wheel games always have one winner)
+  const prizeConfig = await pokerDb.fetch('game_prizes', {
+    filters: { game_id: gameId, winner_position: 1 },
+    select: '*',
+  });
+
+  if (prizeConfig.length === 0) {
+    return NextResponse.json<ApiResponse>(
+      { ok: false, error: 'No prize configuration found for this game' },
+      { status: 400 }
+    );
+  }
+
+  // Separate token and NFT prizes
+  const tokenPrizes: Array<{recipient: string, amount: bigint, currency: string}> = [];
+  const nftPrizes: Array<{recipient: string, contract: string, tokenId: number}> = [];
+
+  for (const prize of prizeConfig) {
+    if (prize.token_amount) {
+      tokenPrizes.push({
+        recipient: winnerAddress,
+        amount: amountToUnits(prize.token_amount, prize.token_currency || 'USDC'),
+        currency: prize.token_currency || 'USDC',
+      });
+    }
+
+    if (prize.nft_contract_address && prize.nft_token_id) {
+      nftPrizes.push({
+        recipient: winnerAddress,
+        contract: prize.nft_contract_address,
+        tokenId: prize.nft_token_id,
+      });
+    }
+  }
+
+  // CRITICAL FIX: Use PrizeDistribution contract (not GameEscrow)
+  if (!PRIZE_DISTRIBUTION_CONTRACT) {
+    return NextResponse.json<ApiResponse>(
+      { ok: false, error: 'PrizeDistribution contract not configured' },
+      { status: 500 }
+    );
+  }
+
+  // Verify NFT ownership before distribution
+  if (nftPrizes.length > 0) {
+    const { verifyAllNFTsOwned } = await import('~/lib/nft-ops');
+    const verification = await verifyAllNFTsOwned(
+      nftPrizes.map(p => ({ contract: p.contract, tokenId: p.tokenId }))
+    );
+
+    if (!verification.allOwned) {
+      return NextResponse.json<ApiResponse>(
+        { ok: false, error: `NFTs not in master wallet: ${JSON.stringify(verification.missing)}` },
+        { status: 400 }
+      );
+    }
+  }
+
+  // Prepare master wallet signer
+  const masterWalletPrivateKey = process.env.MASTER_WALLET_PRIVATE_KEY;
+  if (!masterWalletPrivateKey) {
+    return NextResponse.json<ApiResponse>(
+      { ok: false, error: 'Master wallet private key not configured' },
+      { status: 500 }
+    );
+  }
+
+  const provider = new ethers.JsonRpcProvider(BASE_RPC_URL);
+  const wallet = new ethers.Wallet(masterWalletPrivateKey, provider);
+
+  const txHashes: string[] = [];
+
+  // Distribute tokens
+  if (tokenPrizes.length > 0) {
+    const tokenContract = tokenPrizes[0].currency === 'USDC'
+      ? BASE_USDC_ADDRESS
+      : tokenPrizes[0].currency;
+
+    const prizeContract = new ethers.Contract(
+      PRIZE_DISTRIBUTION_CONTRACT,
+      PRIZE_DISTRIBUTION_ABI,
+      wallet
+    );
+
+    const recipients = tokenPrizes.map(p => p.recipient);
+    const amounts = tokenPrizes.map(p => p.amount);
+
+    try {
+      const tx = await prizeContract.distributeTokens(
+        gameId,
+        tokenContract,
+        recipients,
+        amounts
+      );
+      await tx.wait();
+      txHashes.push(tx.hash);
+      safeLog('info', '[settle-contract] Token prizes distributed', {
+        gameId,
+        winnerFid,
+        winnerAddress,
+        txHash: tx.hash,
+      });
+    } catch (error: any) {
+      safeLog('error', '[settle-contract] Failed to distribute token prizes', {
+        gameId,
+        winnerFid,
+        error: error.message,
+      });
+      return NextResponse.json<ApiResponse>(
+        { ok: false, error: `Failed to distribute token prizes: ${error.message}` },
+        { status: 500 }
+      );
+    }
+  }
+
+  // Distribute NFTs
+  if (nftPrizes.length > 0) {
+    const prizeContract = new ethers.Contract(
+      PRIZE_DISTRIBUTION_CONTRACT,
+      PRIZE_DISTRIBUTION_ABI,
+      wallet
+    );
+
+    const nftContracts = nftPrizes.map(p => p.contract);
+    const nftTokenIds = nftPrizes.map(p => p.tokenId);
+    const nftRecipients = nftPrizes.map(p => p.recipient);
+
+    try {
+      const tx = await prizeContract.distributeNFTs(
+        gameId,
+        nftContracts,
+        nftTokenIds,
+        nftRecipients
+      );
+      await tx.wait();
+      txHashes.push(tx.hash);
+      safeLog('info', '[settle-contract] NFT prizes distributed', {
+        gameId,
+        winnerFid,
+        winnerAddress,
+        txHash: tx.hash,
+      });
+    } catch (error: any) {
+      safeLog('error', '[settle-contract] Failed to distribute NFT prizes', {
+        gameId,
+        winnerFid,
+        error: error.message,
+      });
+      return NextResponse.json<ApiResponse>(
+        { ok: false, error: `Failed to distribute NFT prizes: ${error.message}` },
+        { status: 500 }
+      );
+    }
+  }
+
+  // Update game status
+  await pokerDb.update('games', { id: gameId }, {
+    status: 'completed',
+    settled_at: new Date().toISOString(),
+  });
+
+  // Log settlement event
+  await logSettlementEvent({
+    gameId,
+    actorFid: fid,
+    winners: [{ fid: winnerFid, address: winnerAddress }],
+    txHashes,
+  });
+
+  return NextResponse.json<ApiResponse<{
+    winnerFid: number;
+    winnerAddress: string;
+    txHashes: string[];
+  }>>({
+    ok: true,
+    data: {
+      winnerFid,
+      winnerAddress,
+      txHashes,
+    },
+  });
+}
 
 /**
  * POST /api/games/[id]/settle-contract
@@ -59,14 +291,14 @@ export async function POST(
     try {
       games = await pokerDb.fetch<Game>('games', {
         filters: { id: gameId },
-        select: 'id,club_id,status,buy_in_amount,buy_in_currency,onchain_game_id,settle_tx_hash,payout_bps',
+        select: 'id,club_id,status,buy_in_amount,buy_in_currency,onchain_game_id,settle_tx_hash,payout_bps,game_type,wheel_winner_fid',
         limit: 1,
       });
     } catch (dbError: any) {
       const errorMessage = dbError?.message || String(dbError);
       // Check for Supabase schema mismatch error (42703)
       if (errorMessage.includes('42703') || errorMessage.includes('does not exist')) {
-        const selectUsed = 'id,club_id,status,buy_in_amount,buy_in_currency,onchain_game_id,settle_tx_hash,payout_bps';
+        const selectUsed = 'id,club_id,status,buy_in_amount,buy_in_currency,onchain_game_id,settle_tx_hash,payout_bps,game_type,wheel_winner_fid';
         safeLog('error', '[settle-contract] DB schema mismatch', { gameId, errorMessage, selectUsed });
         return NextResponse.json<ApiResponse>(
           { 
@@ -89,6 +321,11 @@ export async function POST(
     }
 
     const game = games[0];
+
+    // CRITICAL FIX: Handle wheel games differently (before existing settlement logic)
+    if (game.game_type === 'giveaway_wheel') {
+      return await handleWheelGameSettlement(game, gameId, fid);
+    }
 
     // PRECEDENCE: IDEMPOTENCY - If already settled, return success (no-op)
     if (game.status === 'completed' || game.status === 'settled') {

@@ -128,10 +128,11 @@ export function JoinHellfireBanner({ items, className = '' }: JoinHellfireBanner
         try {
           const { sdk } = await import('@farcaster/miniapp-sdk');
           if (sdk?.actions?.composeCast) {
-            // Use the specific Hellfire games page URL
-            const miniAppUrl = 'https://poker-swart.vercel.app/clubs/hellfire/games';
+            // Use the specific Giveaway Games page URL
+            const { GIVEAWAY_GAMES_CLUB_SLUG } = await import('~/lib/constants');
+            const miniAppUrl = `https://poker-swart.vercel.app/clubs/${GIVEAWAY_GAMES_CLUB_SLUG}/games`;
             await sdk.actions.composeCast({
-              text: 'i would like to join the hellfire poker club @tormental.. view the mini app here to get in on the action',
+              text: 'i would like to join giveaway games @tormental.. view the mini app here to get in on the action',
               embeds: [miniAppUrl],
             });
           }

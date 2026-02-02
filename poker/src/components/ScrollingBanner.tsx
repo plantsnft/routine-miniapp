@@ -94,7 +94,7 @@ export function ScrollingBanner() {
 
   // Create alternating banner items with poker chips
   const bannerItems = useMemo(() => {
-    const message1 = 'Welcome to Hellfire Club';
+    const message1 = 'Welcome to Giveaway Games';
     const message2 = 'Add the mini app with notifications on for the latest on new';
     const message3 = 'Join games below';
     const messages = [message1, message2, message3];

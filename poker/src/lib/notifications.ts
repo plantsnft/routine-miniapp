@@ -1,5 +1,5 @@
 /**
- * Push notification utilities for Hellfire Poker
+ * Push notification utilities for Giveaway Games
  * 
  * Uses Farcaster Mini App native notification system:
  * - Sends notifications to stored URLs with tokens (from webhook events)

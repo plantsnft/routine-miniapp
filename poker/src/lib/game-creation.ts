@@ -424,7 +424,7 @@ export async function createGameFromPayload(
         const results = await sendBulkNotifications(
           subscriberFids,
           {
-            title: 'New Hellfire Poker game',
+            title: 'New Giveaway Games game',
             body: notificationBody,
             targetUrl: new URL(`/games/${game.id}?fromNotif=game_created`, APP_URL).href,
           },

@@ -51,7 +51,7 @@ export async function GET(request: Request) {
             isEligible: true,
             hasClaimed: !!creatorData[0].claimed_at,
             castHash: creatorData[0].cast_hash,
-            rewardAmount: parseFloat(creatorData[0].reward_amount || "500000"),
+            rewardAmount: parseFloat(creatorData[0].reward_amount || "1000000"),
             transactionHash: creatorData[0].transaction_hash || undefined,
             verifiedAt: creatorData[0].verified_at,
           };

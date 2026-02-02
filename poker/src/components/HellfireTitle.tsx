@@ -13,7 +13,7 @@ interface HellfireTitleProps {
  * Premium animated fire title with smoke particles
  * Features: ember gradient text, subtle flicker, heat shimmer, continuous smoke emission, scroll-reactive wind
  */
-export function HellfireTitle({ text = 'Hellfire Poker Club', className = '' }: HellfireTitleProps) {
+export function HellfireTitle({ text = 'Giveaway Games', className = '' }: HellfireTitleProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const smokeSystemRef = useRef<SmokeSystem | null>(null);
@@ -114,7 +114,7 @@ export function HellfireTitle({ text = 'Hellfire Poker Club', className = '' }: 
     const deltaTime = now - lastTimeRef.current;
     lastTimeRef.current = now;
 
-    // Get container bounds for spawn points (weighted more on "Hellfire")
+    // Get container bounds for spawn points
     const container = containerRef.current;
     if (!container) return;
 
@@ -126,10 +126,10 @@ export function HellfireTitle({ text = 'Hellfire Poker Club', className = '' }: 
     // Spawn points: evenly distributed across the text for more realistic smoke
     const spawnPoints = [
       { x: containerLeft + containerWidth * 0.1, y: containerTop - 5, weight: 1.0 },  // Left edge
-      { x: containerLeft + containerWidth * 0.25, y: containerTop - 5, weight: 1.0 }, // "Hellfire"
-      { x: containerLeft + containerWidth * 0.4, y: containerTop - 5, weight: 1.0 },  // "Poker"
+      { x: containerLeft + containerWidth * 0.25, y: containerTop - 5, weight: 1.0 }, // Left quarter
+      { x: containerLeft + containerWidth * 0.4, y: containerTop - 5, weight: 1.0 },  // Center-left
       { x: containerLeft + containerWidth * 0.55, y: containerTop - 5, weight: 1.0 }, // Middle
-      { x: containerLeft + containerWidth * 0.7, y: containerTop - 5, weight: 1.0 },  // "Club"
+      { x: containerLeft + containerWidth * 0.7, y: containerTop - 5, weight: 1.0 },  // Center-right
       { x: containerLeft + containerWidth * 0.85, y: containerTop - 5, weight: 1.0 }, // Right edge
     ];
 

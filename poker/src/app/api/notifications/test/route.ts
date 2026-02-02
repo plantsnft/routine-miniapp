@@ -3,13 +3,13 @@
  * Send a test push notification to the authenticated user only
  * 
  * SAFETY: Uses requireAuth() - FID comes only from verified JWT
- * Gate: Only allows HELLFIRE_OWNER_FID if configured (optional safety)
+ * Gate: Only allows GIVEAWAY_GAMES_OWNER_FID if configured (optional safety)
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "~/lib/auth";
 import { sendBulkNotifications, generateNotificationId } from "~/lib/notifications";
-import { HELLFIRE_OWNER_FID } from "~/lib/constants";
+import { GIVEAWAY_GAMES_OWNER_FID } from "~/lib/constants";
 import { safeLog } from "~/lib/redaction";
 import type { ApiResponse } from "~/lib/types";
 
@@ -28,8 +28,8 @@ export async function POST(req: NextRequest) {
     // SAFETY: Require authentication - FID comes only from verified JWT
     const { fid } = await requireAuth(req);
 
-    // Optional gate: only allow HELLFIRE_OWNER_FID if configured
-    if (HELLFIRE_OWNER_FID !== null && fid !== HELLFIRE_OWNER_FID) {
+    // Optional gate: only allow GIVEAWAY_GAMES_OWNER_FID if configured
+    if (GIVEAWAY_GAMES_OWNER_FID !== null && fid !== GIVEAWAY_GAMES_OWNER_FID) {
       return NextResponse.json<ApiResponse>(
         { ok: false, error: 'Test endpoint restricted to owner' },
         { status: 403 }
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
       [fid],
       {
         title: 'Test Notification',
-        body: 'This is a test push notification from Hellfire Poker',
+        body: 'This is a test push notification from Giveaway Games',
         targetUrl: `${process.env.NEXT_PUBLIC_BASE_URL || 'https://poker-swart.vercel.app'}/clubs`,
       },
       notificationId

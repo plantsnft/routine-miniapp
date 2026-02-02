@@ -19,6 +19,7 @@ const VALID_POKER_TABLES = new Set([
   'notification_subscriptions',
   'notification_events',
   'game_requests',
+  'game_prizes', // For NFT and prize configuration
 ] as const);
 
 type PokerTableName = (typeof VALID_POKER_TABLES extends Set<infer T> ? T : never);

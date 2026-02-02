@@ -12,6 +12,38 @@ const POSITIONS = ["PG", "SG", "SF", "PF", "C"] as const;
 const TIERS = ["good", "great", "elite"] as const;
 const AFFINITIES = ["StrongVsZone", "StrongVsMan"] as const;
 
+// Type definitions for database records (with auto-generated id)
+interface Team {
+  id: string;
+  name: string;
+  owner_profile_id: string;
+  prep_boost_active: boolean;
+  created_at?: string;
+}
+
+interface Profile {
+  id: string;
+  auth_type: "farcaster" | "email";
+  farcaster_fid: number | null;
+  email: string | null;
+  is_admin: boolean;
+  created_at?: string;
+}
+
+interface Player {
+  id: string;
+  team_id: string;
+  name: string;
+  position: string;
+  tier: string;
+  rating: number;
+  age: number;
+  affinity: string;
+  salary_m: number;
+  contract_years_remaining: number;
+  created_at?: string;
+}
+
 /**
  * Phase 2: League Initialization
  * 
@@ -64,18 +96,18 @@ export async function POST(req: NextRequest) {
     }
 
     // Step 2: Create 4 profiles (3 Farcaster + 1 email)
-    const profiles = [];
+    const profiles: Profile[] = [];
 
     // Create Farcaster profiles
     for (const username of FARCASTER_USERNAMES) {
       // Check if profile already exists
-      const existing = await basketballDb.fetch("profiles", {
+      const existing = await basketballDb.fetch<Profile>("profiles", {
         filters: { farcaster_fid: fids[username] },
         limit: 1,
       });
 
       if (existing.length === 0) {
-        const profile = await basketballDb.insert("profiles", {
+        const profile = await basketballDb.insert<{ auth_type: "farcaster"; farcaster_fid: number; email: null; is_admin: boolean }, Profile>("profiles", {
           auth_type: "farcaster",
           farcaster_fid: fids[username],
           email: null,
@@ -88,13 +120,13 @@ export async function POST(req: NextRequest) {
     }
 
     // Create email profile
-    const existingEmail = await basketballDb.fetch("profiles", {
+    const existingEmail = await basketballDb.fetch<Profile>("profiles", {
       filters: { email: EMAIL_USER },
       limit: 1,
     });
 
     if (existingEmail.length === 0) {
-      const emailProfile = await basketballDb.insert("profiles", {
+      const emailProfile = await basketballDb.insert<{ auth_type: "email"; email: string; farcaster_fid: null; is_admin: boolean }, Profile>("profiles", {
         auth_type: "email",
         email: EMAIL_USER,
         farcaster_fid: null,
@@ -114,9 +146,9 @@ export async function POST(req: NextRequest) {
 
     // Step 3: Create 4 teams with names: Houston, Atlanta, Vegas, NYC
     // Assign teams to profiles in order: Houston → first, Atlanta → second, Vegas → third, NYC → fourth
-    const teams = [];
+    const teams: Team[] = [];
     for (let i = 0; i < 4; i++) {
-      const team = await basketballDb.insert("teams", {
+      const team = await basketballDb.insert<{ name: string; owner_profile_id: string; prep_boost_active: boolean }, Team>("teams", {
         name: TEAM_NAMES[i],
         owner_profile_id: profiles[i].id,
         prep_boost_active: false,
@@ -169,7 +201,7 @@ export async function POST(req: NextRequest) {
       return Math.floor(Math.random() * 5) + 22; // 22-26
     };
 
-    const players = [];
+    const players: Player[] = [];
     let nameIndex = 0;
 
     for (let teamIndex = 0; teamIndex < 4; teamIndex++) {
@@ -188,7 +220,7 @@ export async function POST(req: NextRequest) {
         const name = availableNames[nameIndex++];
         const affinity = AFFINITIES[Math.floor(Math.random() * AFFINITIES.length)];
 
-        const player = await basketballDb.insert("players", {
+        const player = await basketballDb.insert<{ team_id: string; name: string; position: string; tier: string; rating: number; age: number; affinity: string; salary_m: number; contract_years_remaining: number }, Player>("players", {
           team_id: team.id,
           name: name,
           position: position,

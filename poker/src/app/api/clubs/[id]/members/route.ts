@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "~/lib/auth";
 import { pokerDb } from "~/lib/pokerDb";
-import { requireClubMember, requireClubOwner, requireHellfireClub } from "~/lib/pokerPermissions";
+import { requireClubMember, requireClubOwner, requireGiveawayGamesClub } from "~/lib/pokerPermissions";
 import type { ApiResponse, ClubMember } from "~/lib/types";
 
 /**
@@ -19,8 +19,8 @@ export async function GET(
   try {
     const { id: clubId } = await params;
     
-    // MVP-only: Require Hellfire club
-    await requireHellfireClub(clubId);
+    // MVP-only: Require Giveaway Games club
+    await requireGiveawayGamesClub(clubId);
     
     // SAFETY: Require authentication - FID comes only from verified JWT
     const { fid } = await requireAuth(req);
@@ -84,8 +84,8 @@ export async function POST(
   try {
     const { id: clubId } = await params;
     
-    // MVP-only: Require Hellfire club
-    await requireHellfireClub(clubId);
+    // MVP-only: Require Giveaway Games club
+    await requireGiveawayGamesClub(clubId);
     
     // SAFETY: Require authentication - FID comes only from verified JWT
     const { fid } = await requireAuth(req);

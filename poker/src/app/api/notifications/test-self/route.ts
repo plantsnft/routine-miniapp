@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
       [fid],
       {
         title: 'Test Notification',
-        body: 'This is a test push notification from Hellfire Poker',
+        body: 'This is a test push notification from Giveaway Games',
         targetUrl: `${APP_URL}/clubs`,
       },
       notificationId

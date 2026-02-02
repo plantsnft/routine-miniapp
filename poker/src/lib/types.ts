@@ -1,5 +1,5 @@
 /**
- * Shared TypeScript types and interfaces for the Poker app.
+ * Shared TypeScript types and interfaces for Giveaway Games.
  */
 
 /**
@@ -84,6 +84,39 @@ export interface ClubMember {
 export type GatingType = 'entry_fee' | 'stake_threshold' | 'open';
 
 /**
+ * Game type: poker or giveaway_wheel
+ */
+export type GameType = 'poker' | 'giveaway_wheel';
+
+/**
+ * Prize type: tokens, nfts, or mixed
+ */
+export type PrizeType = 'tokens' | 'nfts' | 'mixed';
+
+/**
+ * NFT prize configuration
+ */
+export interface NFTPrize {
+  contract_address: string;
+  token_id: number;
+  metadata?: {
+    name?: string;
+    image_url?: string;
+    description?: string;
+  };
+}
+
+/**
+ * Prize configuration per winner position
+ */
+export interface PrizeConfiguration {
+  position: number; // 1 = first place, 2 = second place, etc.
+  token_amount?: number | null;
+  token_currency?: string | null;
+  nfts?: NFTPrize[] | null;
+}
+
+/**
  * Game status.
  * Matches poker.games schema: 'open', 'full', 'in_progress', 'completed', 'cancelled'
  * Also supports: 'scheduled', 'settled' for backward compatibility
@@ -129,10 +162,20 @@ export interface Game {
   is_prefunded?: boolean | null;
   prefunded_at?: string | null;
   // Game type and registration
-  game_type?: 'standard' | 'large_event' | null;
+  game_type?: GameType | 'standard' | 'large_event' | null; // 'poker' | 'giveaway_wheel' | 'standard' | 'large_event'
   registration_close_minutes?: number | null;
   max_participants?: number | null;
   payout_bps?: number[] | null; // Basis points for payout distribution
+  // Prize configuration
+  prize_type?: PrizeType | null; // 'tokens' | 'nfts' | 'mixed'
+  // Wheel game configuration
+  wheel_background_color?: string | null;
+  wheel_segment_type?: 'equal' | 'weighted' | null;
+  wheel_image_urls?: string[] | null;
+  wheel_participant_weights?: Record<number, number> | null; // Map of FID to weight
+  wheel_removed_participants?: number[] | null; // Array of FIDs removed before spin
+  wheel_winner_fid?: number | null; // Winner FID (set after spin)
+  wheel_spun_at?: string | null; // Timestamp when wheel was spun
   // Settlement tracking
   settled_at?: string | null;
   can_settle_at?: string | null;

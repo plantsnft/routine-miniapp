@@ -157,11 +157,11 @@ export async function getFarcasterDomainManifest(
   // Build miniapp object with only safe fields
   const miniappConfig: any = {
     version: '1' as const,
-    name: process.env.APP_NAME || 'Poker Lobby',
+    name: process.env.APP_NAME || 'Giveaway Games',
     homeUrl: appUrl,
     iconUrl,
     // Include description (default if not set)
-    description: process.env.APP_DESCRIPTION || 'Play poker games on Farcaster',
+    description: process.env.APP_DESCRIPTION || 'Create games on ClubGG and give away tokens or NFTs to winners',
     // Safe optional fields (only include if set)
     ...(process.env.APP_SUBTITLE && { subtitle: process.env.APP_SUBTITLE }),
     ...(process.env.APP_PRIMARY_CATEGORY && { primaryCategory: process.env.APP_PRIMARY_CATEGORY }),

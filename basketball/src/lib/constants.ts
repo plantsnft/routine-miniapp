@@ -27,10 +27,13 @@ export const APP_DESCRIPTION = process.env.APP_DESCRIPTION || "Daily basketball 
 // Neynar API
 export const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY || "";
 
-// Team names (in order of assignment)
+// Historical Mode: Team names will come from MaxPreps data
+// Team names are now dynamic based on historical_year
+// This constant is kept for backward compatibility but will be replaced
 export const TEAM_NAMES = ["Houston", "Atlanta", "Vegas", "NYC"] as const;
 
-// UVA Player Names (1980-1986 era) - 25 unique names
+// UVA Player Names (1980-1986 era) - DEPRECATED: Now using real historical players
+// Kept for reference but not used in historical mode
 export const UVA_PLAYER_NAMES_1980_1986 = [
   "Ralph Sampson",
   "Othell Wilson",
@@ -59,6 +62,16 @@ export const UVA_PLAYER_NAMES_1980_1986 = [
   "John Johnson",
 ] as const;
 
-// Initial team owners
-export const FARCASTER_USERNAMES = ["catwalk", "farville", "plantsnft"] as const;
+// Initial team owners (6 teams for historical mode)
+export const FARCASTER_USERNAMES = ["catwalk", "farville", "plantsnft", "librarian", "monument"] as const;
+export const FARCASTER_FIDS = {
+  catwalk: 871872,
+  farville: 967647,
+  plantsnft: 318447,
+  librarian: 623879,
+  monument: 624048,
+} as const;
 export const EMAIL_USER = "cpjets07@yahoo.com";
+
+// Team assignment: College Park → plantsnft (FID 318447), rest random
+export const COLLEGE_PARK_OWNER_FID = 318447; // plantsnft

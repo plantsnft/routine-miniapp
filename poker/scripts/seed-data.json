@@ -1,14 +1,14 @@
 {
   "clubs": [
     {
-      "slug": "hellfire",
-      "name": "Hellfire Club",
-      "description": "Tormental's poker club",
+      "slug": "giveaway-games",
+      "name": "Giveaway Games",
+      "description": "Run games on ClubGG and give away tokens or art",
       "owner_fid": 318447
     }
   ],
   "members": {
-    "hellfire": [
+    "giveaway-games": [
       318447
     ]
   }

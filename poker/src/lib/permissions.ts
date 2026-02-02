@@ -8,7 +8,7 @@ import type { Club } from './types';
 import { TORMENTAL_FID } from './constants';
 
 /**
- * Global admin FIDs (hardcoded allowlist for Hellfire-only MVP)
+ * Global admin FIDs (hardcoded allowlist for Giveaway Games MVP)
  * Only Plants (318447) and Tormental (from TORMENTAL_FID env var) have global admin access
  */
 export const GLOBAL_ADMIN_FIDS = [

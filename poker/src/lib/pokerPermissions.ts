@@ -1,7 +1,7 @@
 /**
- * Poker-specific permission checking utilities
+ * Game-specific permission checking utilities
  * 
- * These helpers enforce permission checks for poker operations:
+ * These helpers enforce permission checks for game operations:
  * - Global admins can do everything
  * - Club owners can manage their clubs
  * - Club members can participate in their clubs' games
@@ -9,20 +9,20 @@
 
 import { pokerDb } from './pokerDb';
 import { isGlobalAdmin } from './permissions';
-import { HELLFIRE_CLUB_SLUG } from './constants';
+import { GIVEAWAY_GAMES_CLUB_SLUG } from './constants';
 
 // Re-export for convenience
 export { isGlobalAdmin } from './permissions';
 
 /**
- * Validate that a club is Hellfire (MVP-only restriction)
- * Throws error if club is not Hellfire
+ * Validate that a club is Giveaway Games (MVP-only restriction)
+ * Throws error if club is not Giveaway Games
  */
-export async function requireHellfireClub(clubIdOrSlug: string): Promise<void> {
+export async function requireGiveawayGamesClub(clubIdOrSlug: string): Promise<void> {
   try {
     // UUIDs have format: 8-4-4-4-12 hex digits with dashes
-    // Slugs are short strings like "hellfire"
-    // Check if it's a slug by seeing if it matches HELLFIRE_CLUB_SLUG or doesn't look like a UUID
+    // Slugs are short strings like "giveaway-games"
+    // Check if it's a slug by seeing if it matches GIVEAWAY_GAMES_CLUB_SLUG or doesn't look like a UUID
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clubIdOrSlug);
     
     const club = await pokerDb.fetch('clubs', {
@@ -30,11 +30,11 @@ export async function requireHellfireClub(clubIdOrSlug: string): Promise<void> {
       limit: 1,
     });
     
-    if (club.length === 0 || (club[0] as any).slug !== HELLFIRE_CLUB_SLUG) {
-      throw new Error('Only Hellfire club is supported in MVP');
+    if (club.length === 0 || (club[0] as any).slug !== GIVEAWAY_GAMES_CLUB_SLUG) {
+      throw new Error('Only Giveaway Games club is supported in MVP');
     }
   } catch (error: any) {
-    if (error.message?.includes('Hellfire')) {
+    if (error.message?.includes('Giveaway Games')) {
       throw error;
     }
     throw new Error('Club not found');

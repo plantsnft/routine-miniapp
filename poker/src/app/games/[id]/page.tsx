@@ -538,7 +538,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         const { APP_URL } = await import('~/lib/constants');
         const url = APP_URL + `/games/${id}`;
         await sdk.actions.composeCast({
-          text: 'Join my poker game',
+          text: 'Join my game',
           embeds: [url],
         });
       } else {

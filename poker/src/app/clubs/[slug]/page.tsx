@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useAuth } from '~/components/AuthProvider';
 import { authedFetch } from '~/lib/authedFetch';
 import { isClubOwnerOrAdmin } from '~/lib/permissions';
+import { GIVEAWAY_GAMES_CLUB_SLUG } from '~/lib/constants';
 import type { Club, ClubMember, User } from '~/lib/types';
 
 export default function ClubPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -35,20 +36,20 @@ export default function ClubPage({ params }: { params: Promise<{ slug: string }>
     try {
       setLoading(true);
       
-      // MVP-only: Only Hellfire club is supported
-      if (slug !== 'hellfire') {
-        setError('Only Hellfire club is supported in MVP');
+      // MVP-only: Only Giveaway Games club is supported
+      if (slug !== GIVEAWAY_GAMES_CLUB_SLUG) {
+        setError('Only Giveaway Games club is supported in MVP');
         return;
       }
       
-      // Fetch Hellfire club (requires auth)
+      // Fetch Giveaway Games club (requires auth)
       const clubsRes = await authedFetch('/api/clubs', { method: 'GET' }, token);
       if (!clubsRes.ok) throw new Error('Failed to fetch clubs');
       const clubsData = await clubsRes.json();
-      const foundClub = clubsData.data?.[0]; // Should only be Hellfire
+      const foundClub = clubsData.data?.[0]; // Should only be Giveaway Games
       
-      if (!foundClub || foundClub.slug !== 'hellfire') {
-        setError('Hellfire club not found');
+      if (!foundClub || foundClub.slug !== GIVEAWAY_GAMES_CLUB_SLUG) {
+        setError('Giveaway Games club not found');
         return;
       }
       setClub(foundClub);

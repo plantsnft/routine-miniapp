@@ -119,3 +119,46 @@ export const ERC20_ABI = [
   },
 ] as const;
 
+// PrizeDistribution contract ABI (for NFT and token prize distribution)
+export const PRIZE_DISTRIBUTION_ABI = [
+  {
+    inputs: [
+      { internalType: 'string', name: 'gameId', type: 'string' },
+      { internalType: 'address', name: 'tokenContract', type: 'address' },
+      { internalType: 'address[]', name: 'recipients', type: 'address[]' },
+      { internalType: 'uint256[]', name: 'amounts', type: 'uint256[]' },
+    ],
+    name: 'distributeTokens',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { internalType: 'string', name: 'gameId', type: 'string' },
+      { internalType: 'address[]', name: 'nftContracts', type: 'address[]' },
+      { internalType: 'uint256[]', name: 'tokenIds', type: 'uint256[]' },
+      { internalType: 'address[]', name: 'recipients', type: 'address[]' },
+    ],
+    name: 'distributeNFTs',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { internalType: 'string', name: 'gameId', type: 'string' },
+      { internalType: 'address', name: 'tokenContract', type: 'address' },
+      { internalType: 'address[]', name: 'tokenRecipients', type: 'address[]' },
+      { internalType: 'uint256[]', name: 'tokenAmounts', type: 'uint256[]' },
+      { internalType: 'address[]', name: 'nftContracts', type: 'address[]' },
+      { internalType: 'uint256[]', name: 'nftTokenIds', type: 'uint256[]' },
+      { internalType: 'address[]', name: 'nftRecipients', type: 'address[]' },
+    ],
+    name: 'distributeMixedPrizes',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+] as const;
+

@@ -18,11 +18,11 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Poker Lobby",
-  description: "Find poker games on Farcaster",
+  title: "Giveaway Games",
+  description: "Run games on ClubGG and give away tokens or art",
   openGraph: {
-    title: "Poker Lobby",
-    description: "Find poker games on Farcaster",
+    title: "Giveaway Games",
+    description: "Run games on ClubGG and give away tokens or art",
     images: ['https://imgur.com/qqNbLzq'],
   },
   other: {

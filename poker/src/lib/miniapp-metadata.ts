@@ -11,7 +11,7 @@ export function getMiniAppEmbedMetadata(baseUrl: string) {
       title: 'Open Mini App',
       action: {
         type: 'launch_frame',
-        name: 'Poker Lobby',
+        name: 'Giveaway Games',
         url: baseUrl,
         splashImageUrl: 'https://imgur.com/qqNbLzq',
         splashBackgroundColor: '#111111',

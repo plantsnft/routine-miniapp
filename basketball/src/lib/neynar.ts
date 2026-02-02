@@ -20,7 +20,7 @@ export function getNeynarClient() {
 export async function fetchFidByUsername(username: string): Promise<number | null> {
   try {
     const client = getNeynarClient();
-    const result = await client.searchUser(username);
+    const result = await client.searchUser({ q: username });
     
     if (result.result?.users && result.result.users.length > 0) {
       return result.result.users[0].fid;

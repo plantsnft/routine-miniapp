@@ -3,7 +3,15 @@ import { createClient } from "@supabase/supabase-js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "~/lib/constants";
 import { basketballDb } from "~/lib/basketballDb";
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+/**
+ * Create Supabase client lazily (only when route handler runs, not during build)
+ */
+function getSupabaseClient() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    throw new Error("Supabase configuration missing. SUPABASE_URL and SUPABASE_ANON_KEY must be set.");
+  }
+  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
 
 /**
  * Handle Supabase Auth callback after email magic link click
@@ -15,6 +23,7 @@ export async function GET(req: NextRequest) {
   const next = searchParams.get("next") || "/dashboard";
 
   if (token_hash && type) {
+    const supabase = getSupabaseClient();
     const { data, error } = await supabase.auth.verifyOtp({
       type: type as any,
       token_hash,
@@ -40,6 +49,11 @@ export async function GET(req: NextRequest) {
               is_admin: true, // MVP: all users are admin
             });
           }
+          
+          // Store email in URL param for dashboard (MVP approach)
+          const dashboardUrl = new URL(next, req.url);
+          dashboardUrl.searchParams.set("email", email);
+          return NextResponse.redirect(dashboardUrl);
         } catch (err) {
           console.error("[Auth Callback] Error creating profile:", err);
         }

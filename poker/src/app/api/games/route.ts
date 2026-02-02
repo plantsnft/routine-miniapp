@@ -170,6 +170,14 @@ export async function POST(req: NextRequest) {
       prefunded_at,
       can_settle_at,
       max_participants,
+      // New fields for NFT and wheel features
+      game_type: bodyGameType,
+      prize_type,
+      prize_configuration,
+      wheel_background_color,
+      wheel_segment_type,
+      wheel_image_urls,
+      wheel_participant_weights,
     } = body;
 
     if (!club_id) {
@@ -181,9 +189,9 @@ export async function POST(req: NextRequest) {
 
     // SAFETY: Require club ownership
     const { requireClubOwner } = await import("~/lib/pokerPermissions");
-    // MVP-only: Require Hellfire club
-    const { requireHellfireClub } = await import("~/lib/pokerPermissions");
-    await requireHellfireClub(club_id);
+    // MVP-only: Require Giveaway Games club
+    const { requireGiveawayGamesClub } = await import("~/lib/pokerPermissions");
+    await requireGiveawayGamesClub(club_id);
     
     await requireClubOwner(fid, club_id);
 
@@ -286,11 +294,31 @@ export async function POST(req: NextRequest) {
     const { isAdmin } = await import('~/lib/admin');
     const userIsAdmin = isAdmin(fid);
     
-    // Infer game_type from max_participants: if blank and admin, treat as open-registration (large_event)
-    // Otherwise, use provided game_type or default to standard
-    let gameType: 'standard' | 'large_event' = body.game_type === 'large_event' ? 'large_event' : 'standard';
+    // Validate game type: 'poker' | 'giveaway_wheel' | 'standard' | 'large_event'
+    // CRITICAL: Handle new game types (poker, giveaway_wheel) vs legacy types (standard, large_event)
+    let gameType: 'poker' | 'giveaway_wheel' | 'standard' | 'large_event';
+    
+    if (bodyGameType === 'giveaway_wheel' || bodyGameType === 'poker') {
+      // New game types
+      gameType = bodyGameType;
+    } else if (bodyGameType === 'large_event') {
+      // Legacy type
+      gameType = 'large_event';
+    } else {
+      // Default: infer from max_participants or default to standard
+      gameType = body.game_type === 'large_event' ? 'large_event' : 'standard';
+    }
+    
+    // Validate game type
+    if (gameType !== 'poker' && gameType !== 'giveaway_wheel' && gameType !== 'standard' && gameType !== 'large_event') {
+      return NextResponse.json<ApiResponse>(
+        { ok: false, error: `Invalid game_type: ${gameType}. Must be "poker", "giveaway_wheel", "standard", or "large_event"` },
+        { status: 400 }
+      );
+    }
     
     // If max_participants is missing/null/empty and user is admin, infer large_event (open-registration)
+    // CRITICAL: Don't override explicitly set game types (poker, giveaway_wheel)
     const maxParticipantsValue = max_participants;
     const isMaxBlank = maxParticipantsValue === null || 
                        maxParticipantsValue === undefined || 
@@ -299,7 +327,8 @@ export async function POST(req: NextRequest) {
                        String(maxParticipantsValue).trim() === '' ||
                        String(maxParticipantsValue).trim() === '0';
     
-    if (isMaxBlank && userIsAdmin) {
+    // Only infer large_event if game type wasn't explicitly set to poker or giveaway_wheel
+    if (isMaxBlank && userIsAdmin && gameType !== 'poker' && gameType !== 'giveaway_wheel') {
       gameType = 'large_event'; // Open-registration mode
     }
     
@@ -354,6 +383,66 @@ export async function POST(req: NextRequest) {
     const entryFeeAmountParsed = entry_fee_amount ? parseFloat(String(entry_fee_amount)) : 0;
     const determinedGatingType = entryFeeAmountParsed > 0 && entry_fee_currency ? 'entry_fee' : 'open';
     
+    // CRITICAL FIX: Validate prize configuration if provided
+    if (prize_type) {
+      if (!['tokens', 'nfts', 'mixed'].includes(prize_type)) {
+        return NextResponse.json<ApiResponse>(
+          { ok: false, error: 'Invalid prize_type. Must be "tokens", "nfts", or "mixed"' },
+          { status: 400 }
+        );
+      }
+      
+      // Validate prize_configuration array
+      if (prize_configuration && Array.isArray(prize_configuration)) {
+        // Sort by position
+        const sorted = prize_configuration.sort((a: any, b: any) => a.position - b.position);
+        
+        // Validate positions are sequential (1, 2, 3, ...)
+        for (let i = 0; i < sorted.length; i++) {
+          if (sorted[i].position !== i + 1) {
+            return NextResponse.json<ApiResponse>(
+              { ok: false, error: `Prize positions must be sequential starting from 1. Found position ${sorted[i].position} at index ${i}` },
+              { status: 400 }
+            );
+          }
+        }
+        
+        // Validate each prize
+        const { ethers } = await import('ethers');
+        for (const prize of sorted) {
+          // Validate token amounts
+          if (prize.token_amount !== null && prize.token_amount !== undefined) {
+            const amount = parseFloat(String(prize.token_amount));
+            if (isNaN(amount) || amount <= 0) {
+              return NextResponse.json<ApiResponse>(
+                { ok: false, error: `Invalid token_amount for position ${prize.position}: must be positive number` },
+                { status: 400 }
+              );
+            }
+          }
+          
+          // Validate NFTs
+          if (prize.nfts && Array.isArray(prize.nfts)) {
+            for (const nft of prize.nfts) {
+              if (!ethers.isAddress(nft.contract_address)) {
+                return NextResponse.json<ApiResponse>(
+                  { ok: false, error: `Invalid NFT contract address for position ${prize.position}: ${nft.contract_address}` },
+                  { status: 400 }
+                );
+              }
+              const tokenId = parseInt(String(nft.token_id), 10);
+              if (isNaN(tokenId) || tokenId < 0) {
+                return NextResponse.json<ApiResponse>(
+                  { ok: false, error: `Invalid NFT token ID for position ${prize.position}: must be non-negative integer` },
+                  { status: 400 }
+                );
+              }
+            }
+          }
+        }
+      }
+    }
+    
     const gameData: any = {
       club_id,
       name: title || defaultName, // Database uses 'name', API uses 'title'
@@ -372,6 +461,12 @@ export async function POST(req: NextRequest) {
       creds_ciphertext,
       creds_iv,
       creds_version,
+      // Prize and wheel configuration
+      prize_type: prize_type || 'tokens',
+      wheel_background_color: wheel_background_color || '#FF3B1A',
+      wheel_segment_type: wheel_segment_type || 'equal',
+      wheel_image_urls: wheel_image_urls || [],
+      wheel_participant_weights: wheel_participant_weights || null,
     };
     
     // Add payout_bps if provided (payout structure as basis points array)
@@ -395,6 +490,9 @@ export async function POST(req: NextRequest) {
 
     // Determine if this is a paid game (requires on-chain registration)
     const isPaidGame = entry_fee_amount && parseFloat(String(entry_fee_amount)) > 0;
+    
+    // CRITICAL FIX: Skip on-chain game creation for wheel games without entry fees
+    const needsOnChainCreation = isPaidGame && gameType !== 'giveaway_wheel';
     
     // Insert game with select to return creds fields for immediate validation (atomic operation)
     // If password was provided, we need to verify creds were persisted before proceeding
@@ -470,10 +568,51 @@ export async function POST(req: NextRequest) {
       fid,
     });
 
+    // Store prize configuration in game_prizes table (before on-chain creation)
+    if (prize_configuration && Array.isArray(prize_configuration)) {
+      const sorted = prize_configuration.sort((a: any, b: any) => a.position - b.position);
+      
+      for (const prize of sorted) {
+        // Handle multiple NFTs per position
+        if (prize.nfts && Array.isArray(prize.nfts)) {
+          for (const nft of prize.nfts) {
+            await pokerDb.insert('game_prizes', {
+              game_id: game.id,
+              winner_position: prize.position,
+              token_amount: prize.token_amount || null,
+              token_currency: prize.token_currency || null,
+              nft_contract_address: nft.contract_address,
+              nft_token_id: nft.token_id,
+              nft_metadata: nft.metadata || null,
+            });
+          }
+        } else {
+          // No NFTs, just token prize
+          await pokerDb.insert('game_prizes', {
+            game_id: game.id,
+            winner_position: prize.position,
+            token_amount: prize.token_amount || null,
+            token_currency: prize.token_currency || null,
+            nft_contract_address: null,
+            nft_token_id: null,
+            nft_metadata: null,
+          });
+        }
+      }
+      
+      safeLog('info', '[games] Prize configuration stored', {
+        correlationId,
+        gameId: game.id,
+        prizeCount: sorted.length,
+        fid,
+      });
+    }
+
     // Set initial on-chain status (using game.id as onchain_game_id)
     const onchainGameId = game.id; // Canonical mapping: DB games.id → on-chain gameId
     
-    if (isPaidGame) {
+    // CRITICAL FIX: Only set on-chain status for games that need on-chain creation
+    if (needsOnChainCreation) {
       // Update with pending status and onchain_game_id
       await pokerDb.update('games', 
         { id: game.id },
@@ -485,7 +624,7 @@ export async function POST(req: NextRequest) {
         }
       );
     } else {
-      // Free games don't need on-chain registration
+      // Free games and wheel games without entry fees don't need on-chain registration
       await pokerDb.update('games',
         { id: game.id },
         {
@@ -497,8 +636,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // For paid games, register on-chain
-    if (isPaidGame && game.id) {
+    // CRITICAL FIX: Only register on-chain if needed (skip for wheel games without entry fees)
+    if (needsOnChainCreation && game.id) {
       const correlationId = getCorrelationId(req); // Define outside try block so it's available in catch
       try {
         const { createGameOnContract } = await import('~/lib/contract-ops');
@@ -629,7 +768,7 @@ export async function POST(req: NextRequest) {
           const results = await sendBulkNotifications(
             subscriberFids,
             {
-              title: 'New Hellfire Poker game',
+              title: 'New Giveaway Games game',
               body: notificationBody,
               targetUrl: new URL(`/games/${game.id}?fromNotif=game_created`, APP_URL).href,
             },

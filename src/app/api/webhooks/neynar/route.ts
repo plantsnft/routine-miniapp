@@ -224,6 +224,36 @@ export async function POST(req: NextRequest) {
             webhookMetrics.byEventType['cast.created'].written++;
             webhookMetrics.eventsWritten++;
             processed = true;
+
+            // Also create creator_claim so the author can claim their 1M CATWALK reward
+            try {
+              const { data: existingClaim } = await supabase
+                .from("creator_claims")
+                .select("id")
+                .eq("fid", authorFid)
+                .eq("cast_hash", castHash)
+                .single();
+
+              if (!existingClaim) {
+                const { error: claimError } = await supabase
+                  .from("creator_claims")
+                  .insert({
+                    fid: authorFid,
+                    cast_hash: castHash,
+                    reward_amount: 1_000_000,
+                    verified_at: castTimestamp,
+                  } as any);
+
+                if (!claimError) {
+                  console.log(`[Webhook Neynar] ✅ Created creator_claim for FID ${authorFid}, cast ${castHash.substring(0, 10)}`);
+                } else {
+                  console.warn(`[Webhook Neynar] Failed to create creator_claim:`, claimError);
+                }
+              }
+            } catch (claimErr) {
+              // Non-fatal: log but don't fail webhook processing
+              console.warn(`[Webhook Neynar] Creator claim creation (non-fatal):`, claimErr);
+            }
           }
         } else {
           webhookMetrics.byEventType['cast.created'].ignored++;

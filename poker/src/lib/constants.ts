@@ -6,14 +6,14 @@
 export const SUPER_OWNER_FID = 318447;
 
 // Club configuration
-export const HELLFIRE_CLUB_SLUG = "hellfire";
-export const HELLFIRE_CLUB_NAME = "Hellfire Club";
-export const HELLFIRE_CLUB_DESCRIPTION = "Tormental's poker club";
+export const GIVEAWAY_GAMES_CLUB_SLUG = "giveaway-games";
+export const GIVEAWAY_GAMES_CLUB_NAME = "Giveaway Games";
+export const GIVEAWAY_GAMES_CLUB_DESCRIPTION = "Run games on ClubGG and give away tokens or art";
 
-// Hellfire Club (MVP-only club)
-export const HELLFIRE_OWNER_FID = process.env.HELLFIRE_OWNER_FID 
-  ? parseInt(process.env.HELLFIRE_OWNER_FID, 10) 
-  : null;
+// Giveaway Games Club (MVP-only club)
+export const GIVEAWAY_GAMES_OWNER_FID = process.env.GIVEAWAY_GAMES_OWNER_FID 
+  ? parseInt(process.env.GIVEAWAY_GAMES_OWNER_FID, 10) 
+  : (process.env.HELLFIRE_OWNER_FID ? parseInt(process.env.HELLFIRE_OWNER_FID, 10) : null); // Backward compat
 
 // Tormental's FID (global admin) - set via TORMENTAL_FID env var
 export const TORMENTAL_FID = process.env.TORMENTAL_FID 
@@ -59,6 +59,10 @@ export const MASTER_WALLET_ADDRESS = '0xd942a322Fa7d360F22C525a652F51cA0FC4aF012
 // Server-only env var (GAME_ESCROW_CONTRACT) with fallback to public (NEXT_PUBLIC_GAME_ESCROW_CONTRACT)
 // Server-side code should use GAME_ESCROW_CONTRACT env var, but client-side code can use NEXT_PUBLIC_ version
 export const GAME_ESCROW_CONTRACT = process.env.GAME_ESCROW_CONTRACT || process.env.NEXT_PUBLIC_GAME_ESCROW_CONTRACT || '';
+
+// Prize Distribution contract address (for NFT and token prize distribution)
+// Server-only env var (PRIZE_DISTRIBUTION_CONTRACT) with fallback to public (NEXT_PUBLIC_PRIZE_DISTRIBUTION_CONTRACT)
+export const PRIZE_DISTRIBUTION_CONTRACT = process.env.PRIZE_DISTRIBUTION_CONTRACT || process.env.NEXT_PUBLIC_PRIZE_DISTRIBUTION_CONTRACT || '';
 
 // Neynar API key
 export const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY || '768ACB76-E4C1-488E-9BD7-3BAA76EC0F04';

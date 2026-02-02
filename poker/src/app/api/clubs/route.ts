@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { HELLFIRE_OWNER_FID } from "~/lib/constants";
+import { GIVEAWAY_GAMES_OWNER_FID, GIVEAWAY_GAMES_CLUB_SLUG } from "~/lib/constants";
 import { requireAuth } from "~/lib/auth";
 import { pokerDb } from "~/lib/pokerDb";
 import { isGlobalAdmin } from "~/lib/permissions";
@@ -7,7 +7,7 @@ import type { ApiResponse, Club } from "~/lib/types";
 
 /**
  * GET /api/clubs
- * Get Hellfire club only (MVP-only)
+ * Get Giveaway Games club only (MVP-only)
  * 
  * SAFETY: Uses requireAuth() - FID comes only from verified JWT
  * SAFETY: Uses pokerDb - enforces poker.* schema only
@@ -17,9 +17,9 @@ export async function GET(req: NextRequest) {
     // SAFETY: Require authentication - FID comes only from verified JWT
     const { fid } = await requireAuth(req);
 
-    // MVP-only: Only return Hellfire club
+    // MVP-only: Only return Giveaway Games club
     const clubs = await pokerDb.fetch<Club>('clubs', {
-      filters: { slug: 'hellfire' },
+      filters: { slug: GIVEAWAY_GAMES_CLUB_SLUG },
       select: '*',
       limit: 1,
     });
@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
 
 /**
  * POST /api/clubs/seed
- * Seed Hellfire club (MVP-only)
+ * Seed Giveaway Games club (MVP-only)
  * Should only be called once during initial setup
  * 
  * SAFETY: Requires global admin auth
@@ -67,29 +67,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!HELLFIRE_OWNER_FID) {
-      throw new Error("HELLFIRE_OWNER_FID not configured in environment variables");
+    if (!GIVEAWAY_GAMES_OWNER_FID) {
+      throw new Error("GIVEAWAY_GAMES_OWNER_FID not configured in environment variables");
     }
 
     // Check if club already exists - use pokerDb
     const existing = await pokerDb.fetch<Club>('clubs', {
-      filters: { slug: 'hellfire' },
+      filters: { slug: GIVEAWAY_GAMES_CLUB_SLUG },
       limit: 1,
     });
 
     if (existing.length > 0) {
       return NextResponse.json<ApiResponse>({
         ok: true,
-        data: { message: "Hellfire club already seeded", club: existing[0] },
+        data: { message: "Giveaway Games club already seeded", club: existing[0] },
       });
     }
 
     // Insert club - use pokerDb
+    const { GIVEAWAY_GAMES_CLUB_NAME, GIVEAWAY_GAMES_CLUB_DESCRIPTION } = await import("~/lib/constants");
     const clubToCreate = {
-      slug: "hellfire",
-      owner_fid: HELLFIRE_OWNER_FID,
-      name: "Hellfire Club",
-      description: "Tormental's poker club",
+      slug: GIVEAWAY_GAMES_CLUB_SLUG,
+      owner_fid: GIVEAWAY_GAMES_OWNER_FID,
+      name: GIVEAWAY_GAMES_CLUB_NAME,
+      description: GIVEAWAY_GAMES_CLUB_DESCRIPTION,
     };
 
     const createdClubs = await pokerDb.insert<Club>('clubs', [clubToCreate] as any) as Club[];

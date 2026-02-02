@@ -57,10 +57,10 @@ This document verifies that the complete flow works from initialization through 
   - [ ] Increments day_number, flips day_type to OFFDAY
 
 ### 5. Season Progression ✅
-- [ ] Days 1-27: Regular season games
+- [ ] GameNight 1-27 (Days 2, 4, 6, ..., 54): Regular season games
   - [ ] Schedule follows round-robin pattern
   - [ ] Standings update correctly
-- [ ] Day 27 completion: Transition to PLAYOFFS phase
+- [ ] GameNight 27 (Day 54) completion: Transition to PLAYOFFS phase
   - [ ] Top 2 teams determined by record
   - [ ] Higher seed gets home advantage
 - [ ] Days 28-30: Playoff games (best-of-3)

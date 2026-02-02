@@ -3,7 +3,22 @@
 import { createClient } from "@supabase/supabase-js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./constants";
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+/**
+ * Create Supabase client lazily (only when function is called, not during build)
+ * This prevents build-time errors when env vars are not available
+ */
+function getSupabaseClient() {
+  // Check if we're in browser (runtime) and env vars exist
+  if (typeof window === "undefined") {
+    throw new Error("Supabase client can only be created in browser environment");
+  }
+  
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    throw new Error("Supabase configuration missing. SUPABASE_URL and SUPABASE_ANON_KEY must be set.");
+  }
+  
+  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
 
 export interface AuthResult {
   ok: boolean;
@@ -82,6 +97,10 @@ export async function signInWithFarcaster(): Promise<AuthResult> {
       });
 
       if (profileResult.ok) {
+        // Store FID in localStorage for dashboard access
+        if (typeof window !== "undefined") {
+          localStorage.setItem("basketball_fid", String(data.fid));
+        }
         return {
           ok: true,
           fid: data.fid,
@@ -106,6 +125,9 @@ export async function signInWithFarcaster(): Promise<AuthResult> {
  */
 export async function signInWithEmail(email: string): Promise<AuthResult> {
   try {
+    // Create client only when function is actually called (at runtime)
+    const supabase = getSupabaseClient();
+    
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {

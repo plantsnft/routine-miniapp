@@ -10,7 +10,7 @@ import { getEffectiveMaxParticipants, getGameBadges } from '~/lib/game-registrat
 import { RegistrationInfoBadge } from '~/components/RegistrationInfoBadge';
 import { JoinHellfireBanner } from '~/components/JoinHellfireBanner';
 import { AdminRequests } from '~/components/AdminRequests';
-import { HELLFIRE_CLUB_SLUG } from '~/lib/constants';
+import { GIVEAWAY_GAMES_CLUB_SLUG } from '~/lib/constants';
 import { HellfireTitle } from '~/components/HellfireTitle';
 import { PaymentButton } from '~/components/PaymentButton';
 import { ParticipantListModal } from '~/components/ParticipantListModal';
@@ -217,15 +217,15 @@ export default function ClubGamesPage({ params }: { params: Promise<{ slug: stri
     );
   }
 
-  // Hellfire Club GG URL (same URL that the old green button used)
-  // This is the source of truth for the Hellfire club deep link
-  const hellfireHref = 'https://clubgg.app.link/nPkZsgIq9Yb';
+  // Giveaway Games Club GG URL (same URL that the old green button used)
+  // This is the source of truth for the Giveaway Games club deep link
+  const giveawayGamesHref = 'https://clubgg.app.link/nPkZsgIq9Yb';
 
-  // Only show banner for Hellfire club
-  const isHellfireClub = slug === HELLFIRE_CLUB_SLUG || club.slug === HELLFIRE_CLUB_SLUG;
+  // Only show banner for Giveaway Games club
+  const isGiveawayGamesClub = slug === GIVEAWAY_GAMES_CLUB_SLUG || club.slug === GIVEAWAY_GAMES_CLUB_SLUG;
 
-  // Banner items for rotating carousel (only used for Hellfire club)
-  const bannerItems = isHellfireClub ? [
+  // Banner items for rotating carousel (only used for Giveaway Games club)
+  const bannerItems = isGiveawayGamesClub ? [
     {
       title: 'Request to join the group chat',
       subtitle: 'Send a message to Tormental',
@@ -236,8 +236,8 @@ export default function ClubGamesPage({ params }: { params: Promise<{ slug: stri
       },
     },
     {
-      title: 'View Hellfire Poker Club on Club GG',
-      href: hellfireHref,
+      title: 'View Giveaway Games on Club GG',
+      href: giveawayGamesHref,
     },
   ] : [];
 
@@ -246,16 +246,16 @@ export default function ClubGamesPage({ params }: { params: Promise<{ slug: stri
       <div className="max-w-4xl mx-auto">
         {/* Header - centered at top */}
         <div className="text-center mb-2" style={{ minHeight: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 8px', maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box' }}>
-          {slug === HELLFIRE_CLUB_SLUG ? (
+          {slug === GIVEAWAY_GAMES_CLUB_SLUG ? (
             <div style={{ width: '100%', maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box' }}>
-              <HellfireTitle text="Hellfire Poker Club" />
+              <HellfireTitle text="Giveaway Games" />
             </div>
           ) : (
             <h1 className="text-2xl font-bold" style={{ color: 'var(--text-0)' }}>
               {club.name}
             </h1>
           )}
-          {slug !== HELLFIRE_CLUB_SLUG && (
+          {slug !== GIVEAWAY_GAMES_CLUB_SLUG && (
             <Link href="/clubs" className="text-ember hover:underline mt-2 inline-block transition-colors" style={{ color: 'var(--ember-1)' }}>
               ← Back to Clubs
             </Link>
@@ -301,11 +301,11 @@ export default function ClubGamesPage({ params }: { params: Promise<{ slug: stri
                   if (sdk?.actions?.composeCast) {
                     // Get the mini app URL - use the current page URL or a specific games page
                     const miniAppUrl = typeof window !== 'undefined' 
-                      ? window.location.origin + '/clubs/hellfire/games'
-                      : 'https://poker-swart.vercel.app/clubs/hellfire/games';
+                      ? window.location.origin + `/clubs/${GIVEAWAY_GAMES_CLUB_SLUG}/games`
+                      : `https://poker-swart.vercel.app/clubs/${GIVEAWAY_GAMES_CLUB_SLUG}/games`;
                     
                     await sdk.actions.composeCast({
-                      text: 'i would like to play hellfire poker club who is with me? CC: @tormental',
+                      text: 'i would like to play giveaway games who is with me? CC: @tormental',
                       embeds: [miniAppUrl],
                     });
                   } else {
@@ -341,10 +341,10 @@ export default function ClubGamesPage({ params }: { params: Promise<{ slug: stri
             {showHistory ? '← Back to Active Games' : 'Previous Games'}
           </button>
           
-          {/* Club GG button - only for Hellfire club */}
-          {isHellfireClub && (
+          {/* Club GG button - only for Giveaway Games club */}
+          {isGiveawayGamesClub && (
             <Link
-              href={hellfireHref}
+              href={giveawayGamesHref}
               target="_blank"
               rel="noopener noreferrer"
               className="btn-primary"
@@ -549,8 +549,8 @@ export default function ClubGamesPage({ params }: { params: Promise<{ slug: stri
         })()}
 
 
-        {/* Join Hellfire Banner - moved below games (only for Hellfire club) */}
-        {isHellfireClub && bannerItems.length > 0 && (
+        {/* Join Giveaway Games Banner - moved below games (only for Giveaway Games club) */}
+        {isGiveawayGamesClub && bannerItems.length > 0 && (
           <div className="mb-4">
             <JoinHellfireBanner items={bannerItems} />
           </div>

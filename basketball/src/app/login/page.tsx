@@ -16,6 +16,7 @@ export default function LoginPage() {
       const result = await signInWithFarcaster();
       if (result.ok && result.fid) {
         // Redirect to dashboard after successful login
+        // FID is stored in localStorage by signInWithFarcaster
         window.location.href = "/dashboard";
       } else {
         setError(result.error || "Farcaster login failed");

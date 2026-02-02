@@ -56,12 +56,24 @@ function buildBasketballUrl(tableName: BasketballTableName, query?: string): str
   return query ? `${baseUrl}?${query}` : baseUrl;
 }
 
+// Filter operator types for PostgREST
+type FilterValue = 
+  | string 
+  | number 
+  | boolean
+  | { eq?: string | number | boolean }
+  | { in?: (string | number)[] }
+  | { gt?: number }
+  | { gte?: number }
+  | { lt?: number }
+  | { lte?: number };
+
 export const basketballDb = {
   async fetch<T = any>(
     tableName: string,
     options: {
       select?: string;
-      filters?: Record<string, string | number | boolean>;
+      filters?: Record<string, FilterValue>;
       order?: string;
       limit?: number;
     } = {}
@@ -75,9 +87,30 @@ export const basketballDb = {
 
     if (options.filters) {
       for (const [key, value] of Object.entries(options.filters)) {
-        // Handle boolean values for PostgREST (convert to "true"/"false" strings)
-        const filterValue = typeof value === 'boolean' ? String(value) : String(value);
-        params.append(key, `eq.${filterValue}`);
+        // Handle different filter operator types
+        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+          // Object with operator (in, gt, gte, lt, lte, eq)
+          if ('in' in value && Array.isArray(value.in)) {
+            // PostgREST syntax: ?id=in.(value1,value2,value3)
+            params.append(key, `in.(${value.in.join(',')})`);
+          } else if ('gt' in value && typeof value.gt === 'number') {
+            params.append(key, `gt.${value.gt}`);
+          } else if ('gte' in value && typeof value.gte === 'number') {
+            params.append(key, `gte.${value.gte}`);
+          } else if ('lt' in value && typeof value.lt === 'number') {
+            params.append(key, `lt.${value.lt}`);
+          } else if ('lte' in value && typeof value.lte === 'number') {
+            params.append(key, `lte.${value.lte}`);
+          } else if ('eq' in value) {
+            // Explicit eq operator
+            const eqValue = typeof value.eq === 'boolean' ? String(value.eq) : String(value.eq);
+            params.append(key, `eq.${eqValue}`);
+          }
+        } else {
+          // Simple value (defaults to eq operator for backward compatibility)
+          const filterValue = typeof value === 'boolean' ? String(value) : String(value);
+          params.append(key, `eq.${filterValue}`);
+        }
       }
     }
 

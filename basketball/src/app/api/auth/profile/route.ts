@@ -54,7 +54,8 @@ export async function POST(req: NextRequest) {
         limit: 1,
       });
       existingProfile = profiles[0];
-    } else {
+    } else if (auth_type === "email" && email) {
+      // email is guaranteed to be truthy here due to earlier validation
       const profiles = await basketballDb.fetch("profiles", {
         filters: { email: email },
         limit: 1,

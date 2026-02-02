@@ -1,11 +1,31 @@
-# Catwalk Mini App - Source of Truth
+# Catwalk Mini App - Source of Truth (MASTER)
 
-> **FOR AI/AGENT USE:** This is the single source of truth for Catwalk. Reference this before making changes.
+> **FOR AI/AGENT USE:** This is the **MASTER** source of truth for Catwalk. Always start here.
 
 **Last Updated:** 2026-02-02  
 **Last Verified:** 2026-02-02  
 **Status:** ✅ LIVE  
 **Production URL:** https://catwalk-smoky.vercel.app
+
+---
+
+## RELATED DOCUMENT: CREATOR PORTAL DETAIL
+
+| Document | Path | Purpose |
+|----------|------|---------|
+| **Portal Detail SOT** | `c:\miniapps\routine\CREATOR_PORTAL_COMPREHENSIVE_SOT.md` | Deep-dive on portal reward flows, claim mechanics, auto-engage |
+
+**When to use Portal SOT:**
+- Debugging portal reward issues
+- Understanding claim data flows
+- Working on auto-engage feature
+- Need detailed portal DB schema
+
+**⚠️ PORTAL SOT UPDATE RULE:**
+If your changes affect any portal functionality (files in `src/app/api/portal/`, reward claims, auto-engage, webhook engagement processing), you MUST:
+1. Update this MASTER SOT first
+2. **ASK USER FOR CONFIRMATION** before updating Portal SOT
+3. Only update Portal SOT after user approves
 
 ---
 
@@ -15,11 +35,13 @@
 1. Search this document for relevant section (Ctrl+F keywords)
 2. Check file paths listed - they are relative to `c:\miniapps\routine\`
 3. Verify claims against actual source if uncertain
+4. For portal-specific deep details, see Portal SOT (path above)
 
 **After making changes:**
 1. Update the relevant section in this SOT
 2. Add entry to [Change Log](#change-log) with files modified
 3. Update "Last Updated" date at top
+4. **IF PORTAL-RELATED:** Ask user before updating Portal SOT
 
 **Verification Rule:** Every fact in this document has been verified against source code. If you cannot verify something, do not add it.
 

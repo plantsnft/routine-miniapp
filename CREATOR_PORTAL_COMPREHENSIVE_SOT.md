@@ -1,8 +1,17 @@
-# Creator Portal - Comprehensive Source of Truth
+# Creator Portal - Detail Documentation
+
+> **⚠️ THIS IS A DETAIL APPENDIX - NOT THE MASTER SOT**
+>
+> **MASTER SOT:** `c:\miniapps\routine\CATWALK_APP_SOT.md`
+>
+> Always check the Master SOT first. This document contains deep-dive details on portal-specific mechanics (data flows, claim logic, auto-engage) that are too detailed for the master doc.
+>
+> **For general info** (env vars, monorepo structure, deployment): See Master SOT
+> **For portal deep-dive** (claim flows, reward mechanics, caching): Use this document
 
 **Last Updated:** 2026-02-02  
 **Status:** ✅ LIVE AND WORKING  
-**Document Version:** 2.0
+**Document Version:** 2.1
 
 ---
 
@@ -381,24 +390,12 @@ CREATE TABLE public.user_engage_preferences (
 
 ## Environment Variables
 
-### Required Variables
+> **See Master SOT** (`CATWALK_APP_SOT.md`) for complete list of environment variables.
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `CATWALK_AUTHOR_FIDS` | Comma-separated creator FIDs | `8926,11632,14511,...` |
-| `NEYNAR_API_KEY` | Neynar API key | `9C979716-...` |
-| `NEYNAR_WEBHOOK_SECRETS` | Webhook signature verification | `secret1,secret2` |
-| `REWARD_SIGNER_PRIVATE_KEY` | Wallet private key for sending tokens | `0x...` |
-| `CRON_SECRET` | Auth token for cron endpoints | `random-secret` |
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | `https://xxx.supabase.co` |
-| `SUPABASE_SERVICE_ROLE` | Supabase service role key | `eyJhbG...` |
-
-### Optional Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `BASE_RPC_URL` | Base chain RPC endpoint | `https://mainnet.base.org` |
-| `PRIVATE_KEY` | Fallback for REWARD_SIGNER_PRIVATE_KEY | - |
+**Portal-critical variables:**
+- `CATWALK_AUTHOR_FIDS` - 47 creator FIDs (determines eligible casts)
+- `REWARD_SIGNER_PRIVATE_KEY` - Wallet for sending token rewards
+- `NEYNAR_WEBHOOK_SECRETS` - Webhook signature verification
 
 ---
 
@@ -888,42 +885,16 @@ curl https://catwalk-smoky.vercel.app/api/ops/portal-health | jq '.checks.webhoo
 
 ---
 
-## Monorepo Structure - STAY OUT OF THESE FOLDERS
+## Monorepo Structure
 
-### Critical Warning
+> **See Master SOT** (`CATWALK_APP_SOT.md`) for complete monorepo structure and DO NOT MODIFY warnings.
 
-This repository is a **monorepo** containing multiple independent apps. The Creator Portal is part of the **Catwalk app** (root `/src` folder). 
-
-**DO NOT MODIFY** files in these folders - they are separate apps:
-
-| Folder | App | Description |
-|--------|-----|-------------|
-| `/burrfriends/` | BurrFriends | Betr games, Jenga, Buddy Up, Steal No Steal |
-| `/poker/` | Poker Mini App | Poker games with on-chain payments |
-| `/basketball/` | Basketball App | NBA/sports betting app |
-| `/catwalkagent/` | Catwalk AI Agent | Separate AI agent scripts |
-
-### Safe to Modify (Catwalk App)
-
+**Portal-specific paths (safe to modify):**
 ```
-/src/                    ← Catwalk app source code
-/public/                 ← Catwalk public assets
-/supabase_*.sql          ← Catwalk DB migrations (root level only)
-/vercel.json             ← Catwalk deployment config
-/package.json            ← Catwalk dependencies
-/CREATOR_PORTAL_*.md     ← This documentation
-```
-
-### Example Path Check
-
-```
-✅ SAFE:     src/app/api/portal/engagement/verify/route.ts
-✅ SAFE:     src/components/ui/tabs/PortalTab.tsx
-✅ SAFE:     supabase_migration_portal_claims.sql
-
-❌ DANGER:   burrfriends/src/app/api/...
-❌ DANGER:   poker/src/components/...
-❌ DANGER:   basketball/supabase_migration_...
+src/app/api/portal/           ← Portal API endpoints
+src/components/ui/tabs/PortalTab.tsx  ← Portal UI (~1650 lines)
+src/app/api/webhooks/neynar/  ← Webhook (creates claims)
+src/app/api/cron/auto-engage/ ← Auto-engage cron
 ```
 
 ### Shared Configuration (Be Careful)

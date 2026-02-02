@@ -234,14 +234,15 @@ export enum Tab {
 CREATE TABLE public.eligible_casts (
   cast_hash TEXT PRIMARY KEY,
   author_fid BIGINT NOT NULL,
-  author_username TEXT,           -- Added 2026-02-01
+  author_username TEXT,           -- Added via ALTER TABLE (not in original migration)
   created_at TIMESTAMPTZ NOT NULL,
-  parent_url TEXT,                -- Should be 'https://warpcast.com/~/channel/catwalk'
-  text TEXT,
-  last_seen_at TIMESTAMPTZ,
-  inserted_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
+  parent_url TEXT NOT NULL,       -- Should be 'https://warpcast.com/~/channel/catwalk'
+  text TEXT,                      -- nullable
+  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Note: author_username column was added manually:
+-- ALTER TABLE eligible_casts ADD COLUMN author_username TEXT;
 ```
 
 #### creator_claims
@@ -280,11 +281,13 @@ CREATE TABLE public.engagement_claims (
 #### user_engage_preferences
 ```sql
 CREATE TABLE public.user_engage_preferences (
-  fid BIGINT PRIMARY KEY,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  fid BIGINT NOT NULL UNIQUE,     -- One record per user
   signer_uuid TEXT,               -- Neynar signer for auto-engage
-  auto_engage_enabled BOOLEAN DEFAULT false,
+  auto_engage_enabled BOOLEAN NOT NULL DEFAULT false,
   auto_engage_enabled_at TIMESTAMPTZ,
-  bonus_multiplier NUMERIC DEFAULT 1.0,  -- 1.1 = 10% bonus for auto-engage users
+  bonus_multiplier NUMERIC NOT NULL DEFAULT 1.0,  -- 1.1 = 10% bonus for auto-engage users
+  created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 ```
@@ -327,7 +330,7 @@ CREATE TABLE public.user_engage_preferences (
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
 | `/api/ops/portal-health` | GET | Comprehensive system health check |
-| `/api/ops/webhook-metrics` | GET | Webhook event statistics |
+| `/api/ops/webhook-metrics` | GET | Basic health check (metrics tracked in-memory, logged in dev only) |
 
 ---
 
@@ -400,8 +403,10 @@ CREATE TABLE public.user_engage_preferences (
 |--------|--------|-------|
 | Like | 1,000 CATWALK | Per cast |
 | Recast | 2,000 CATWALK | Per cast |
-| Comment | 5,000 CATWALK | Per cast |
+| Comment/Reply | 5,000 CATWALK | Per cast (stored as 'reply' in DB, displayed as 'comment' in UI) |
 | **Total possible per cast** | **8,000 CATWALK** | If all 3 actions |
+
+> **Note:** The `engagements` table stores the type as 'reply', but the code maps this to 'comment' for user-facing displays and reward calculations.
 
 #### Creator Rewards (for creators who post in /catwalk)
 | Action | Reward | Notes |

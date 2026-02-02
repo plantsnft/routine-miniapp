@@ -126,7 +126,11 @@
 
 #### checkins
 Primary table for daily check-in tracking.
+
+> **Note:** No migration file exists for this table. Schema inferred from `CheckinRecord` interface in `src/lib/supabase.ts`.
+
 ```sql
+-- Expected schema (create if not exists)
 CREATE TABLE checkins (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   fid BIGINT NOT NULL UNIQUE,
@@ -307,6 +311,7 @@ See **[CREATOR_PORTAL_COMPREHENSIVE_SOT.md](./CREATOR_PORTAL_COMPREHENSIVE_SOT.m
 |----------|-------------|
 | `NEXT_PUBLIC_URL` | App URL (https://catwalk-smoky.vercel.app) |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon/public key |
 | `SUPABASE_SERVICE_ROLE` | Supabase service role key |
 | `NEYNAR_API_KEY` | Neynar API key |
 | `NEYNAR_WEBHOOK_SECRETS` | Webhook signature secrets (comma-separated) |
@@ -426,6 +431,18 @@ src/components/
 │   ├── Header.tsx             # App header
 │   ├── Footer.tsx             # Tab navigation
 │   ├── TokenTicker.tsx        # Price display in header
+│   ├── Button.tsx             # Reusable button component
+│   ├── input.tsx              # Form input component
+│   ├── label.tsx              # Form label component
+│   ├── Share.tsx              # Share button/dialog
+│   ├── ImageCarousel.tsx      # Image carousel for posts
+│   ├── VideoPlayer.tsx        # Video player component
+│   ├── wallet/
+│   │   ├── SignIn.tsx         # Wallet sign-in
+│   │   ├── SendEth.tsx        # Send ETH
+│   │   ├── SendSolana.tsx     # Send SOL
+│   │   ├── SignEvmMessage.tsx # Sign EVM messages
+│   │   └── SignSolanaMessage.tsx # Sign Solana messages
 │   └── tabs/
 │       ├── HomeTab.tsx        # Check-in, creator info
 │       ├── LeaderboardTab.tsx # Rankings
@@ -434,11 +451,18 @@ src/components/
 │       ├── WalletTab.tsx      # Wallet functions
 │       ├── ActionsTab.tsx     # Cast, notifications
 │       └── ContextTab.tsx     # Debug/context info
+├── providers/
+│   ├── WagmiProvider.tsx      # Wagmi wallet provider
+│   └── SafeFarcasterSolanaProvider.tsx  # Solana wallet provider
 ├── CheckinButton.tsx          # Daily check-in button
 ├── CheckinAnimation.tsx       # Check-in success animation
+├── CheckinGifAnimation.tsx    # GIF-based check-in animation
 ├── ConfettiCelebration.tsx    # Celebration effects
 ├── CreatorCard.tsx            # Creator profile cards
 ├── CreatorGreeting.tsx        # Creator welcome message
+├── RewardClaimButton.tsx      # Claim reward button
+├── SleepingCat.tsx            # Idle cat animation
+├── DevAuthDebug.tsx           # Dev-only auth debug panel
 ├── WelcomePopup.tsx           # First-time user popup
 └── ErrorBoundary.tsx          # Error handling wrapper
 ```
@@ -477,13 +501,17 @@ export enum Tab {
 | `src/lib/notifs.ts` | Push notification helpers |
 | `src/lib/webhookSecurity.ts` | Webhook signature verification |
 | `src/lib/creatorStats.ts` | Creator statistics helpers |
+| `src/lib/creatorStatsHelpers.ts` | Additional creator stat utilities |
 | `src/lib/castUtils.ts` | Cast/post utilities |
 | `src/lib/devices.ts` | Device detection |
 | `src/lib/errorUtils.tsx` | Error handling components |
 | `src/lib/localStorage.ts` | Local storage utilities |
 | `src/lib/models.ts` | Data models |
+| `src/lib/neynarResult.ts` | Neynar API response types |
 | `src/lib/opsAuth.ts` | Ops endpoint auth |
 | `src/lib/truncateAddress.ts` | Wallet address formatting |
+| `src/lib/authDebug.ts` | Auth debugging utilities |
+| `src/lib/dbConstants.ts` | Database constants |
 
 ---
 
@@ -1055,6 +1083,8 @@ The `accountAssociation` proves the mini app is owned by a specific Farcaster ac
 1. Sign a message with your Farcaster account's custody address
 2. The message contains: `{ fid, type: "auth", key: "0x..." }`
 3. Set via `NEXT_PUBLIC_APP_ACCOUNT_ASSOCIATION` env var (JSON)
+
+> **Note:** The hardcoded fallback in `utils.ts` has `routine-smoky.vercel.app` domain, but production uses `catwalk-smoky.vercel.app`. Always ensure `NEXT_PUBLIC_APP_ACCOUNT_ASSOCIATION` is set correctly in Vercel.
 
 ### Webhook URL in Manifest
 

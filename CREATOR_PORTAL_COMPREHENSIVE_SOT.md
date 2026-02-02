@@ -24,6 +24,8 @@
 14. [File Structure](#file-structure)
 15. [Troubleshooting](#troubleshooting)
 16. [Recent Changes](#recent-changes)
+17. [Neynar API Credit Conservation](#neynar-api-credit-conservation)
+18. [Monorepo Structure - STAY OUT OF THESE FOLDERS](#monorepo-structure---stay-out-of-these-folders)
 
 ---
 
@@ -833,6 +835,100 @@ curl -X POST https://catwalk-smoky.vercel.app/api/portal/engagement/verify \
 # Check status for a user
 curl "https://catwalk-smoky.vercel.app/api/portal/status?fid=318447"
 ```
+
+---
+
+## Neynar API Credit Conservation
+
+### Strategy Overview
+
+Neynar API credits are limited and expensive. The Creator Portal is designed to minimize API calls through:
+
+1. **Webhook-First Architecture** - Real-time data via webhooks instead of polling
+2. **Aggressive Caching** - 1-hour user cache, 5-minute feed cache
+3. **Database as Primary Source** - Query Supabase before Neynar
+4. **Smart Invalidation** - Only refresh cache when new engagements detected
+
+### Credit-Saving Techniques
+
+| Technique | Implementation | Savings |
+|-----------|---------------|---------|
+| **Webhook for casts** | Neynar pushes new casts to `/api/webhooks/neynar` | Eliminates polling |
+| **Webhook for reactions** | Neynar pushes likes/recasts immediately | Eliminates verification API calls |
+| **engagement_cache** | Stores verification results for 1 hour | ~60x reduction per active user |
+| **channel_feed_cache** | Stores feed for auto-engage cron | Shared across all 15 auto-engage users |
+| **eligible_casts table** | Store creator casts in DB | Query DB instead of Neynar feed API |
+| **engagements table** | Store all reactions in DB | Verify from DB, not API |
+
+### When Neynar API IS Called
+
+| Endpoint | When | Why |
+|----------|------|-----|
+| `/api/portal/engagement/verify` | Cache miss + no DB data | Fallback only |
+| `/api/cron/auto-engage` | Hourly | Like/recast via signer (unavoidable) |
+| `/api/cron/seed-eligible-casts` | Manual only | Backfill historical casts |
+| `/api/portal/creator/claim` | On claim | Fetch user's wallet address |
+| `/api/portal/engagement/claim` | On claim | Fetch user's wallet address |
+
+### Monitoring Credit Usage
+
+```bash
+# Check webhook is receiving events (reduces API needs)
+curl https://catwalk-smoky.vercel.app/api/ops/portal-health | jq '.checks.webhook_health'
+
+# Check cache hit rate in Vercel logs
+# Look for: "[Engagement Verify] ✅ Cache HIT"
+```
+
+---
+
+## Monorepo Structure - STAY OUT OF THESE FOLDERS
+
+### Critical Warning
+
+This repository is a **monorepo** containing multiple independent apps. The Creator Portal is part of the **Catwalk app** (root `/src` folder). 
+
+**DO NOT MODIFY** files in these folders - they are separate apps:
+
+| Folder | App | Description |
+|--------|-----|-------------|
+| `/burrfriends/` | BurrFriends | Betr games, Jenga, Buddy Up, Steal No Steal |
+| `/poker/` | Poker Mini App | Poker games with on-chain payments |
+| `/basketball/` | Basketball App | NBA/sports betting app |
+| `/catwalkagent/` | Catwalk AI Agent | Separate AI agent scripts |
+
+### Safe to Modify (Catwalk App)
+
+```
+/src/                    ← Catwalk app source code
+/public/                 ← Catwalk public assets
+/supabase_*.sql          ← Catwalk DB migrations (root level only)
+/vercel.json             ← Catwalk deployment config
+/package.json            ← Catwalk dependencies
+/CREATOR_PORTAL_*.md     ← This documentation
+```
+
+### Example Path Check
+
+```
+✅ SAFE:     src/app/api/portal/engagement/verify/route.ts
+✅ SAFE:     src/components/ui/tabs/PortalTab.tsx
+✅ SAFE:     supabase_migration_portal_claims.sql
+
+❌ DANGER:   burrfriends/src/app/api/...
+❌ DANGER:   poker/src/components/...
+❌ DANGER:   basketball/supabase_migration_...
+```
+
+### Shared Configuration (Be Careful)
+
+These files affect ALL apps - modify with caution:
+
+| File | Impact |
+|------|--------|
+| `tsconfig.json` | TypeScript config for all (excludes other app folders) |
+| `.eslintrc.json` | Linting for all |
+| `package.json` | Dependencies for root Catwalk app |
 
 ---
 

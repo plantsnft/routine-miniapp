@@ -322,7 +322,7 @@ CREATE TABLE public.user_engage_preferences (
 | `/api/portal/engagement/claim` | POST | Claim engagement rewards (sends tokens) |
 | `/api/portal/creator/claim` | POST | Claim single creator posting reward (sends tokens) |
 | `/api/portal/creator/claim-all` | POST | Claim ALL unclaimed creator rewards in one transaction |
-| `/api/portal/lifetime-rewards` | GET | Get total rewards earned (7d/30d/1y/lifetime) |
+| `/api/portal/lifetime-rewards` | GET | Get total rewards claimed (7d/30d/1y/lifetime) |
 | `/api/portal/engage/preferences` | GET/POST | Get/set auto-engage preferences |
 | `/api/portal/engage/authorize` | POST | Start signer authorization flow |
 | `/api/portal/engage/bulk` | POST | Bulk like/recast multiple casts |
@@ -702,7 +702,7 @@ src/
 │   │   │   │   ├── preferences/route.ts     # GET/POST auto-engage prefs
 │   │   │   │   ├── authorize/route.ts       # POST start signer flow
 │   │   │   │   └── bulk/route.ts            # POST bulk engage
-│   │   │   └── lifetime-rewards/route.ts    # GET lifetime earnings
+│   │   │   └── lifetime-rewards/route.ts    # GET lifetime claimed
 │   │   ├── cron/
 │   │   │   ├── auto-engage/route.ts         # Hourly auto-engage
 │   │   │   ├── seed-eligible-casts/route.ts # Backfill eligible_casts

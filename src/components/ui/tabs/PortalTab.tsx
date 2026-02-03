@@ -746,10 +746,10 @@ export function PortalTab() {
         Earn CATWALK for posting and engaging in /catwalk
       </p>
 
-      {/* Lifetime Earnings Section */}
+      {/* Lifetime Claimed Section */}
       <div
         style={{
-          background: "linear-gradient(135deg, rgba(193, 180, 0, 0.15) 0%, rgba(0, 0, 0, 0.9) 100%)",
+          background: "linear-gradient(135deg, rgba(193, 180, 0, 0.1) 0%, rgba(0, 0, 0, 0.95) 100%)",
           border: "2px solid #c1b400",
           borderRadius: 12,
           padding: 16,
@@ -758,7 +758,7 @@ export function PortalTab() {
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <h3 style={{ color: "#c1b400", fontSize: 16, fontWeight: 700, margin: 0 }}>
-            Lifetime Earned
+            Lifetime Claimed
           </h3>
           <select
             value={lifetimePeriod}
@@ -785,64 +785,69 @@ export function PortalTab() {
         ) : lifetimeRewards ? (
           <>
             {/* Total */}
-            <div style={{ textAlign: "center", marginBottom: 16, padding: 12, background: "rgba(193, 180, 0, 0.2)", borderRadius: 8 }}>
+            <div style={{ textAlign: "center", marginBottom: 16, padding: 12, background: "rgba(193, 180, 0, 0.15)", borderRadius: 8, border: "1px solid rgba(193, 180, 0, 0.3)" }}>
               <div style={{ color: "#c1b400", fontSize: 28, fontWeight: 900 }}>
                 {(lifetimeRewards.total || 0).toLocaleString()}
               </div>
               <div style={{ color: "#888", fontSize: 11, marginTop: 2 }}>TOTAL $CATWALK CLAIMED</div>
+              {creatorSummary && creatorSummary.unclaimedTotal > 0 && (
+                <div style={{ color: "#c1b400", fontSize: 10, marginTop: 6, opacity: 0.8 }}>
+                  + {creatorSummary.unclaimedTotal.toLocaleString()} unclaimed
+                </div>
+              )}
             </div>
             {/* 3 Category Cards */}
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {/* Creator Rewards */}
-              <div style={{ background: "rgba(34, 197, 94, 0.1)", border: "1px solid #22c55e", padding: 12, borderRadius: 8 }}>
+              <div style={{ background: "rgba(17, 17, 17, 0.9)", border: "1px solid rgba(193, 180, 0, 0.4)", padding: 12, borderRadius: 8 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
-                    <div style={{ color: "#22c55e", fontSize: 11, fontWeight: 600, marginBottom: 2 }}>CREATOR REWARDS</div>
+                    <div style={{ color: "#c1b400", fontSize: 11, fontWeight: 600, marginBottom: 2 }}>CREATOR REWARDS</div>
                     <div style={{ color: "#888", fontSize: 10 }}>Posting in /catwalk</div>
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ color: "#22c55e", fontSize: 18, fontWeight: 700 }}>{(lifetimeRewards.creator?.amount || 0).toLocaleString()}</div>
-                    <div style={{ color: "#666", fontSize: 10 }}>{lifetimeRewards.creator?.count || 0} posts</div>
+                    <div style={{ color: "#fff", fontSize: 18, fontWeight: 700 }}>{(lifetimeRewards.creator?.amount || 0).toLocaleString()}</div>
+                    <div style={{ color: "#888", fontSize: 10 }}>{lifetimeRewards.creator?.count || 0} posts</div>
                   </div>
                 </div>
               </div>
               {/* Patron Rewards */}
-              <div style={{ background: "rgba(168, 85, 247, 0.1)", border: "1px solid #a855f7", padding: 12, borderRadius: 8 }}>
+              <div style={{ background: "rgba(17, 17, 17, 0.9)", border: "1px solid rgba(193, 180, 0, 0.4)", padding: 12, borderRadius: 8 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                   <div>
-                    <div style={{ color: "#a855f7", fontSize: 11, fontWeight: 600, marginBottom: 2 }}>PATRON REWARDS</div>
-                    <div style={{ color: "#888", fontSize: 10 }}>Likes, recasts and comments</div>
+                    <div style={{ color: "#c1b400", fontSize: 11, fontWeight: 600, marginBottom: 2 }}>PATRON REWARDS</div>
+                    <div style={{ color: "#888", fontSize: 10 }}>Likes, recasts, comments</div>
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ color: "#a855f7", fontSize: 18, fontWeight: 700 }}>{(lifetimeRewards.patron?.amount || 0).toLocaleString()}</div>
-                    <div style={{ color: "#666", fontSize: 10 }}>{lifetimeRewards.patron?.count || 0} actions</div>
+                    <div style={{ color: "#fff", fontSize: 18, fontWeight: 700 }}>{(lifetimeRewards.patron?.amount || 0).toLocaleString()}</div>
+                    <div style={{ color: "#888", fontSize: 10 }}>{lifetimeRewards.patron?.count || 0} actions</div>
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 8, paddingTop: 8, borderTop: "1px solid rgba(168, 85, 247, 0.3)" }}>
+                <div style={{ display: "flex", gap: 8, paddingTop: 8, borderTop: "1px solid rgba(193, 180, 0, 0.2)" }}>
                   <div style={{ flex: 1, textAlign: "center" }}>
-                    <div style={{ color: "#ef4444", fontSize: 12, fontWeight: 600 }}>{(lifetimeRewards.patron?.likes?.amount || 0).toLocaleString()}</div>
-                    <div style={{ color: "#666", fontSize: 9 }}>Likes ({lifetimeRewards.patron?.likes?.count || 0})</div>
+                    <div style={{ color: "#c1b400", fontSize: 12, fontWeight: 600 }}>{(lifetimeRewards.patron?.likes?.amount || 0).toLocaleString()}</div>
+                    <div style={{ color: "#888", fontSize: 9 }}>Likes ({lifetimeRewards.patron?.likes?.count || 0})</div>
                   </div>
                   <div style={{ flex: 1, textAlign: "center" }}>
-                    <div style={{ color: "#3b82f6", fontSize: 12, fontWeight: 600 }}>{(lifetimeRewards.patron?.recasts?.amount || 0).toLocaleString()}</div>
-                    <div style={{ color: "#666", fontSize: 9 }}>Recasts ({lifetimeRewards.patron?.recasts?.count || 0})</div>
+                    <div style={{ color: "#c1b400", fontSize: 12, fontWeight: 600 }}>{(lifetimeRewards.patron?.recasts?.amount || 0).toLocaleString()}</div>
+                    <div style={{ color: "#888", fontSize: 9 }}>Recasts ({lifetimeRewards.patron?.recasts?.count || 0})</div>
                   </div>
                   <div style={{ flex: 1, textAlign: "center" }}>
-                    <div style={{ color: "#f59e0b", fontSize: 12, fontWeight: 600 }}>{(lifetimeRewards.patron?.comments?.amount || 0).toLocaleString()}</div>
-                    <div style={{ color: "#666", fontSize: 9 }}>Comments ({lifetimeRewards.patron?.comments?.count || 0})</div>
+                    <div style={{ color: "#c1b400", fontSize: 12, fontWeight: 600 }}>{(lifetimeRewards.patron?.comments?.amount || 0).toLocaleString()}</div>
+                    <div style={{ color: "#888", fontSize: 9 }}>Comments ({lifetimeRewards.patron?.comments?.count || 0})</div>
                   </div>
                 </div>
               </div>
               {/* Virtual Walk Rewards */}
-              <div style={{ background: "rgba(59, 130, 246, 0.1)", border: "1px solid #3b82f6", padding: 12, borderRadius: 8 }}>
+              <div style={{ background: "rgba(17, 17, 17, 0.9)", border: "1px solid rgba(193, 180, 0, 0.4)", padding: 12, borderRadius: 8 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
-                    <div style={{ color: "#3b82f6", fontSize: 11, fontWeight: 600, marginBottom: 2 }}>VIRTUAL WALK REWARDS</div>
+                    <div style={{ color: "#c1b400", fontSize: 11, fontWeight: 600, marginBottom: 2 }}>VIRTUAL WALK REWARDS</div>
                     <div style={{ color: "#888", fontSize: 10 }}>Daily cat walks</div>
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ color: "#3b82f6", fontSize: 18, fontWeight: 700 }}>{(lifetimeRewards.virtualWalk?.amount || 0).toLocaleString()}</div>
-                    <div style={{ color: "#666", fontSize: 10 }}>{lifetimeRewards.virtualWalk?.count || 0} walks</div>
+                    <div style={{ color: "#fff", fontSize: 18, fontWeight: 700 }}>{(lifetimeRewards.virtualWalk?.amount || 0).toLocaleString()}</div>
+                    <div style={{ color: "#888", fontSize: 10 }}>{lifetimeRewards.virtualWalk?.count || 0} walks</div>
                   </div>
                 </div>
               </div>

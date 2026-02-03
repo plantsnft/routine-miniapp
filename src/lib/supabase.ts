@@ -25,6 +25,8 @@ export interface CheckinRecord {
   streak: number;
   total_checkins?: number; // All-time total check-in count
   reward_claimed_at?: string | null; // When the daily reward was last claimed
+  token_balance?: number; // Cached CATWALK token balance
+  balance_updated_at?: string; // When token balance was last synced
   inserted_at?: string;
   updated_at?: string;
 }
@@ -329,6 +331,69 @@ export async function getTopUsersByTotalCheckins(
   }
 
   return await res.json();
+}
+
+/**
+ * Get top users by token balance (cached) for leaderboard.
+ * Uses pre-synced token_balance column instead of live API calls.
+ *
+ * @param limit - Number of users to return (default: 100)
+ * @returns Array of check-in records sorted by token balance (descending)
+ */
+export async function getTopUsersByBalance(
+  limit: number = 100
+): Promise<CheckinRecord[]> {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/checkins?select=fid,last_checkin,streak,total_checkins,token_balance,balance_updated_at&token_balance=gt.0&order=token_balance.desc.nullslast&limit=${limit}`,
+    {
+      method: "GET",
+      headers: SUPABASE_HEADERS,
+    }
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("[Supabase] Leaderboard token_balance query error:", text);
+    throw new Error(`Failed to fetch leaderboard by balance: ${text}`);
+  }
+
+  return await res.json();
+}
+
+/**
+ * Update a user's cached token balance.
+ *
+ * @param fid - Farcaster user ID
+ * @param balance - Token balance to cache
+ * @returns Updated check-in record
+ */
+export async function updateUserTokenBalance(
+  fid: number,
+  balance: number
+): Promise<CheckinRecord | null> {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/checkins?fid=eq.${fid}`,
+    {
+      method: "PATCH",
+      headers: {
+        ...SUPABASE_HEADERS,
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({
+        token_balance: balance,
+        balance_updated_at: new Date().toISOString(),
+      }),
+    }
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("[Supabase] Update token balance error:", text);
+    return null;
+  }
+
+  const data = await res.json();
+  return data && data.length > 0 ? data[0] : null;
 }
 
 /**

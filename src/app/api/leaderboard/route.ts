@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getTopUsersByStreak, getTopUsersByTotalCheckins } from "~/lib/supabase";
+import { getTopUsersByStreak, getTopUsersByTotalCheckins, getTopUsersByBalance } from "~/lib/supabase";
 import { getNeynarClient } from "~/lib/neynar";
 import type { LeaderboardEntry } from "~/lib/models";
 
@@ -295,16 +295,35 @@ export async function GET(req: NextRequest) {
     let totalTokenHolders = 0; // Total holders from blockchain
 
     if (sortBy === "holdings") {
-      // TEMPORARY: Return empty entries for "Coming Soon" placeholder
-      // TODO: Implement proper token holder fetching once API/data source is ready
-      return NextResponse.json({
-        ok: true,
-        entries: [],
-        totalHolders: 0,
+      // Use cached token balances from database (synced daily by /api/cron/sync-balances)
+      console.log("[Leaderboard] Fetching holdings from cached balances...");
+      const topByBalance = await getTopUsersByBalance(limit);
+      
+      if (topByBalance.length === 0) {
+        console.log("[Leaderboard] No cached balances found. Run /api/cron/sync-balances first.");
+        return NextResponse.json({
+          ok: true,
+          entries: [],
+          totalHolders: 0,
+          message: "Balance sync pending. Holdings will be available after daily sync.",
+        });
+      }
+      
+      fids = topByBalance.map((c) => c.fid);
+      topByBalance.forEach((c) => {
+        checkinMap.set(c.fid, {
+          streak: c.streak || 0,
+          last_checkin: c.last_checkin || null,
+          total_checkins: c.total_checkins || 0,
+        });
+        // Store balance for later use in response
+        blockchainBalances.set(c.fid, c.token_balance || 0);
       });
       
-      // FLOW: Get ALL token holders from blockchain → Match to Farcaster FIDs → Show only Farcaster users
-      console.log("[Leaderboard] Step 1: Fetching ALL token holders from blockchain...");
+      console.log(`[Leaderboard] Found ${fids.length} users with cached balances`);
+      
+      // NOTE: Dead code below (old blockchain logic) is never reached
+      // TODO: Remove this dead code in a future cleanup
       
       const addressToBalance = new Map<string, number>();
       const addressToFid = new Map<string, number>();

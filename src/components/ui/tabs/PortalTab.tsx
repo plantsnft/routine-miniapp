@@ -786,7 +786,7 @@ export function PortalTab() {
           <>
             {/* Total */}
             <div style={{ textAlign: "center", marginBottom: 16, padding: 12, background: "rgba(193, 180, 0, 0.15)", borderRadius: 8, border: "1px solid rgba(193, 180, 0, 0.3)" }}>
-              <div style={{ color: "#c1b400", fontSize: 28, fontWeight: 900 }}>
+              <div style={{ color: "#fff", fontSize: 28, fontWeight: 900 }}>
                 {(lifetimeRewards.total || 0).toLocaleString()}
               </div>
               <div style={{ color: "#888", fontSize: 11, marginTop: 2 }}>TOTAL $CATWALK CLAIMED</div>

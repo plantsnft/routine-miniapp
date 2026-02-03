@@ -175,7 +175,7 @@ export async function GET(request: Request) {
     // 3. Fetch VIRTUAL WALK rewards from checkins table
     // First try to get the total_walk_rewards from the checkins table
     const checkinRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/checkins?fid=eq.${fid}&select=total_checkins,total_walk_rewards,balance_updated_at`,
+      `${SUPABASE_URL}/rest/v1/checkins?fid=eq.${fid}&select=total_checkins,total_walk_rewards`,
       { method: "GET", headers: SUPABASE_HEADERS }
     );
 
@@ -188,17 +188,9 @@ export async function GET(request: Request) {
         
         console.log(`[Lifetime Rewards] FID ${fid}: DB shows ${totalWalks} walks, ${totalWalkRewards} total rewards`);
         
-        // Check if we've recently queried on-chain (use balance_updated_at as cache timestamp)
-        // Skip on-chain query if checked within last 24 hours
-        const lastChecked = checkin.balance_updated_at ? new Date(checkin.balance_updated_at).getTime() : 0;
-        const cacheAge = Date.now() - lastChecked;
-        const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
-        const recentlyChecked = lastChecked > 0 && cacheAge < CACHE_TTL;
-        
         // If total_walk_rewards is 0 but they have walks, try on-chain query as fallback
-        // Only do this if we haven't checked recently (to save on-chain query credits)
-        if (totalWalkRewards === 0 && totalWalks > 0 && period === "lifetime" && !recentlyChecked) {
-          console.log(`[Lifetime Rewards] FID ${fid}: Cache expired or never checked, querying on-chain...`);
+        if (totalWalkRewards === 0 && totalWalks > 0 && period === "lifetime") {
+          console.log(`[Lifetime Rewards] FID ${fid}: No cached walk rewards, querying on-chain...`);
           try {
             // Get user's wallet address for on-chain lookup
             const user = await getNeynarUser(Number(fid));
@@ -218,20 +210,17 @@ export async function GET(request: Request) {
                 }
               }
               
-              // Update the database with the on-chain value AND mark as checked
+              // Update the database with the on-chain value
               try {
                 await fetch(
                   `${SUPABASE_URL}/rest/v1/checkins?fid=eq.${fid}`,
                   {
                     method: "PATCH",
                     headers: SUPABASE_HEADERS,
-                    body: JSON.stringify({ 
-                      total_walk_rewards: totalWalkRewards,
-                      balance_updated_at: new Date().toISOString(),
-                    }),
+                    body: JSON.stringify({ total_walk_rewards: totalWalkRewards }),
                   }
                 );
-                console.log(`[Lifetime Rewards] Updated total_walk_rewards and cache timestamp for FID ${fid}`);
+                console.log(`[Lifetime Rewards] Updated total_walk_rewards for FID ${fid}`);
               } catch (backfillErr) {
                 console.error("[Lifetime Rewards] Backfill error:", backfillErr);
               }
@@ -239,8 +228,6 @@ export async function GET(request: Request) {
           } catch (onChainErr) {
             console.error("[Lifetime Rewards] On-chain fallback error:", onChainErr);
           }
-        } else if (totalWalkRewards === 0 && totalWalks > 0 && recentlyChecked) {
-          console.log(`[Lifetime Rewards] FID ${fid}: Skipping on-chain query (checked ${Math.round(cacheAge / 3600000)}h ago)`);
         }
         
         breakdown.virtualWalk.amount = totalWalkRewards;

@@ -33,11 +33,12 @@ export async function GET(request: Request) {
       );
     }
 
-    // Fetch creator claim status
-    let creatorClaim = null;
+    // Fetch ALL creator claims (supports multiple casts per creator)
+    let creatorClaims: any[] = [];
+    let creatorSummary = null;
     try {
       const creatorRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/creator_claims?fid=eq.${fid}&limit=1`,
+        `${SUPABASE_URL}/rest/v1/creator_claims?fid=eq.${fid}&order=verified_at.desc`,
         {
           method: "GET",
           headers: SUPABASE_HEADERS,
@@ -47,18 +48,31 @@ export async function GET(request: Request) {
       if (creatorRes.ok) {
         const creatorData = await creatorRes.json() as any;
         if (creatorData && creatorData.length > 0) {
-          creatorClaim = {
+          // Map all claims
+          creatorClaims = creatorData.map((claim: any) => ({
             isEligible: true,
-            hasClaimed: !!creatorData[0].claimed_at,
-            castHash: creatorData[0].cast_hash,
-            rewardAmount: parseFloat(creatorData[0].reward_amount || "1000000"),
-            transactionHash: creatorData[0].transaction_hash || undefined,
-            verifiedAt: creatorData[0].verified_at,
+            hasClaimed: !!claim.claimed_at,
+            castHash: claim.cast_hash,
+            rewardAmount: parseFloat(claim.reward_amount || "1000000"),
+            transactionHash: claim.transaction_hash || undefined,
+            verifiedAt: claim.verified_at,
+            claimedAt: claim.claimed_at || undefined,
+          }));
+
+          // Calculate summary
+          const unclaimed = creatorClaims.filter((c: any) => !c.hasClaimed);
+          const claimed = creatorClaims.filter((c: any) => c.hasClaimed);
+          creatorSummary = {
+            totalClaims: creatorClaims.length,
+            unclaimedCount: unclaimed.length,
+            claimedCount: claimed.length,
+            unclaimedTotal: unclaimed.reduce((sum: number, c: any) => sum + c.rewardAmount, 0),
+            claimedTotal: claimed.reduce((sum: number, c: any) => sum + c.rewardAmount, 0),
           };
         }
       }
     } catch (err) {
-      console.error("[Portal Status] Error fetching creator claim:", err);
+      console.error("[Portal Status] Error fetching creator claims:", err);
     }
 
     // Fetch engagement claim status
@@ -97,7 +111,11 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({
-      creator: creatorClaim,
+      // Legacy single-claim format (first unclaimed or first claim for backward compat)
+      creator: creatorClaims.find((c: any) => !c.hasClaimed) || creatorClaims[0] || null,
+      // New multi-claim format
+      creatorClaims: creatorClaims,
+      creatorSummary: creatorSummary,
       engagement: engagementData,
     });
   } catch (error: any) {

@@ -2,8 +2,8 @@
 
 > **FOR AI/AGENT USE:** This is the **MASTER** source of truth for Catwalk. Always start here.
 
-**Last Updated:** 2026-02-02  
-**Last Verified:** 2026-02-02  
+**Last Updated:** 2026-02-03  
+**Last Verified:** 2026-02-03  
 **Status:** ✅ LIVE  
 **Production URL:** https://catwalk-smoky.vercel.app
 
@@ -395,6 +395,7 @@ See **[CREATOR_PORTAL_COMPREHENSIVE_SOT.md](./CREATOR_PORTAL_COMPREHENSIVE_SOT.m
 | `/api/portal/engagement/verify` | `engagement/verify/route.ts` |
 | `/api/portal/engagement/claim` | `engagement/claim/route.ts` |
 | `/api/portal/creator/claim` | `creator/claim/route.ts` |
+| `/api/portal/creator/claim-all` | `creator/claim-all/route.ts` |
 | `/api/portal/engage/preferences` | `engage/preferences/route.ts` |
 | `/api/portal/engage/authorize` | `engage/authorize/route.ts` |
 | `/api/portal/engage/bulk` | `engage/bulk/route.ts` |
@@ -1501,6 +1502,15 @@ SELECT * FROM app_state WHERE key = 'last_webhook_at';
 ## Change Log
 
 > **IMPORTANT:** Update this log with every code change. Include date, files modified, and what changed.
+
+### 2026-02-03
+
+| Change | Files Modified | Details |
+|--------|---------------|---------|
+| Multi-cast creator claims | `portal/status/route.ts`, `portal/creator/claim-all/route.ts`, `PortalTab.tsx` | Creators can now see ALL unclaimed casts and claim all at once |
+| Claim All endpoint | `portal/creator/claim-all/route.ts` | NEW: Batch claim all unclaimed creator rewards in single transaction |
+| Status returns array | `portal/status/route.ts` | Returns `creatorClaims[]` and `creatorSummary` for multi-cast support |
+| UI: Claim All + dropdown | `PortalTab.tsx` | Shows summary, "Claim All" button, expandable list with individual claims |
 
 ### 2026-02-02
 

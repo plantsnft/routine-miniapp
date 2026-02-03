@@ -12,6 +12,15 @@ interface CreatorClaimStatus {
   rewardAmount?: number;
   transactionHash?: string;
   verifiedAt?: string;
+  claimedAt?: string;
+}
+
+interface CreatorSummary {
+  totalClaims: number;
+  unclaimedCount: number;
+  claimedCount: number;
+  unclaimedTotal: number;
+  claimedTotal: number;
 }
 
 interface EngagementClaimStatus {
@@ -69,6 +78,10 @@ export function PortalTab() {
   const userFid = context?.user?.fid;
 
   const [creatorClaimStatus, setCreatorClaimStatus] = useState<CreatorClaimStatus | null>(null);
+  const [creatorClaims, setCreatorClaims] = useState<CreatorClaimStatus[]>([]);
+  const [creatorSummary, setCreatorSummary] = useState<CreatorSummary | null>(null);
+  const [creatorClaimsExpanded, setCreatorClaimsExpanded] = useState(false);
+  const [claimingAll, setClaimingAll] = useState(false);
   const [_engagementClaimStatus, setEngagementClaimStatus] = useState<EngagementClaimStatus | null>(null);
   const [engagementOpportunities, setEngagementOpportunities] = useState<EngagementOpportunity[]>([]);
   const [claimableRewards, setClaimableRewards] = useState<ClaimableReward[]>([]);
@@ -430,6 +443,8 @@ export function PortalTab() {
 
       const statusData = await statusRes.json();
       setCreatorClaimStatus(statusData.creator || null);
+      setCreatorClaims(statusData.creatorClaims || []);
+      setCreatorSummary(statusData.creatorSummary || null);
       setEngagementClaimStatus(statusData.engagement || null);
 
       // If no creator claim exists yet, try to auto-verify
@@ -530,8 +545,10 @@ export function PortalTab() {
     }
   };
 
-  const handleClaimCreator = async () => {
-    if (!userFid || !creatorClaimStatus?.isEligible || creatorClaimStatus.hasClaimed) return;
+  const handleClaimCreator = async (castHash?: string) => {
+    // If castHash provided, claim specific cast; otherwise use creatorClaimStatus
+    const targetCastHash = castHash || creatorClaimStatus?.castHash;
+    if (!userFid || !targetCastHash) return;
 
     try {
       setClaiming(true);
@@ -542,7 +559,7 @@ export function PortalTab() {
       const res = await fetch("/api/portal/creator/claim", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fid: userFid }),
+        body: JSON.stringify({ fid: userFid, castHash: targetCastHash }),
       });
 
       const data = await res.json();
@@ -552,7 +569,7 @@ export function PortalTab() {
       }
 
       setSuccess(`Successfully claimed ${data.rewardAmount?.toLocaleString()} CATWALK tokens!`);
-      setCreatorClaimStatus(data);
+      setTransactionUrl(data.basescanUrl || null);
       triggerHaptic("heavy");
       setTimeout(() => fetchClaimStatus(), 1000);
     } catch (err: any) {
@@ -561,6 +578,40 @@ export function PortalTab() {
       triggerHaptic("rigid");
     } finally {
       setClaiming(false);
+    }
+  };
+
+  const handleClaimAllCreator = async () => {
+    if (!userFid || !creatorSummary || creatorSummary.unclaimedCount === 0) return;
+
+    try {
+      setClaimingAll(true);
+      setError(null);
+      setSuccess(null);
+      triggerHaptic("medium");
+
+      const res = await fetch("/api/portal/creator/claim-all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fid: userFid }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Claim all failed");
+      }
+
+      setSuccess(`Successfully claimed ${data.totalAmount?.toLocaleString()} CATWALK tokens from ${data.claimedCount} casts!`);
+      setTransactionUrl(data.basescanUrl || null);
+      triggerHaptic("heavy");
+      setTimeout(() => fetchClaimStatus(), 1000);
+    } catch (err: any) {
+      console.error("[PortalTab] Error claiming all creator rewards:", err);
+      setError(err.message || "Failed to claim rewards");
+      triggerHaptic("rigid");
+    } finally {
+      setClaimingAll(false);
     }
   };
 
@@ -1015,7 +1066,7 @@ export function PortalTab() {
         </div>
       ) : (
         <>
-          {/* Creator Claim Section */}
+          {/* Creator Claim Section - Multi-Cast Support */}
           {isCreator && (
             <div
               style={{
@@ -1034,84 +1085,195 @@ export function PortalTab() {
                   marginBottom: 16,
                 }}
               >
-                Creator Reward
+                Creator Rewards
               </h2>
               <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 12, lineHeight: 1.6 }}>
-                Verify that you&apos;ve posted to the /catwalk channel and claim 500,000 CATWALK tokens.
+                Earn 1,000,000 CATWALK per cast in the /catwalk channel.
               </p>
               <p style={{ color: "#999999", fontSize: 12, marginBottom: 20, lineHeight: 1.4 }}>
-                Claims are available for casts posted in the last 30 days. New casts are detected automatically within 5 minutes.
+                Claims are available for casts posted in the last 15 days. New casts are detected automatically.
               </p>
 
-              {creatorClaimStatus?.hasClaimed ? (
-                <div
-                  style={{
-                    background: "#000000",
-                    border: "2px solid #00ff00",
-                    borderRadius: 8,
-                    padding: "16px",
+              {/* Multi-Cast Claim UI */}
+              {creatorSummary && creatorSummary.totalClaims > 0 ? (
+                <div>
+                  {/* Stats Row */}
+                  <div style={{ 
+                    display: "flex", 
+                    justifyContent: "space-between", 
                     marginBottom: 16,
-                  }}
-                >
-                  <p style={{ color: "#00ff00", fontSize: 16, fontWeight: 700, marginBottom: 8 }}>
-                    Reward Claimed
-                  </p>
-                  <p style={{ color: "#ffffff", fontSize: 14 }}>
-                    You&apos;ve already claimed {creatorClaimStatus.rewardAmount?.toLocaleString()} CATWALK tokens.
-                  </p>
-                  {creatorClaimStatus.transactionHash && (
-                    <div style={{ marginTop: 8 }}>
-                      <a
-                        href={`https://basescan.org/tx/${creatorClaimStatus.transactionHash}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          color: "#c1b400",
-                          fontSize: 12,
-                          textDecoration: "underline",
-                          display: "block",
-                        }}
-                      >
-                        View on BaseScan: {creatorClaimStatus.transactionHash.substring(0, 10)}...
-                        {creatorClaimStatus.transactionHash.substring(creatorClaimStatus.transactionHash.length - 8)}
-                      </a>
+                    padding: "14px",
+                    background: "#000000",
+                    borderRadius: 8,
+                    border: "1px solid #333"
+                  }}>
+                    <div>
+                      <div style={{ color: "#888", fontSize: 11, marginBottom: 2 }}>UNCLAIMED</div>
+                      <div style={{ color: "#c1b400", fontSize: 20, fontWeight: 700 }}>
+                        {creatorSummary.unclaimedCount} cast{creatorSummary.unclaimedCount !== 1 ? "s" : ""}
+                      </div>
                     </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ color: "#888", fontSize: 11, marginBottom: 2 }}>REWARD AVAILABLE</div>
+                      <div style={{ color: "#c1b400", fontSize: 20, fontWeight: 700 }}>
+                        {creatorSummary.unclaimedTotal.toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Claim All Button */}
+                  {creatorSummary.unclaimedCount > 0 && (
+                    <button
+                      onClick={handleClaimAllCreator}
+                      disabled={claimingAll || claiming}
+                      style={{
+                        width: "100%",
+                        padding: "16px 24px",
+                        background: "#c1b400",
+                        color: "#000000",
+                        border: "2px solid #000000",
+                        borderRadius: 8,
+                        fontSize: 18,
+                        fontWeight: 700,
+                        cursor: (claimingAll || claiming) ? "not-allowed" : "pointer",
+                        opacity: (claimingAll || claiming) ? 0.6 : 1,
+                        marginBottom: 16,
+                      }}
+                    >
+                      {claimingAll 
+                        ? "Claiming All..." 
+                        : `Claim All ${creatorSummary.unclaimedTotal.toLocaleString()} CATWALK`}
+                    </button>
                   )}
-                </div>
-              ) : creatorClaimStatus?.isEligible ? (
-                <div
-                  style={{
-                    background: "#000000",
-                    border: "2px solid #c1b400",
-                    borderRadius: 8,
-                    padding: "16px",
-                    marginBottom: 16,
-                  }}
-                >
-                  <p style={{ color: "#c1b400", fontSize: 16, fontWeight: 700, marginBottom: 8 }}>
-                    Verification Complete
-                  </p>
-                  <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 16 }}>
-                    You&apos;re eligible to claim {creatorClaimStatus.rewardAmount?.toLocaleString()} CATWALK tokens!
-                  </p>
+
+                  {/* Expandable Details Toggle */}
                   <button
-                    onClick={handleClaimCreator}
-                    disabled={claiming}
+                    onClick={() => setCreatorClaimsExpanded(!creatorClaimsExpanded)}
                     style={{
                       width: "100%",
-                      padding: "12px 24px",
-                      background: "#c1b400",
-                      color: "#000000",
-                      border: "2px solid #000000",
+                      padding: "12px",
+                      background: "transparent",
+                      color: "#888",
+                      border: "1px solid #444",
                       borderRadius: 8,
-                      fontSize: 16,
-                      fontWeight: 700,
-                      cursor: claiming ? "not-allowed" : "pointer",
-                      opacity: claiming ? 0.6 : 1,
+                      fontSize: 13,
+                      cursor: "pointer",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
                     }}
                   >
-                    {claiming ? "Claiming..." : `Claim ${creatorClaimStatus.rewardAmount?.toLocaleString()} CATWALK`}
+                    <span>
+                      {creatorClaimsExpanded ? "Hide" : "View"} Details ({creatorClaims.length} total cast{creatorClaims.length !== 1 ? "s" : ""})
+                    </span>
+                    <span style={{ 
+                      transform: creatorClaimsExpanded ? "rotate(180deg)" : "rotate(0deg)", 
+                      transition: "transform 0.2s",
+                      fontSize: 10,
+                    }}>
+                      ▼
+                    </span>
                   </button>
+
+                  {/* Claims List (Expanded) */}
+                  {creatorClaimsExpanded && (
+                    <div style={{ 
+                      marginTop: 16, 
+                      maxHeight: "320px", 
+                      overflowY: "auto",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 10,
+                    }}>
+                      {creatorClaims.map((claim, idx) => (
+                        <div 
+                          key={claim.castHash || idx}
+                          style={{
+                            background: claim.hasClaimed ? "#001a00" : "#0a0a0a",
+                            border: `1px solid ${claim.hasClaimed ? "#00ff00" : "#c1b400"}`,
+                            borderRadius: 8,
+                            padding: "12px 14px",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                          }}
+                        >
+                          <div style={{ flex: 1 }}>
+                            <a
+                              href={`https://warpcast.com/~/conversations/${claim.castHash}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ 
+                                color: claim.hasClaimed ? "#00ff00" : "#fff", 
+                                fontSize: 13,
+                                fontFamily: "monospace",
+                                textDecoration: "none",
+                              }}
+                            >
+                              {claim.castHash?.substring(0, 10)}...{claim.castHash?.substring((claim.castHash?.length || 0) - 6)}
+                            </a>
+                            <div style={{ color: "#666", fontSize: 11, marginTop: 4 }}>
+                              {claim.rewardAmount?.toLocaleString()} CATWALK
+                            </div>
+                          </div>
+                          {claim.hasClaimed ? (
+                            <div style={{ textAlign: "right" }}>
+                              <div style={{ color: "#00ff00", fontSize: 12, fontWeight: 600 }}>CLAIMED</div>
+                              {claim.transactionHash && (
+                                <a
+                                  href={`https://basescan.org/tx/${claim.transactionHash}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{ color: "#888", fontSize: 11, textDecoration: "underline" }}
+                                >
+                                  View TX
+                                </a>
+                              )}
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => handleClaimCreator(claim.castHash)}
+                              disabled={claiming || claimingAll}
+                              style={{
+                                padding: "8px 16px",
+                                background: "#c1b400",
+                                color: "#000",
+                                border: "none",
+                                borderRadius: 6,
+                                fontSize: 12,
+                                fontWeight: 600,
+                                cursor: (claiming || claimingAll) ? "not-allowed" : "pointer",
+                                opacity: (claiming || claimingAll) ? 0.6 : 1,
+                              }}
+                            >
+                              Claim
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* All Claimed State */}
+                  {creatorSummary.claimedCount > 0 && creatorSummary.unclaimedCount === 0 && (
+                    <div
+                      style={{
+                        background: "#001a00",
+                        border: "1px solid #00ff00",
+                        borderRadius: 8,
+                        padding: "16px",
+                        marginTop: 16,
+                        textAlign: "center",
+                      }}
+                    >
+                      <p style={{ color: "#00ff00", fontSize: 16, fontWeight: 600, marginBottom: 6 }}>
+                        All Rewards Claimed!
+                      </p>
+                      <p style={{ color: "#888", fontSize: 13 }}>
+                        You&apos;ve claimed {creatorSummary.claimedTotal.toLocaleString()} CATWALK from {creatorSummary.claimedCount} cast{creatorSummary.claimedCount !== 1 ? "s" : ""}.
+                      </p>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <button
@@ -1119,7 +1281,7 @@ export function PortalTab() {
                   disabled={verifying}
                   style={{
                     width: "100%",
-                    padding: "12px 24px",
+                    padding: "14px 24px",
                     background: "#c1b400",
                     color: "#000000",
                     border: "2px solid #000000",
@@ -1130,7 +1292,7 @@ export function PortalTab() {
                     opacity: verifying ? 0.6 : 1,
                   }}
                 >
-                  {verifying ? "Verifying..." : "Verify Creator Cast"}
+                  {verifying ? "Checking..." : "Check for Creator Rewards"}
                 </button>
               )}
             </div>

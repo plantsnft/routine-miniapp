@@ -9,9 +9,9 @@
 > **For general info** (env vars, monorepo structure, deployment): See Master SOT
 > **For portal deep-dive** (claim flows, reward mechanics, caching): Use this document
 
-**Last Updated:** 2026-02-02  
+**Last Updated:** 2026-02-03  
 **Status:** ✅ LIVE AND WORKING  
-**Document Version:** 2.1
+**Document Version:** 2.2
 
 ---
 
@@ -320,7 +320,8 @@ CREATE TABLE public.user_engage_preferences (
 | `/api/portal/status` | GET | Get user's claim status (creator + engagement) |
 | `/api/portal/engagement/verify` | POST | Verify & list claimable engagement rewards |
 | `/api/portal/engagement/claim` | POST | Claim engagement rewards (sends tokens) |
-| `/api/portal/creator/claim` | POST | Claim creator posting reward (sends tokens) |
+| `/api/portal/creator/claim` | POST | Claim single creator posting reward (sends tokens) |
+| `/api/portal/creator/claim-all` | POST | Claim ALL unclaimed creator rewards in one transaction |
 | `/api/portal/lifetime-rewards` | GET | Get total rewards earned (7d/30d/1y/lifetime) |
 | `/api/portal/engage/preferences` | GET/POST | Get/set auto-engage preferences |
 | `/api/portal/engage/authorize` | POST | Start signer authorization flow |
@@ -790,6 +791,18 @@ WHERE engaged_at > NOW() - INTERVAL '1 hour';
 ---
 
 ## Recent Changes
+
+### 2026-02-03: Multi-Cast Creator Claims + Claim All
+- **Feature:** Creators can now claim rewards for multiple casts at once
+- **Changes:**
+  1. `/api/portal/status` now returns array of ALL creator claims + summary
+  2. NEW `/api/portal/creator/claim-all` endpoint - batch claim in single transaction
+  3. Frontend shows unclaimed count, total reward, "Claim All" button
+  4. Expandable dropdown to see/claim individual casts
+- **Files Modified:**
+  - `src/app/api/portal/status/route.ts`
+  - `src/app/api/portal/creator/claim-all/route.ts` (NEW)
+  - `src/components/ui/tabs/PortalTab.tsx`
 
 ### 2026-02-02: Creator Claims Fix
 - **Problem:** Creators couldn't claim posting rewards - `creator_claims` never created

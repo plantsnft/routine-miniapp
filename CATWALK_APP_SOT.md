@@ -1520,7 +1520,7 @@ SELECT * FROM app_state WHERE key = 'last_webhook_at';
 | New cron: sync-balances | `/api/cron/sync-balances/route.ts` | Syncs CATWALK balances daily at 2 AM UTC |
 | DB columns | `supabase_migration_token_balance.sql` | Added `token_balance`, `balance_updated_at` to checkins |
 | Lifetime Claimed UI refresh | `PortalTab.tsx`, `lifetime-rewards/route.ts` | Renamed "Earned" to "Claimed", brand colors (gold/black/white) |
-| Bug fix: Lifetime Claimed | `PortalTab.tsx`, `lifetime-rewards/route.ts` | Fixed see-through total text, fixed walk rewards showing 0 |
+| Bug fix: Lifetime Claimed | `PortalTab.tsx`, `lifetime-rewards/route.ts` | Fixed total box styling, fixed walk rewards on-chain query (wrong sender) |
 | Multi-cast creator claims | `portal/status/route.ts`, `portal/creator/claim-all/route.ts`, `PortalTab.tsx` | Creators can now see ALL unclaimed casts and claim all at once |
 | Claim All endpoint | `portal/creator/claim-all/route.ts` | NEW: Batch claim all unclaimed creator rewards in single transaction |
 | Status returns array | `portal/status/route.ts` | Returns `creatorClaims[]` and `creatorSummary` for multi-cast support |

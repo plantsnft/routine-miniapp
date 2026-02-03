@@ -8,6 +8,7 @@ const SUPABASE_SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE || "";
 const BASE_RPC_URL = process.env.BASE_RPC_URL || "https://mainnet.base.org";
 const REWARD_WALLET = "0x8efefE5D91f889A70d48742668e1d9266356c7B1";
 const CATWALK_TOKEN = "0xa5eb1cAD0dFC1c4f8d4f84f995aeDA9a7A047B07";
+const REWARD_CLAIM_CONTRACT = process.env.REWARD_CLAIM_CONTRACT_ADDRESS || "";
 
 const SUPABASE_HEADERS = {
   apikey: SUPABASE_SERVICE_ROLE,
@@ -67,12 +68,12 @@ async function getOnChainWalkRewards(userAddress: string): Promise<{ amount: num
     // ERC20 Transfer event signature
     const transferEvent = parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 value)');
     
-    // Query transfer events from reward wallet to user
+    // Query transfer events from reward claim contract to user
     const logs = await client.getLogs({
       address: CATWALK_TOKEN as `0x${string}`,
       event: transferEvent,
       args: {
-        from: REWARD_WALLET as `0x${string}`,
+        from: REWARD_CLAIM_CONTRACT as `0x${string}`,
         to: userAddress as `0x${string}`,
       },
       fromBlock: BigInt(0),

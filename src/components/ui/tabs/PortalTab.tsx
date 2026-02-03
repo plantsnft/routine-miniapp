@@ -785,7 +785,7 @@ export function PortalTab() {
         ) : lifetimeRewards ? (
           <>
             {/* Total */}
-            <div style={{ textAlign: "center", marginBottom: 16, padding: 12, background: "rgba(193, 180, 0, 0.15)", borderRadius: 8, border: "1px solid rgba(193, 180, 0, 0.3)" }}>
+            <div style={{ textAlign: "center", marginBottom: 16, padding: 12, background: "rgba(17, 17, 17, 0.9)", borderRadius: 8, border: "1px solid rgba(193, 180, 0, 0.4)" }}>
               <div style={{ color: "#fff", fontSize: 28, fontWeight: 900 }}>
                 {(lifetimeRewards.total || 0).toLocaleString()}
               </div>

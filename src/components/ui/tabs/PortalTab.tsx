@@ -81,6 +81,7 @@ export function PortalTab() {
   const [creatorClaims, setCreatorClaims] = useState<CreatorClaimStatus[]>([]);
   const [creatorSummary, setCreatorSummary] = useState<CreatorSummary | null>(null);
   const [creatorClaimsExpanded, setCreatorClaimsExpanded] = useState(false);
+  const [opportunitiesExpanded, setOpportunitiesExpanded] = useState(false);
   const [claimingAll, setClaimingAll] = useState(false);
   const [_engagementClaimStatus, setEngagementClaimStatus] = useState<EngagementClaimStatus | null>(null);
   const [engagementOpportunities, setEngagementOpportunities] = useState<EngagementOpportunity[]>([]);
@@ -745,6 +746,42 @@ export function PortalTab() {
       >
         Earn CATWALK for posting and engaging in /catwalk
       </p>
+
+      {/* Auto-Engage Banner (if not enabled) */}
+      {!autoEngageEnabled && !loading && (
+        <div
+          style={{
+            background: "rgba(193, 180, 0, 0.1)",
+            border: "1px solid #c1b400",
+            borderRadius: 8,
+            padding: "10px 16px",
+            marginBottom: 16,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <span style={{ color: "#c1b400", fontSize: 13, fontWeight: 600 }}>
+            Enable Auto-Engage for +10% bonus
+          </span>
+          <button
+            onClick={handleEnableAutoEngage}
+            disabled={enablingAutoEngage}
+            style={{
+              padding: "6px 12px",
+              background: "#c1b400",
+              color: "#000",
+              border: "none",
+              borderRadius: 6,
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: enablingAutoEngage ? "not-allowed" : "pointer",
+            }}
+          >
+            {enablingAutoEngage ? "..." : "Enable"}
+          </button>
+        </div>
+      )}
 
       {/* Lifetime Claimed Section */}
       <div
@@ -1438,8 +1475,8 @@ export function PortalTab() {
           {/* Auto-Engage Section */}
           <div
             style={{
-              background: "#1a0a1a",
-              border: "2px solid #ff00ff",
+              background: "rgba(17, 17, 17, 0.9)",
+              border: "2px solid #c1b400",
               borderRadius: 12,
               padding: "20px",
               marginBottom: 24,
@@ -1448,16 +1485,16 @@ export function PortalTab() {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
               <h2
                 style={{
-                  color: "#ff00ff",
+                  color: "#c1b400",
                   fontSize: 18,
                   fontWeight: 700,
                 }}
               >
-                Quick Actions
+                Auto-Engage
               </h2>
               {bonusMultiplier > 1 && (
                 <span style={{
-                  background: "#ff00ff",
+                  background: "#c1b400",
                   color: "#000",
                   padding: "4px 8px",
                   borderRadius: 4,
@@ -1476,7 +1513,7 @@ export function PortalTab() {
               style={{
                 width: "100%",
                 padding: "14px 20px",
-                background: signerUuid ? "#ff00ff" : "#333",
+                background: signerUuid ? "#c1b400" : "#333",
                 color: signerUuid ? "#000" : "#666",
                 border: "none",
                 borderRadius: 8,
@@ -1575,12 +1612,12 @@ export function PortalTab() {
             {/* Auto-Engage Toggle */}
             <div style={{
               background: "#0a0a0a",
-              border: `1px solid ${autoEngageEnabled ? "#00ff00" : "#ff00ff"}`,
+              border: `1px solid ${autoEngageEnabled ? "#00ff00" : "#c1b400"}`,
               borderRadius: 8,
               padding: "12px",
             }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                <p style={{ color: autoEngageEnabled ? "#00ff00" : "#ff00ff", fontSize: 14, fontWeight: 600, margin: 0 }}>
+                <p style={{ color: autoEngageEnabled ? "#00ff00" : "#c1b400", fontSize: 14, fontWeight: 600, margin: 0 }}>
                   {autoEngageEnabled ? "Auto-Engage Active" : "Auto Like & Recast"}
                 </p>
                 {autoEngageEnabled && (
@@ -1605,7 +1642,7 @@ export function PortalTab() {
               </p>
               
               {!autoEngageEnabled && (
-                <p style={{ color: "#ff00ff", fontSize: 12, fontWeight: 600, marginBottom: 12 }}>
+                <p style={{ color: "#c1b400", fontSize: 12, fontWeight: 600, marginBottom: 12 }}>
                   Earn 10% bonus CATWALK on all rewards when enabled!
                 </p>
               )}
@@ -1652,7 +1689,7 @@ export function PortalTab() {
                   style={{
                     width: "100%",
                     padding: "10px 16px",
-                    background: enablingAutoEngage ? "#333" : "#ff00ff",
+                    background: enablingAutoEngage ? "#333" : "#c1b400",
                     color: enablingAutoEngage ? "#666" : "#000",
                     border: "none",
                     borderRadius: 6,
@@ -1689,7 +1726,7 @@ export function PortalTab() {
                   style={{
                     width: "100%",
                     padding: "10px 16px",
-                    background: "#ff00ff",
+                    background: "#c1b400",
                     color: "#000",
                     border: "none",
                     borderRadius: 6,
@@ -1767,9 +1804,39 @@ export function PortalTab() {
 
             {engagementOpportunities.length > 0 ? (
               <div style={{ marginBottom: 16 }}>
-                <p style={{ color: "#ffffff", fontSize: 14, marginBottom: 12, fontWeight: 600 }}>
-                  <strong>{engagementOpportunities.length}</strong> engagement opportunity(s) available
-                </p>
+                {/* Dropdown Toggle */}
+                <button
+                  onClick={() => setOpportunitiesExpanded(!opportunitiesExpanded)}
+                  style={{
+                    width: "100%",
+                    padding: "12px 16px",
+                    background: "rgba(17, 17, 17, 0.9)",
+                    color: "#c1b400",
+                    border: "1px solid #c1b400",
+                    borderRadius: 8,
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: opportunitiesExpanded ? 12 : 0,
+                  }}
+                >
+                  <span>
+                    {opportunitiesExpanded ? "Hide" : "View"} {engagementOpportunities.length} engagement opportunity{engagementOpportunities.length !== 1 ? "ies" : "y"}
+                  </span>
+                  <span style={{ 
+                    transform: opportunitiesExpanded ? "rotate(180deg)" : "rotate(0deg)", 
+                    transition: "transform 0.2s",
+                    fontSize: 10,
+                  }}>
+                    ▼
+                  </span>
+                </button>
+
+                {/* Opportunities List (Expanded) */}
+                {opportunitiesExpanded && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: "500px", overflowY: "auto" }}>
                   {engagementOpportunities.map((opportunity) => (
                     <div
@@ -1866,6 +1933,7 @@ export function PortalTab() {
                     </div>
                   ))}
                 </div>
+                )}
               </div>
             ) : (
               <button

@@ -1525,6 +1525,7 @@ SELECT * FROM app_state WHERE key = 'last_webhook_at';
 | Claim All endpoint | `portal/creator/claim-all/route.ts` | NEW: Batch claim all unclaimed creator rewards in single transaction |
 | Status returns array | `portal/status/route.ts` | Returns `creatorClaims[]` and `creatorSummary` for multi-cast support |
 | UI: Claim All + dropdown | `PortalTab.tsx` | Shows summary, "Claim All" button, expandable list with individual claims |
+| Portal UI reorganization | `PortalTab.tsx` | Auto-engage gold colors, enable banner, patron sections merged, opportunities dropdown |
 
 ### 2026-02-02
 

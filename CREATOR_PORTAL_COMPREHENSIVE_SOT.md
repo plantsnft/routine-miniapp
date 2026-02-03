@@ -338,6 +338,7 @@ CREATE TABLE public.user_engage_preferences (
 | Endpoint | Schedule | Purpose |
 |----------|----------|---------|
 | `/api/cron/auto-engage` | `0 * * * *` (hourly) | Auto like/recast for enabled users |
+| `/api/cron/sync-balances` | `0 2 * * *` (daily) | Sync token balances for holdings leaderboard |
 | `/api/cron/seed-eligible-casts` | Manual | Backfill eligible_casts from API |
 | `/api/cron/refresh-channel-feed` | Manual | Refresh channel_feed_cache |
 | `/api/cron/refresh-engagement-cache` | Manual | Refresh engagement_cache |
@@ -361,6 +362,10 @@ CREATE TABLE public.user_engage_preferences (
     {
       "path": "/api/cron/auto-engage",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-balances",
+      "schedule": "0 2 * * *"
     }
   ]
 }

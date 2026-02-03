@@ -9,6 +9,10 @@
     {
       "path": "/api/cron/auto-engage",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-balances",
+      "schedule": "0 2 * * *"
     }
   ]
 }

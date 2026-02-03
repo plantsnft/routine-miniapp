@@ -415,6 +415,7 @@ See **[CREATOR_PORTAL_COMPREHENSIVE_SOT.md](./CREATOR_PORTAL_COMPREHENSIVE_SOT.m
 | Endpoint | File | Schedule | Auth |
 |----------|------|----------|------|
 | `/api/cron/auto-engage` | `auto-engage/route.ts` | Hourly | `Authorization: Bearer {CRON_SECRET}` |
+| `/api/cron/sync-balances` | `sync-balances/route.ts` | Daily 2 AM UTC | `Authorization: Bearer {CRON_SECRET}` |
 | `/api/cron/seed-eligible-casts` | `seed-eligible-casts/route.ts` | Manual | `x-cron-secret` header |
 | `/api/cron/webhook-health` | `webhook-health/route.ts` | Manual | `x-cron-secret` header |
 | `/api/cron/refresh-channel-feed` | `refresh-channel-feed/route.ts` | Manual | `x-cron-secret` header |
@@ -655,6 +656,10 @@ export enum Tab {
     {
       "path": "/api/cron/auto-engage",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-balances",
+      "schedule": "0 2 * * *"
     }
   ]
 }
@@ -664,6 +669,7 @@ export enum Tab {
 |------|----------|---------|
 | `/api/creator-stats/sync` | Daily 1 AM UTC | Sync creator statistics |
 | `/api/cron/auto-engage` | Hourly | Auto like/recast for enabled users |
+| `/api/cron/sync-balances` | Daily 2 AM UTC | Sync token balances for holdings leaderboard |
 
 ### Manual Cron Endpoints
 
@@ -1401,13 +1407,16 @@ curl https://catwalk-smoky.vercel.app/api/ops/wiring-check | jq
 
 **Code Location:** `src/lib/dateUtils.ts`
 
-### ⚠️ Holdings Leaderboard is Expensive
+### ✅ Holdings Leaderboard (RESOLVED)
 
-**Issue:** `?type=holdings` makes Neynar API calls for EACH user to get token balances.
+**Previous Issue:** `?type=holdings` made Neynar API calls for EACH user to get token balances.
 
-**Impact:** High Neynar credit usage, slow response time.
+**Solution (2026-02-03):**
+- Added `token_balance` and `balance_updated_at` columns to `checkins` table
+- Created `/api/cron/sync-balances` cron job (daily at 2 AM UTC)
+- Leaderboard now queries cached balances (fast, no API calls)
 
-**Recommendation:** Limit to 50 users max, consider caching.
+**Migration:** `supabase_migration_token_balance.sql`
 
 ### ⚠️ Base RPC 503 Errors
 
@@ -1507,6 +1516,9 @@ SELECT * FROM app_state WHERE key = 'last_webhook_at';
 
 | Change | Files Modified | Details |
 |--------|---------------|---------|
+| Holdings leaderboard caching | `vercel.json`, `checkins` table | Added daily cron to sync token balances, leaderboard now uses cached data |
+| New cron: sync-balances | `/api/cron/sync-balances/route.ts` | Syncs CATWALK balances daily at 2 AM UTC |
+| DB columns | `supabase_migration_token_balance.sql` | Added `token_balance`, `balance_updated_at` to checkins |
 | Multi-cast creator claims | `portal/status/route.ts`, `portal/creator/claim-all/route.ts`, `PortalTab.tsx` | Creators can now see ALL unclaimed casts and claim all at once |
 | Claim All endpoint | `portal/creator/claim-all/route.ts` | NEW: Batch claim all unclaimed creator rewards in single transaction |
 | Status returns array | `portal/status/route.ts` | Returns `creatorClaims[]` and `creatorSummary` for multi-cast support |

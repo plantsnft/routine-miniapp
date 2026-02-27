@@ -70,3 +70,7 @@ export const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY || '768ACB76-E4C1-488E-
 // Poker credentials encryption key (32 bytes, base64 encoded)
 // Required for encrypting/decrypting ClubGG credentials
 export const POKER_CREDS_ENCRYPTION_KEY = process.env.POKER_CREDS_ENCRYPTION_KEY || '';
+
+// App gate: BETR WITH BURR access control (same source as stake_threshold games)
+export const BETR_APP_GATE_MIN_STAKE = 50_000_000;
+export const NEYNAR_SCORE_GATE_MIN = 0.6;

@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { MiniAppInitializer } from "~/components/MiniAppInitializer";
 import { AuthProviderWrapper } from "~/components/AuthProviderWrapper";
+import { AppGate } from "~/components/AppGate";
 import AppFooter from "~/components/AppFooter";
 import { AuthDebugOverlay } from "~/components/AuthDebugOverlay";
 import { PreviewBanner } from "~/components/PreviewBanner";
@@ -42,26 +43,28 @@ export default function RootLayout({
         {/* MiniAppInitializer handles sdk.actions.ready() */}
         <MiniAppInitializer />
         <AuthProviderWrapper>
-          <PreviewBanner />
-          <ScrollingBanner />
-          {/* App shell wrapper - consistent background, max-width, safe-area padding */}
-          <div 
-            className="flex flex-col min-h-screen bg-bg-0"
-            style={{
-              maxWidth: '100%',
-              margin: '0 auto',
-              paddingTop: 'env(safe-area-inset-top, 0)',
-              paddingBottom: 'env(safe-area-inset-bottom, 0)',
-              paddingLeft: 'env(safe-area-inset-left, 0)',
-              paddingRight: 'env(safe-area-inset-right, 0)',
-            }}
-          >
-            <main className="flex-1 w-full">
-              {children}
-            </main>
-            <AppFooter />
-            <AuthDebugOverlay />
-          </div>
+          <AppGate>
+            <PreviewBanner />
+            <ScrollingBanner />
+            {/* App shell wrapper - consistent background, max-width, safe-area padding */}
+            <div 
+              className="flex flex-col min-h-screen bg-bg-0"
+              style={{
+                maxWidth: '100%',
+                margin: '0 auto',
+                paddingTop: 'env(safe-area-inset-top, 0)',
+                paddingBottom: 'env(safe-area-inset-bottom, 0)',
+                paddingLeft: 'env(safe-area-inset-left, 0)',
+                paddingRight: 'env(safe-area-inset-right, 0)',
+              }}
+            >
+              <main className="flex-1 w-full">
+                {children}
+              </main>
+              <AppFooter />
+              <AuthDebugOverlay />
+            </div>
+          </AppGate>
         </AuthProviderWrapper>
       </body>
     </html>

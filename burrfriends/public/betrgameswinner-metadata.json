@@ -1,0 +1,11 @@
+{
+  "name": "Betr Games Season 1 Winner",
+  "description": "Betr Games Season 1 winner NFT by Doodle Day Darlings. Celebrating Tracy and 90 players.",
+  "image": "https://gateway.pinata.cloud/ipfs/bafybeiajrnbotbdd4z34zbrqpmqo5fkzps2j3plauxuwc3xs4gyoemdety",
+  "attributes": [
+    { "trait_type": "Artist", "value": "Doodle Day Darlings" },
+    { "trait_type": "Betr Games Season", "value": "1" },
+    { "trait_type": "Number of Players", "value": "90" },
+    { "trait_type": "Winning FID", "value": "417851" }
+  ]
+}

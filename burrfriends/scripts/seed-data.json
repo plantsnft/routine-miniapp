@@ -1,0 +1,18 @@
+{
+  "clubs": [
+    {
+      "slug": "sias-poker-room",
+      "name": "SIAs Poker Room",
+      "description": "SIAs Poker Room",
+      "owner_fid": 318447
+    }
+  ],
+  "members": {
+    "sias-poker-room": [
+      318447,
+      273708,
+      311933
+    ]
+  }
+}
+

@@ -1,0 +1,83 @@
+/**
+ * POST /api/admin/betr-games/approve
+ * Approve a pending registration.
+ * 
+ * Phase 22: Tournament management
+ */
+
+import { NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "~/lib/auth";
+import { isAdmin } from "~/lib/admin";
+import { pokerDb } from "~/lib/pokerDb";
+import { safeLog } from "~/lib/redaction";
+import type { ApiResponse } from "~/lib/types";
+
+export async function POST(req: NextRequest) {
+  try {
+    const { fid: adminFid } = await requireAuth(req);
+
+    if (!isAdmin(adminFid)) {
+      return NextResponse.json<ApiResponse>(
+        { ok: false, error: "Admin access required" },
+        { status: 403 }
+      );
+    }
+
+    const body = await req.json();
+    const { fid } = body;
+
+    if (!fid || typeof fid !== "number") {
+      return NextResponse.json<ApiResponse>(
+        { ok: false, error: "fid is required" },
+        { status: 400 }
+      );
+    }
+
+    // Check if registration exists
+    const existing = await pokerDb.fetch<{ fid: number; approved_at: string | null }>("betr_games_registrations", {
+      filters: { fid },
+      select: "fid,approved_at",
+      limit: 1,
+    });
+
+    if (!existing || existing.length === 0) {
+      return NextResponse.json<ApiResponse>(
+        { ok: false, error: "Registration not found" },
+        { status: 404 }
+      );
+    }
+
+    if (existing[0].approved_at !== null) {
+      return NextResponse.json<ApiResponse>({
+        ok: true,
+        data: { approved: true, alreadyApproved: true },
+      });
+    }
+
+    // Approve the registration
+    await pokerDb.update("betr_games_registrations", 
+      { fid },
+      { 
+        approved_at: new Date().toISOString(),
+        approved_by: adminFid,
+      }
+    );
+
+    safeLog("info", "[admin/betr-games/approve] Approved registration", { fid, adminFid });
+
+    return NextResponse.json<ApiResponse>({
+      ok: true,
+      data: { approved: true, alreadyApproved: false },
+    });
+  } catch (error: unknown) {
+    const err = error as { message?: string };
+    if (typeof err?.message === "string" && (err.message.includes("authentication") || err.message.includes("token"))) {
+      return NextResponse.json<ApiResponse>({ ok: false, error: err.message }, { status: 401 });
+    }
+    safeLog("error", "[admin/betr-games/approve] Error", { error: err?.message ?? String(error) });
+    return NextResponse.json<ApiResponse>(
+      { ok: false, error: "Failed to approve registration" },
+      { status: 500 }
+    );
+  }
+}

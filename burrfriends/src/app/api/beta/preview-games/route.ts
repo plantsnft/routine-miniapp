@@ -30,7 +30,7 @@ const GAME_TABLES: { table: string; gameType: string; select: string }[] = [
   { table: "mole_games", gameType: "THE MOLE", select: "id, title, prize_amount, status, created_at, created_by_fid, is_preview" },
   { table: "steal_no_steal_games", gameType: "STEAL OR NO STEAL", select: "id, title, prize_amount, status, decision_time_seconds, created_at, created_by_fid, is_preview" },
   { table: "remix_betr_rounds", gameType: "FRAMEDL BETR", select: "id, round_label, prize_amount, status, submissions_close_at, game_date, created_at, created_by_fid, is_preview" },
-  { table: "weekend_game_rounds", gameType: "WEEKEND GAME", select: "id, round_label, prize_amount, status, submissions_close_at, created_at, created_by_fid, is_preview" },
+  { table: "weekend_game_rounds", gameType: "Escape Velocity", select: "id, round_label, prize_amount, status, submissions_close_at, created_at, created_by_fid, is_preview" },
   { table: "bullied_games", gameType: "BULLIED", select: "id, title, status, created_at, created_by_fid, is_preview" },
   { table: "in_or_out_games", gameType: "IN OR OUT", select: "id, title, status, created_at, created_by_fid, is_preview" },
   { table: "take_from_the_pile_games", gameType: "TAKE FROM THE PILE", select: "id, title, status, prize_pool_amount, created_at, created_by_fid, is_preview" },

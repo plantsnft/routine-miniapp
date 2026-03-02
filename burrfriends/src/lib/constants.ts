@@ -208,8 +208,8 @@ export const FRAMEDL_MINIAPP_LAUNCH_URL = "https://farcaster.xyz/miniapps/KdCXV0
 // Web app URL — fallback when openMiniApp unavailable or outside miniapp
 export const FRAMEDL_BETR_PLAY_URL = "https://framedl.com/app/v2?id=0938f0cf-6a86-4254-9c14-0fafbf1fd5d2&app=1";
 
-// WEEKEND GAME - REMIX 3D Tunnel Racer (Phase 30)
-export const WEEKEND_GAME_PLAY_URL = "https://play.remix.gg/games/1ecca8f5-107c-4e0d-9b99-d75b3371fd2b";
+// Escape Velocity (Phase 30) – Farcaster miniapp launch URL
+export const WEEKEND_GAME_PLAY_URL = "https://farcaster.xyz/miniapps/70JYaQHoZSlz/remix";
 export const WEEKEND_GAME_CREATOR = "@spaceman-ngu.eth";
 
 // TO SPINFINITY AND BEYOND ART CONTEST (Phase 39) – example cast URL shown on game page

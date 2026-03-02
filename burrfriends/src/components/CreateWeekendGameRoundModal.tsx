@@ -12,7 +12,7 @@ interface CreateWeekendGameRoundModalProps {
 }
 
 /**
- * Phase 30: Create WEEKEND GAME (3D Tunnel Racer) round from Admin Create Game hub.
+ * Phase 30: Create Escape Velocity round from Admin Create Game hub.
  * Per Phase 29: Live Game (default) vs Preview Only toggle; when Preview selected, yellow border.
  */
 export function CreateWeekendGameRoundModal({
@@ -125,7 +125,7 @@ export function CreateWeekendGameRoundModal({
       >
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold" style={{ color: 'var(--text-0)' }}>
-            Create WEEKEND GAME Round
+            Create Escape Velocity Round
           </h2>
           <button
             onClick={onClose}

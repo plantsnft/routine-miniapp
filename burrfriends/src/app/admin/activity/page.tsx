@@ -28,7 +28,7 @@ const GAME_TYPE_LABELS: Record<string, string> = {
   steal_no_steal: 'STEAL OR NO STEAL',
   jenga: 'JENGA',
   remix_betr: 'REMIX BETR',
-  weekend_game: 'WEEKEND GAME',
+  weekend_game: 'Escape Velocity',
   poker: 'POKER',
   superbowl_squares: 'SUPERBOWL SQUARES',
   superbowl_props: 'SUPERBOWL PROPS',

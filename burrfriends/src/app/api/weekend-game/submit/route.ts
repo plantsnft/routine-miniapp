@@ -1,7 +1,7 @@
 /**
  * POST /api/weekend-game/submit
  * Score (0-1M) + screenshot or castUrl. Requires open round; eligibility checks; higher=better.
- * Path A: image → tunnel-racer-verify (liberal). Path B: Neynar cast, author=fid, cast refs 3D Tunnel Racer/Remix, extract score.
+ * Path A: image → tunnel-racer-verify (liberal). Path B: Neynar cast, author=fid, cast refs Escape Velocity or Remix, extract score.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -14,7 +14,7 @@ import type { ApiResponse } from "~/lib/types";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB
 const LEADERBOARD_CACHE_ID = "default";
-const TUNNEL_RACER_MARKERS = ["3d tunnel racer", "3D Tunnel Racer", "tunnel racer", "remix", "play.remix.gg"];
+const TUNNEL_RACER_MARKERS = ["escape velocity", "Escape Velocity", "3d tunnel racer", "3D Tunnel Racer", "tunnel racer", "remix", "play.remix.gg"];
 
 function castReferencesTunnelRacer(text: string, embedUrls: string[]): boolean {
   const combined = `${(text || "").toLowerCase()} ${(embedUrls || []).join(" ").toLowerCase()}`;
@@ -138,8 +138,9 @@ export async function POST(req: NextRequest) {
         return NextResponse.json<ApiResponse>({ ok: false, error: "Invalid form data." }, { status: 400 });
       }
       const scoreVal = form.get("score");
+      const raw = typeof scoreVal === "string" ? scoreVal.replace(/,/g, "") : scoreVal;
       score =
-        typeof scoreVal === "string" ? parseInt(scoreVal, 10) : typeof scoreVal === "number" ? scoreVal : NaN;
+        typeof raw === "string" ? parseInt(raw, 10) : typeof raw === "number" ? raw : NaN;
       const img = form.get("image");
       imageFile = img instanceof File ? img : null;
       if (isNaN(score) || clampScore(score) === null) {
@@ -161,7 +162,7 @@ export async function POST(req: NextRequest) {
       const body = await req.json().catch(() => ({}));
       const scoreVal = body.score;
       score =
-        typeof scoreVal === "number" ? scoreVal : parseInt(String(scoreVal ?? ""), 10);
+        typeof scoreVal === "number" ? scoreVal : parseInt(String(scoreVal ?? "").replace(/,/g, ""), 10);
       castUrl = typeof body.castUrl === "string" ? body.castUrl.trim() || null : null;
       imageBase64 = typeof body.imageBase64 === "string" ? body.imageBase64.trim() : "";
       if (isNaN(score) || clampScore(score) === null) {
@@ -208,7 +209,7 @@ export async function POST(req: NextRequest) {
       const { score: extractedScore, is3DTunnelRacerGame } = await extractTunnelRacerFromImage(buf);
       if (!is3DTunnelRacerGame) {
         return NextResponse.json<ApiResponse>(
-          { ok: false, error: "Image does not appear to be from 3D Tunnel Racer on Remix." },
+          { ok: false, error: "Image does not appear to be from Escape Velocity on Remix." },
           { status: 400 }
         );
       }
@@ -254,7 +255,7 @@ export async function POST(req: NextRequest) {
       const embedUrls = (resolvedCast?.embeds || []).map((e) => e?.url || "").filter(Boolean);
       if (!castReferencesTunnelRacer(text, embedUrls)) {
         return NextResponse.json<ApiResponse>(
-          { ok: false, error: "Cast must reference 3D Tunnel Racer or Remix." },
+          { ok: false, error: "Cast must reference Escape Velocity or Remix." },
           { status: 400 }
         );
       }

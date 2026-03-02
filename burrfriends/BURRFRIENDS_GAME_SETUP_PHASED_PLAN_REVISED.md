@@ -165,6 +165,41 @@ The app gate uses the same `checkUserStakeByFid` from `burrfriends/src/lib/staki
 
 ---
 
+## Escape Velocity (Phase 30)
+
+Formerly "WEEKEND GAME" / "REMIX 3D Tunnel Racer". Rebranded to Escape Velocity.
+
+### Game Details
+
+| Field | Value |
+|-------|-------|
+| **Game Name** | Escape Velocity |
+| **Play URL** | `https://farcaster.xyz/miniapps/70JYaQHoZSlz/remix` |
+| **Creator** | @spaceman-ngu.eth |
+| **Route Path** | `/weekend-game` (unchanged; do not change route or internal IDs) |
+| **Internal IDs** | `weekend-game`, `weekend_game`, `weekend_game_rounds`, etc. |
+
+### Leaderboard Prizes
+
+- **1st:** 1M $BETR
+- **2nd:** 420K $BETR
+- **Top 5:** Advantage (two picks in next BULLIED game)
+- **Better Believer:** If staking 50M+ $BETR, prizes are DOUBLED
+
+### Score Format
+
+- Accepts both: `12,850` (comma) and `12850` (no comma)
+- Range: 0–1,000,000
+- Higher = better
+
+### Changelog
+
+| Date | Change |
+|------|--------|
+| 2026-02-13 | Rebranded to Escape Velocity; Play URL updated; prize badges 1M/420K; Better Believer copy; score parsing accepts commas |
+
+---
+
 ## Deployment Rules
 
 - Burrfriends is a separate app (excluded from root build per `tsconfig.json`)

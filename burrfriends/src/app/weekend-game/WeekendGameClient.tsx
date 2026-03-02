@@ -275,14 +275,14 @@ export default function WeekendGameClient() {
 
   const handleSubmit = async () => {
     if (!token) return;
-    const s = parseInt(score.trim(), 10);
+    const s = parseInt(score.trim().replace(/,/g, ""), 10);
     if (isNaN(s) || s < 0 || s > 1_000_000) {
       setSubmitError("Enter a valid score (0–1,000,000).");
       return;
     }
     if (proofKind === "screenshot") {
       if (!screenshotFile) {
-        setSubmitError("Upload a screenshot of your 3D Tunnel Racer result.");
+        setSubmitError("Upload a screenshot of your Escape Velocity result.");
         return;
       }
     } else {
@@ -575,18 +575,18 @@ export default function WeekendGameClient() {
         ← Back
       </Link>
       <div style={{ display: "flex", justifyContent: "center", marginBottom: "16px" }}>
-        <Image src="/remix.png" alt="REMIX 3D Tunnel Racer" width={400} height={400} style={{ maxWidth: "100%", height: "auto", borderRadius: "16px" }} priority />
+        <Image src="/remix.png" alt="Escape Velocity" width={400} height={400} style={{ maxWidth: "100%", height: "auto", borderRadius: "16px" }} priority />
       </div>
-      <h1 style={{ fontSize: "1.5rem", marginBottom: "8px" }}>WEEKEND GAME - REMIX 3D Tunnel Racer</h1>
+      <h1 style={{ fontSize: "1.5rem", marginBottom: "8px" }}>Escape Velocity</h1>
       <p style={{ color: "var(--text-1)", marginBottom: "16px" }}>
-        Play 3D Tunnel Racer on Remix, submit your score here.
+        Play Escape Velocity, submit your score here.
       </p>
 
       {error && <p style={{ color: "var(--ember-2)", marginBottom: "12px" }}>{error}</p>}
 
       <div style={{ marginBottom: "24px" }}>
         <button type="button" onClick={handlePlay} className="btn-primary">
-          Play 3D Tunnel Racer
+          Play Escape Velocity
         </button>
       </div>
 
@@ -601,7 +601,7 @@ export default function WeekendGameClient() {
         </div>
         {howToPlayOpen && (
           <p style={{ fontSize: "0.875rem", color: "var(--text-1)" }}>
-            Play 3D Tunnel Racer on Remix (link above). Higher score is better. Submit your best score with a screenshot or a cast URL. Unlimited submissions; only your best counts.
+            Play Escape Velocity (link above). Higher score is better. Submit your best score with a screenshot or a cast URL. Unlimited submissions; only your best counts.
           </p>
         )}
       </section>
@@ -778,8 +778,8 @@ export default function WeekendGameClient() {
                           >
                             {e.pfp_url && <img src={e.pfp_url} alt="" style={{ width: 20, height: 20, borderRadius: 10, marginRight: 6, verticalAlign: "middle" }} />}
                             {e.display_name || e.username || `FID ${e.fid}`}
-                            {idx === 0 && <span style={{ marginLeft: "8px", color: "#fbbf24", fontWeight: 700, fontSize: "0.75rem" }}>5M $BETR</span>}
-                            {idx === 1 && <span style={{ marginLeft: "8px", color: "#d1d5db", fontWeight: 700, fontSize: "0.75rem" }}>3M $BETR</span>}
+                            {idx === 0 && <span style={{ marginLeft: "8px", color: "#fbbf24", fontWeight: 700, fontSize: "0.75rem" }}>1M $BETR</span>}
+                            {idx === 1 && <span style={{ marginLeft: "8px", color: "#d1d5db", fontWeight: 700, fontSize: "0.75rem" }}>420K $BETR</span>}
                           </span>
                         </td>
                         <td style={{ textAlign: "right", padding: "6px 8px", color: isDnp ? "#ef4444" : "inherit" }}>
@@ -800,7 +800,7 @@ export default function WeekendGameClient() {
 
       <div style={{ marginBottom: "12px", textAlign: "center" }}>
         <p style={{ fontSize: "0.85rem", color: "#14B8A6", fontWeight: 600, margin: 0 }}>
-          1st = 5M $BETR &middot; 2nd = 3M $BETR &middot; Top 5 get an advantage
+          1st = 1M $BETR &middot; 2nd = 420K $BETR &middot; Top 5 get an advantage
         </p>
         <p style={{
           fontSize: "0.9rem",
@@ -810,7 +810,7 @@ export default function WeekendGameClient() {
           textShadow: "0 0 8px rgba(217,70,239,0.6), 0 0 20px rgba(217,70,239,0.3)",
           letterSpacing: "0.05em",
         }}>
-          DOUBLED IF BETR BELIEVER
+          DOUBLED IF BETTER BELIEVER (50M+ STAKED)
         </p>
       </div>
 

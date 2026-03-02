@@ -62,7 +62,7 @@ const GAME_TABLES: { table: string; gameType: string; select: string }[] = [
   },
   {
     table: "weekend_game_rounds",
-    gameType: "WEEKEND GAME",
+    gameType: "Escape Velocity",
     select: "id, round_label, prize_amount, status, submissions_close_at, created_at, created_by_fid, is_preview",
   },
   {

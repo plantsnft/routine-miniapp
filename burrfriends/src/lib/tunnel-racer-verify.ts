@@ -1,5 +1,5 @@
 /**
- * WEEKEND GAME - 3D Tunnel Racer verification (Phase 30).
+ * Escape Velocity verification (Phase 30).
  * OpenAI Vision for screenshots and cast embed images; extract score + liberal game check.
  * When in doubt, accept. No date validation.
  * Env: OPENAI_API_KEY.
@@ -17,8 +17,8 @@ function getOpenAI(): OpenAI {
 }
 
 /**
- * Extract score and is3DTunnelRacerGame from an image (screenshot of 3D Tunnel Racer / Remix result).
- * Liberal: if there is a numeric score and any hint of Remix / 3D Tunnel Racer, set is3DTunnelRacerGame true.
+ * Extract score and is3DTunnelRacerGame from an image (screenshot of Escape Velocity / Remix result).
+ * Liberal: if there is a numeric score and any hint of Remix / Escape Velocity, set is3DTunnelRacerGame true.
  * Returns { score: number | null (0-1000000), is3DTunnelRacerGame: boolean }.
  */
 export async function extractTunnelRacerFromImage(
@@ -42,14 +42,14 @@ export async function extractTunnelRacerFromImage(
         content: [
           {
             type: "text",
-            text: `You are analyzing an image that may show "3D Tunnel Racer" game results (a game on Remix by farcade). The game shows a numeric score (e.g. 3200, 3,200, "New High Score 3200").
+            text: `You are analyzing an image that may show "Escape Velocity" game results (a game on Remix by farcade). The game shows a numeric score (e.g. 3200, 3,200, 12,850, "New High Score 3200").
 
 Respond with a JSON object only, no other text:
 { "score": <number or null>, "is3DTunnelRacerGame": <boolean> }
 
 Rules:
-- "score": The numeric score shown (e.g. 3200, 1450, 7250). Strip commas. Use null only if no clear score is visible.
-- "is3DTunnelRacerGame": true if this looks like 3D Tunnel Racer or Remix game results (score display, "New High Score", "Play Again", tunnel/racer style UI, or Remix/farcade branding). When in doubt, use true if there is any plausible score and game-like UI.`,
+- "score": The numeric score shown (e.g. 3200, 1450, 12850, 12,850). Strip commas. Use null only if no clear score is visible.
+- "is3DTunnelRacerGame": true if this looks like Escape Velocity or Remix game results (score display, "New High Score", "Play Again", tunnel/racer style UI, or Remix/farcade branding). When in doubt, use true if there is any plausible score and game-like UI.`,
           },
           { type: "image_url", image_url: { url, detail: "high" as const } },
         ],
@@ -94,7 +94,7 @@ export async function extractTunnelRacerFromCastText(text: string): Promise<{ sc
     messages: [
       {
         role: "user",
-        content: `From this Farcaster cast text, extract a single numeric game score (e.g. from 3D Tunnel Racer or similar). Look for patterns like "Score 3200", "3,200", "3200", "New High Score 3200".
+        content: `From this Farcaster cast text, extract a single numeric game score (e.g. from Escape Velocity or similar). Look for patterns like "Score 3200", "3,200", "12,850", "12850", "New High Score 3200".
 
 Respond with a JSON object only: { "score": <number or null> }
 
@@ -113,10 +113,13 @@ ${t.slice(0, 2000)}`,
 
   try {
     const j = JSON.parse(raw) as { score?: unknown };
-    const score =
-      typeof j.score === "number" && !isNaN(j.score) && j.score >= 0 && j.score <= 1_000_000
-        ? Math.floor(j.score)
-        : null;
+    let score: number | null = null;
+    if (typeof j.score === "number" && !isNaN(j.score) && j.score >= 0 && j.score <= 1_000_000) {
+      score = Math.floor(j.score);
+    } else if (typeof j.score === "string") {
+      const n = parseInt(j.score.replace(/,/g, ""), 10);
+      if (!isNaN(n) && n >= 0 && n <= 1_000_000) score = n;
+    }
     return { score };
   } catch {
     return { score: null };

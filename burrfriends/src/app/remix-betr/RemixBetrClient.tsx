@@ -10,12 +10,12 @@ import { FRAMEDL_BETR_PLAY_URL, FRAMEDL_MINIAPP_LAUNCH_URL } from '~/lib/constan
 
 // Plan 12.18: FRAMEDL advantage (score ≤ 2) — practice URL and copy
 const REMIX_PRACTICE_URL = 'https://play.remix.gg/games/1ecca8f5-107c-4e0d-9b99-d75b3371fd2b';
-const ADVANTAGE_COPY = 'Congrats! Your performance has earned you an advantage for the next game. Shhhh, keep it a secret. The next game will be the REMIX game — 3d tunnel racer by @spaceman-ngu. The bottom 10% will be eliminated. Link to practice:';
+const ADVANTAGE_COPY = 'Congrats! Your performance has earned you an advantage for the next game. Shhhh, keep it a secret. The next game will be Escape Velocity by @spaceman-ngu. The bottom 10% will be eliminated. Link to practice:';
 
-// Shared advantage copy with "3D Tunnel Racer" bold and teal (modal + persistent block stay in sync)
+// Shared advantage copy with "Escape Velocity" bold and teal (modal + persistent block stay in sync)
 const advantageCopyJsx = (
   <>
-    Congrats! Your performance has earned you an advantage for the next game. Shhhh, keep it a secret. The next game will be the REMIX game — <strong style={{ color: 'var(--fire-1)', fontWeight: 700 }}>3D Tunnel Racer</strong> by @spaceman-ngu. The bottom 10% will be eliminated. Link to practice:
+    Congrats! Your performance has earned you an advantage for the next game. Shhhh, keep it a secret. The next game will be <strong style={{ color: 'var(--fire-1)', fontWeight: 700 }}>Escape Velocity</strong> by @spaceman-ngu. The bottom 10% will be eliminated. Link to practice:
   </>
 );
 

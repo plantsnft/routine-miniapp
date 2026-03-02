@@ -1578,14 +1578,14 @@ export default function ClubGamesPage({ params }: { params: Promise<{ slug: stri
                             onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; }}
                           >
                             <div style={{ display: 'flex', justifyContent: 'center' }}>
-                              <Image src="/remix.png" alt="REMIX 3D Tunnel Racer" width={268} height={268} style={{ maxWidth: '100%', height: 'auto', borderRadius: '12px', marginBottom: '8px' }} />
+                              <Image src="/remix.png" alt="Escape Velocity" width={268} height={268} style={{ maxWidth: '100%', height: 'auto', borderRadius: '12px', marginBottom: '8px' }} />
                             </div>
                             <div className="flex-1" style={{ textAlign: 'center' }}>
                               <div className="flex items-center gap-2 mb-2" style={{ justifyContent: 'center', alignItems: 'center' }}>
-                                <h3 className="text-lg font-semibold text-primary" style={{ color: 'var(--text-0)', fontWeight: 600, margin: 0 }}>WEEKEND GAME</h3>
+                                <h3 className="text-lg font-semibold text-primary" style={{ color: 'var(--text-0)', fontWeight: 600, margin: 0 }}>Escape Velocity</h3>
                               </div>
-                              <span className="hl-badge hl-badge--fire" style={{ display: 'inline-block', marginBottom: '8px' }}>REMIX 3D TUNNEL RACER</span>
-                              <p className="text-sm text-secondary mt-2" style={{ color: 'var(--text-1)', margin: 0 }}>Play 3D Tunnel Racer on Remix, submit your score here.</p>
+                              <span className="hl-badge hl-badge--fire" style={{ display: 'inline-block', marginBottom: '8px' }}>ESCAPE VELOCITY</span>
+                              <p className="text-sm text-secondary mt-2" style={{ color: 'var(--text-1)', margin: 0 }}>Play Escape Velocity, submit your score here.</p>
                             </div>
                           </div>
                         </Link>

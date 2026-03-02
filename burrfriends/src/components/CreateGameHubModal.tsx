@@ -62,8 +62,8 @@ const GAME_TYPES = [
   },
   {
     id: 'weekend-game',
-    name: 'WEEKEND GAME',
-    description: 'REMIX 3D Tunnel Racer, single round',
+    name: 'Escape Velocity',
+    description: 'Escape Velocity, single round',
     modal: 'weekend-game',
     color: '#a855f7',
   },

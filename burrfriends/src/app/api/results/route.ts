@@ -779,7 +779,7 @@ export async function GET(req: NextRequest) {
               id: round.id,
               gameType: 'weekend_game',
               subType: null,
-              title: roundLabel ? `WEEKEND GAME - ${roundLabel}` : 'WEEKEND GAME',
+              title: roundLabel ? `Escape Velocity - ${roundLabel}` : 'Escape Velocity',
               prizeAmount: 0,
               settledAt: firstS?.chosen_at ?? round.settled_at ?? '',
               txHash: firstS?.tx_hash ?? null,
